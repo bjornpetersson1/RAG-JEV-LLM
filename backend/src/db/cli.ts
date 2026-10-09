@@ -17,9 +17,9 @@ try {
   process.exit(1);
 }
 
-function run(command: 'migrate' | 'reset'): void {
+function run(action: 'migrate' | 'reset'): void {
   const path = resolveDatabasePath(process.env.DATABASE_PATH);
-  if (command === 'reset') {
+  if (action === 'reset') {
     deleteDatabaseFiles(path);
     console.log(`Deleted ${path}`);
   }
