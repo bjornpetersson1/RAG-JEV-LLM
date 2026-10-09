@@ -4,7 +4,7 @@
 - **Labels:** `E1 Foundation`
 - **Phase:** 1. Foundation
 - **Depends on:** E1-1 (#1)
-- **Status:** Approved
+- **Status:** Implemented — all acceptance criteria verified (npm ci, lint, format:check, typecheck, 82 tests (78 backend, 4 frontend) and build exit 0; tests pass with outbound network denied; `db:migrate` twice and `db:reset` checked from both `tsx` and the built `dist`)
 
 ## Summary
 
@@ -43,17 +43,17 @@ A SQLite database with tables for documents, chunks, tags and chunk–tag links,
 
 ## Tasks
 
-- [ ] `backend/migrations/0001_initial.sql` with the four tables:
+- [x] `backend/migrations/0001_initial.sql` with the four tables:
   - `documents`: `id` (integer key), `type` (`law` | `ruling`), `title`, `identifier` (unique; SFS number or case number), `court` (rulings, nullable), `date`, `source_url`, `fetched_at`, `raw_text`.
   - `chunks`: `id`, `document_id` (→ documents, cascade delete), `ordinal`, `source_ref`, `text`, `token_count`; unique (`document_id`, `ordinal`).
   - `tags`: `id`, `slug` (unique), `label`, `description`, `area`.
   - `chunk_tags`: `chunk_id` (→ chunks, cascade delete), `tag_id` (→ tags, cascade delete), `model`, `vocabulary_version`, `created_at`; primary key (`chunk_id`, `tag_id`); index on `tag_id`.
-- [ ] Migration runner: reads `backend/migrations/NNNN_name.sql` in version order, applies each pending one in its own transaction, records version, name and time in a `schema_migrations` table.
-- [ ] Database opening helper: creates the parent directory, turns on foreign keys and WAL mode.
-- [ ] Database config: `DATABASE_PATH` from `.env`, default `data/rag.db`, relative paths resolved from the repo root; a clear error for an invalid value.
-- [ ] CLI with `migrate` and `reset`; backend scripts `db:migrate`, `db:reset` and root scripts that call them.
-- [ ] `.gitignore`: `data/` and SQLite side files; `.env.example` and README: `DATABASE_PATH` and the two commands.
-- [ ] Tests for every acceptance criterion.
+- [x] Migration runner: reads `backend/migrations/NNNN_name.sql` in version order, applies each pending one in its own transaction, records version, name and time in a `schema_migrations` table.
+- [x] Database opening helper: creates the parent directory, turns on foreign keys and WAL mode.
+- [x] Database config: `DATABASE_PATH` from `.env`, default `data/rag.db`, relative paths resolved from the repo root; a clear error for an invalid value.
+- [x] CLI with `migrate` and `reset`; backend scripts `db:migrate`, `db:reset` and root scripts that call them.
+- [x] `.gitignore`: `data/` and SQLite side files; `.env.example` and README: `DATABASE_PATH` and the two commands.
+- [x] Tests for every acceptance criterion.
 
 ## Decisions
 
@@ -69,6 +69,21 @@ A SQLite database with tables for documents, chunks, tags and chunk–tag links,
 - **Dates as ISO 8601 text** (default), SQLite's conventional date format.
 - **`tags.area` as a text column** (default): the vocabulary (E3-1) defines the areas; a separate table can come later if needed.
 - **WAL mode and foreign keys on** (default): foreign keys are off by default in SQLite and must be enabled per connection; WAL allows reading while an import writes.
+- **Required columns are `NOT NULL`** (settled while implementing): every column except `documents.court`, `documents.date` and `documents.source_url` is required, so an importer cannot store a half-filled row; `chunk_tags` is `WITHOUT ROWID` since its primary key is the pair.
+- **Migration file rules**: only `.sql` files are read; one that is not named `NNNN_name.sql`, or two files with the same version, stop the run with an error. A failing migration is rolled back and named in the error.
+- **Invalid `DATABASE_PATH`** (clean code): an empty value falls back to the default; any path that cannot be opened (a directory, a parent that is a file, no write permission) fails with "Cannot open database at <path>" and the SQLite error as cause, instead of SQLite's bare "unable to open database file".
+- **Skipped clean-code suggestions**: reading only pending migration files (negligible with one file) and a shared env-reading helper (`port.ts` must stay import-free).
+- **`.gitignore` also covers `*.db`, `*.db-wal` and `*.db-shm`**, so a database outside `data/` is not committed by accident.
+- **Code layout**: `backend/src/db/` holds `config.ts` (path), `database.ts` (open, delete files), `migrations.ts` (runner) and `cli.ts` (the two commands).
+- **Migrations run with foreign keys off** (code review): SQLite ignores `PRAGMA foreign_keys` inside a transaction, so with them on a future table rebuild (create, copy, drop, rename) would cascade-delete child rows. The runner turns them off before each migration, runs `PRAGMA foreign_key_check` before committing (a violation rolls the migration back), and turns them on again afterwards.
+- **Each migration runs in `BEGIN IMMEDIATE` and re-checks `schema_migrations` inside it** (code review), so two concurrent `db:migrate` runs do not both apply the same file. A failed migration is rolled back only if SQLite has not already done so, so the real error is never hidden.
+- **`openDatabase` also wraps the pragmas** (code review): a file that is not a database fails with "Cannot open database at <path>" and the handle is closed.
+- **`db:reset` refuses to delete a file that is not a SQLite database** (checked by its 16-byte header; an empty or missing file is fine), so a mistyped `DATABASE_PATH` cannot delete e.g. the README (code review). **Known limitation:** it cannot tell whether another process has the database open; stop the server or an import before resetting.
+- **`DATABASE_PATH=:memory:` is rejected** (code review): it would otherwise create a file named `:memory:` in the repo root.
+- **`.gitignore` uses `/data/`** (code review), anchored to the repo root, so `data` directories elsewhere (e.g. source or fixtures) are not ignored.
+- **The CLI prints errors as one line with their causes** instead of a stack trace.
+- **Tests close every database** they open (code review) and use platform-neutral paths.
+- **Tracking chunks that got zero tags is left to E3-2** (owner, after code review): `chunk_tags` only shows that a chunk was tagged if it got at least one tag, so E3-2 cannot skip a chunk that got none. E3-2 owns the tagging logic and can add what it needs (e.g. `tagged_model` and `tagged_vocabulary_version` on `chunks`) in a new migration; noted on issue #9.
 
 ## Open Questions
 

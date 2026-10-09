@@ -19,6 +19,17 @@ npm run dev
 
 The backend needs a `.env`: it validates the LLM settings at startup and exits with a list of what is missing or invalid. Either set `ANTHROPIC_API_KEY`, or set `LLM_PROVIDER=fake` to run without a key (deterministic fake answers, no network).
 
+## Database
+
+SQLite through Node's built-in `node:sqlite`. The schema lives in numbered SQL files in `backend/migrations/`.
+
+```bash
+npm run db:migrate   # create the database or apply new migrations (safe to re-run)
+npm run db:reset     # delete the database file and migrate from scratch
+```
+
+The file is `data/rag.db` by default, or `DATABASE_PATH` from `.env` (relative paths resolve from the repo root). `data/` is git-ignored.
+
 ## LLM configuration
 
 Each LLM role (tagger, query translator, judge, generator) gets its provider and model from `.env`, so switching needs no code change:
