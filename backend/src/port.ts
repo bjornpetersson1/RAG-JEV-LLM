@@ -1,3 +1,6 @@
+// Imported by frontend/vite.config.ts for the dev proxy target, so keep this module free of
+// imports and side effects.
+
 export const DEFAULT_PORT = 3000;
 
 const MAX_PORT = 65535;

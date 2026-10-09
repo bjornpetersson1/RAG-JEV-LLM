@@ -73,7 +73,7 @@ A single npm-workspaces repository with a Node + TypeScript backend (Fastify, `/
 - **Supporting packages** that the named tools need: `@eslint/js`, `globals`, `eslint-config-prettier`, `eslint-plugin-react-hooks` (ESLint); `@vitejs/plugin-react` (Vite + React); `jsdom`, `@testing-library/dom` (Vitest in the frontend); `@types/node` pinned to `^24` (backend and frontend) to match the runtime.
 - **Prettier ignores `Constitution/` and `.claude/`**: these are owner-authored documents outside this issue's scope; formatting them would rewrite unrelated files.
 - **`.env` is loaded only from the repo root**: the backend via Node's `--env-file-if-exists` flag in its `dev`/`start` scripts (no `dotenv` dependency; a missing `.env` is not an error), and `vite.config.ts` via `node:util` `parseEnv` on the same file. Vite's own `loadEnv` was not used because it also reads `.env.local`/`.env.[mode]`, which the backend would ignore (code review). A shell `PORT` overrides the file on both sides.
-- **One port parser, `backend/src/port.ts`**: `resolvePort` treats an empty `PORT` as unset (default `3000`) and throws a clear error for anything that is not an integer 1–65535. `vite.config.ts` imports it so the default lives in one place (code review). This is a dev-config-only import from frontend into backend.
+- **One port parser, `backend/src/port.ts`**: `resolvePort` treats an empty `PORT` as unset (default `3000`) and throws a clear error for anything that is not an integer 1–65535. `vite.config.ts` imports it so the default lives in one place (code review). This is a dev-config-only import from frontend into backend; a comment in `port.ts` says it must stay free of imports and side effects (PR review).
 - **`frontend/tsconfig.node.json`** type-checks `vite.config.ts` with Node types, separate from the browser code in `src/`; the frontend `typecheck` script runs both. The config imports `port.ts` with its extension (`allowImportingTsExtensions`), as Vite's upcoming native config loader requires.
 - **`.env.*` is git-ignored** (except `.env.example`) as a guard against committing local env files (code review).
 - **Dev proxy key `/api/`** (with the slash), so paths such as `/apidocs` are not proxied (code review).
@@ -81,6 +81,7 @@ A single npm-workspaces repository with a Node + TypeScript backend (Fastify, `/
 - **`concurrently --kill-others-on-fail`**: if one dev server fails to start (e.g. port in use), the whole `npm run dev` stops visibly (code review).
 - **Frontend status texts**: "Backend: checking…" while loading, the reported status (e.g. "Backend: ok") on success, "Backend: unreachable" on a failed request or non-2xx response.
 - **npm `install-scripts` notice left as is**: npm 11 reports that the `esbuild` and `fsevents` install scripts are not allow-listed. esbuild works through its platform package and fsevents is optional, so no allow-list was added in this issue.
+- **No frontend `preview` script** (PR review): `vite preview` does not use the dev proxy, so the page would always show "unreachable"; serving the build is a Non-goal.
 
 ## Open Questions
 
