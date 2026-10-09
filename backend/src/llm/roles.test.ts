@@ -42,11 +42,16 @@ describe('LLM-backed roles', () => {
     const draft = await createLlmGenerator(client).generate({
       template: 'NDA template',
       instruction: 'Two-year NDA',
-      chunks: [{ id: 'c1', text: 'Confidentiality…' }],
+      chunks: [
+        { id: 'c1', text: 'Confidentiality…', source: 'SFS 2018:558 2 §' },
+        { id: 'c2', text: 'Damages…' },
+      ],
     });
 
     expect(draft).toEqual({ text: 'Draft', references: ['c1'] });
-    expect(client.requests[0].prompt).toContain('[c1] Confidentiality…');
+    expect(client.requests[0].prompt).toContain(
+      '[c1] (SFS 2018:558 2 §) Confidentiality…\n\n[c2] Damages…',
+    );
   });
 
   it('rejects a response that does not match the expected shape', async () => {

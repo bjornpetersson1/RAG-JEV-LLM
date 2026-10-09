@@ -11,6 +11,7 @@ Legal RAG proof of concept: tag-based search and the JEV judge model find releva
 ```bash
 npm install
 cp .env.example .env
+# edit .env: set ANTHROPIC_API_KEY, or LLM_PROVIDER=fake to run without a key
 npm run dev
 ```
 

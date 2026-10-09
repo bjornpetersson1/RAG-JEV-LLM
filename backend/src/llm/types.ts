@@ -10,6 +10,8 @@ export interface Tag {
 export interface Chunk {
   id: string;
   text: string;
+  /** Where the text comes from, e.g. "SFS 1982:80 7 §" or a case reference. */
+  source?: string;
 }
 
 export interface Judgement {

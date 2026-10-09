@@ -103,7 +103,12 @@ function formatVocabulary(vocabulary: readonly Tag[]): string {
 }
 
 function formatChunks(chunks: readonly Chunk[]): string {
-  return chunks.map((chunk) => `[${chunk.id}] ${chunk.text}`).join('\n\n');
+  return chunks
+    .map((chunk) => {
+      const source = chunk.source ? ` (${chunk.source})` : '';
+      return `[${chunk.id}]${source} ${chunk.text}`;
+    })
+    .join('\n\n');
 }
 
 function keepVocabularyTags(tags: string[], vocabulary: readonly Tag[]): string[] {

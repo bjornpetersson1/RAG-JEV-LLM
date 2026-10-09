@@ -66,7 +66,14 @@ export function createAnthropicClient(options: AnthropicClientOptions): LlmClien
     return parseMessage(await fetchMessage(body));
   }
 
-  return withRetryAndLogging(attempt, { ...options, provider: 'anthropic' });
+  return withRetryAndLogging(attempt, {
+    role: options.role,
+    provider: 'anthropic',
+    model,
+    maxRetries: options.maxRetries,
+    logger: options.logger,
+    sleep: options.sleep,
+  });
 }
 
 function classifyTransportError(error: unknown, timeoutMs: number): unknown {
