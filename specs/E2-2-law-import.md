@@ -4,7 +4,7 @@
 - **Labels:** `E2 Data ingestion`
 - **Phase:** 2. Data
 - **Depends on:** E1-3 (#3), E2-1 (#4)
-- **Status:** Implemented — all acceptance criteria verified (npm ci, lint, format:check, typecheck, 140 tests (136 backend, 4 frontend) and build exit 0; a real `npm run data:import:laws` imported all 11 laws with exit 0, and a second run updated all 11 with the same ids)
+- **Status:** Implemented — all acceptance criteria verified (npm ci, lint, format:check, typecheck, 141 tests (137 backend, 4 frontend) and build exit 0; a real `npm run data:import:laws` imported all 11 laws with exit 0, and a second run updated all 11 with the same ids)
 
 ## Summary
 
@@ -86,6 +86,7 @@ Parse the raw SFST law pages fetched by E2-1 into `documents` rows with title, S
   - `raw_text` is rendered from the tree, so it holds only the text in force, without version markers, amendment notes or repealed sections, and matches the chunks.
   - The import date is built from the local date parts instead of a locale format.
   - `upsertDocument` prepares its statements once per connection.
+- **PR review** (test-only changes): a test now orders sections with letter suffixes (`2`, `2 a`, `2 b`, `3`) and treats a `2 a §` after `2 b §` as running text, as criterion 3 asks. The version-switch test now asserts wording that only the coming version of 2 kap. 6 § has.
 
 ## Open Questions
 

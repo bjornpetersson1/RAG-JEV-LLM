@@ -116,7 +116,7 @@ describe('parseLawPage on a law with chapters (2008:567)', () => {
     const section = chapters[1]!.sections.find((candidate) => candidate.number === '6')!;
 
     expect(chapters[1]!.sections.filter((candidate) => candidate.number === '6')).toHaveLength(1);
-    expect(section.paragraphs[0]).toContain('anpassade grundskolan');
+    expect(section.paragraphs[0]).toContain('i förskolan, förskoleklassen, grundskolan');
     expect(law.notInForce).toEqual(['2 kap. 6 §']);
   });
 
@@ -127,10 +127,11 @@ describe('parseLawPage on a law with chapters (2008:567)', () => {
     )!;
 
     expect(later.notInForce).toEqual(['2 kap. 6 §']);
-    expect(section.paragraphs[0]).not.toEqual(
-      law.structure.chapters[1]!.sections.find((candidate) => candidate.number === '6')!
-        .paragraphs[0],
+    // Only the coming version drops "förskoleklassen" from the list of school forms.
+    expect(section.paragraphs[0]).toContain(
+      'i förskolan, grundskolan, anpassade grundskolan, specialskolan, sameskolan eller fritidshemmet',
     );
+    expect(section.paragraphs[0]).not.toContain('förskoleklassen');
   });
 
   it('stores only the text in force, without markers or amendment notes', () => {
@@ -267,6 +268,28 @@ Andra stycket.`),
     expect(law.structure.chapters[0]!.sections[0]!.paragraphs).toEqual([
       'Femte.',
       '7 § första stycket gäller inte arbetstagare i hushåll.',
+    ]);
+  });
+
+  it('orders sections with letter suffixes after their number', () => {
+    const law = parseLawPage(
+      page(`2 § Andra.
+
+2 a § Andra a.
+
+2 b § Andra b.
+
+2 a § Står efter 2 b § och är därför löptext.
+
+3 § Tredje.`),
+      TODAY,
+    );
+    const sections = law.structure.chapters[0]!.sections;
+
+    expect(sections.map((section) => section.number)).toEqual(['2', '2 a', '2 b', '3']);
+    expect(sections[2]!.paragraphs).toEqual([
+      'Andra b.',
+      '2 a § Står efter 2 b § och är därför löptext.',
     ]);
   });
 
