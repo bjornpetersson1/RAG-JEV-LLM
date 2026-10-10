@@ -69,7 +69,7 @@ A control report on the tagging: chunks per tag (including tags no chunk got), c
 - **Real data with the fake tagger** (settled while implementing): on a copy of the database tagged by the fake provider, `index:report` showed 2,116 tagged chunks. 627 got zero tags, 72 tags got no chunks, and one tag was broad (`skadestand`, 25 %). The terminal listed 50 zero-tag chunks and "… and 577 more", and the file was written to `reports/`. These numbers reflect the fake tagger's label matching, not real tagging.
 
 - **Clean code**:
-  - "Currently tagged" is one SQL predicate, `CURRENTLY_TAGGED` in `tag-chunks.ts`, shared by the tagger's pending query and the report. It uses `IS` so untagged (NULL) chunks compare correctly.
+  - "Currently tagged" is one SQL predicate, `currentlyTagged(alias)` in `tag-chunks.ts`, shared by the tagger's pending query and the report. It uses `IS` so untagged (NULL) chunks compare correctly. (Introduced as a constant `CURRENTLY_TAGGED`; code review made it a function that qualifies the columns with the table alias.)
   - `readShare` sits in `env.ts` next to `readPositiveInteger`.
   - `formatUsd` (in `llm/pricing.ts`) formats every estimated cost.
   - The run summary and the report are both formatted in `report-format.ts`.
