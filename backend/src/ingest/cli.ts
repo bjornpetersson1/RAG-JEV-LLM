@@ -5,6 +5,7 @@ import { migrate } from '../db/migrations.js';
 import { describeError } from '../errors.js';
 import { loadChunkConfig } from './chunk-config.js';
 import { chunkDocuments, describeLengths } from './chunk-documents.js';
+import type { Failure } from './failures.js';
 import { fetchRaw } from './fetch-raw.js';
 import type { ImportOptions, ImportResult } from './import-documents.js';
 import { importLaws } from './import-laws.js';
@@ -90,7 +91,7 @@ function summarize(result: ImportResult): string {
   return `Inserted ${result.inserted.length}, updated ${result.updated.length}, failed ${result.failed.length}, flagged ${result.flagged.length}`;
 }
 
-function reportFailures(failed: { identifier: string }[]): number {
+function reportFailures(failed: Failure[]): number {
   if (failed.length === 0) return 0;
   console.error(`Failed: ${failed.map((failure) => failure.identifier).join(', ')}`);
   return 1;

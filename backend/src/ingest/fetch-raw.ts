@@ -2,8 +2,9 @@ import { mkdirSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { setTimeout } from 'node:timers/promises';
 import { describeError } from '../errors.js';
+import type { Failure } from './failures.js';
 import { writeFileAtomically } from './files.js';
-import { decodeHtmlEntities } from './html.js';
+import { collapseWhitespace, decodeHtmlEntities } from './html.js';
 import { readManifest, writeManifest, type ManifestEntry } from './manifest.js';
 import type { SelectedDocument } from './selection.js';
 
@@ -30,7 +31,7 @@ export interface FetchRawOptions {
 export interface FetchRawResult {
   fetched: string[];
   skipped: string[];
-  failed: { identifier: string; reason: string }[];
+  failed: Failure[];
 }
 
 /** URL the document is fetched from, which the manifest records as its source. */
@@ -167,7 +168,9 @@ async function download(fetchFn: typeof fetch, url: string, timeoutMs: number): 
 /** Rejects a response that is not the expected document, e.g. an error or search page. */
 function checkContent(document: SelectedDocument, content: string): void {
   if (document.type === 'law') {
-    if (!normalizeSpaces(decodeHtmlEntities(content)).includes(normalizeSpaces(document.title))) {
+    if (
+      !collapseWhitespace(decodeHtmlEntities(content)).includes(collapseWhitespace(document.title))
+    ) {
       throw new Error(`Page does not contain the law title "${document.title}"`);
     }
     return;
@@ -188,9 +191,4 @@ function checkContent(document: SelectedDocument, content: string): void {
   if (typeof innehall !== 'string' || innehall.trim() === '') {
     throw new Error('Record has no HTML full text (innehall)');
   }
-}
-
-/** Any run of whitespace, including the non-breaking spaces `&nbsp;` decodes to, as one space. */
-function normalizeSpaces(text: string): string {
-  return text.replace(/\s+/g, ' ');
 }

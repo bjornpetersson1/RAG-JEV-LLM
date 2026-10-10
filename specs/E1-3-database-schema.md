@@ -84,7 +84,7 @@ A SQLite database with tables for documents, chunks, tags and chunk–tag links,
 - **The CLI prints errors as one line with their causes** instead of a stack trace.
 - **Tests close every database** they open (code review) and use platform-neutral paths.
 - **Tracking chunks that got zero tags is left to E3-2** (owner, after code review): `chunk_tags` only shows that a chunk was tagged if it got at least one tag, so E3-2 cannot skip a chunk that got none. E3-2 owns the tagging logic and can add what it needs (e.g. `tagged_model` and `tagged_vocabulary_version` on `chunks`) in a new migration; noted on issue #9.
-- **`documents.identifier` is court-qualified for rulings** (PR review): e.g. `AD 2019 nr 35` or `HD T 1234-20`, because bare case numbers repeat across courts and `UNIQUE (court, identifier)` would not work for laws (`court` is NULL, and SQLite treats NULLs as distinct). Laws use the SFS number. E2-3 builds the identifier this way.
+- **`documents.identifier` is court-qualified for rulings** (PR review): e.g. `AD 2019 nr 35` or `HD T 1234-20`, because bare case numbers repeat across courts and `UNIQUE (court, identifier)` would not work for laws (`court` is NULL, and SQLite treats NULLs as distinct). Laws use the SFS number. E2-3 builds the identifier this way. **Superseded by E2-3:** rulings use their reference number as identifier (`AD 2024 nr 13`, `NJA 2015 s. 741`), which is unique across courts; case numbers are kept in `documents.structure`.
 
 ## Open Questions
 

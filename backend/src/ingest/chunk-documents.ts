@@ -33,9 +33,9 @@ export function chunkDocuments(options: ChunkDocumentsOptions): ChunkDocumentsRe
   const { db, config, identifier } = options;
   const log = options.log ?? console.log;
   const documents = (identifier === undefined
-    ? db.prepare('SELECT id, identifier, title, structure FROM documents ORDER BY id').all()
+    ? db.prepare('SELECT id, identifier, title FROM documents ORDER BY id').all()
     : db
-        .prepare('SELECT id, identifier, title, structure FROM documents WHERE identifier = ?')
+        .prepare('SELECT id, identifier, title FROM documents WHERE identifier = ?')
         .all(identifier)) as unknown as DocumentRecord[];
   const selectStructure = db.prepare('SELECT structure FROM documents WHERE id = ?');
   if (identifier !== undefined && documents.length === 0) {

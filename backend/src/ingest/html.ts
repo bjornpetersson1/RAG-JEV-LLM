@@ -18,3 +18,8 @@ export function decodeHtmlEntities(text: string): string {
     return NAMED_ENTITIES[name.toLowerCase()] ?? entity;
   });
 }
+
+/** Any run of whitespace, including the non-breaking spaces `&nbsp;` decodes to, as one space, trimmed. */
+export function collapseWhitespace(text: string): string {
+  return text.replace(/\s+/g, ' ').trim();
+}
