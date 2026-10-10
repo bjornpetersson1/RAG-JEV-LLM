@@ -1,12 +1,17 @@
 ---
 name: spec-from-issue
 description: Turn a GitHub issue into an implementation spec under specs/ by asking the owner structured questions, get the spec approved, then create the feature branch and commit the spec. Use for /spec-from-issue <N> or as step 1 of /ship-issue.
-argument-hint: <issue number>
+argument-hint: <issue number> [batch]
 ---
 
 # GitHub issue → approved spec
 
 Issue: $ARGUMENTS — if none was given, ask for one first.
+
+**Batch mode** (argument `batch`, used by `/ship-epic`): run steps 1–3 only.
+- Do not move the issue's status.
+- Leave the spec uncommitted with Status `Draft`.
+- `/ship-epic` approves all of the epic's specs together and commits them.
 
 ## 1. Gather context (cheaply)
 
