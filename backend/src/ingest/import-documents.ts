@@ -15,15 +15,12 @@ export interface ImportResult {
   inserted: string[];
   updated: string[];
   failed: { identifier: string; reason: string }[];
-  /** Imported, but with warnings worth a look, e.g. a ruling whose sections were not recognised. */
-  flagged: string[];
 }
 
 /** What a parser makes of one raw file: the row (the manifest supplies its source) and a log line. */
 export interface ParsedDocument {
   row: Omit<DocumentRow, 'identifier' | 'sourceUrl' | 'fetchedAt'>;
   summary: string;
-  warnings?: string[];
 }
 
 /**
@@ -38,16 +35,12 @@ export function importDocuments(
 ): ImportResult {
   const { db, rawDir, type, parse } = options;
   const log = options.log ?? console.log;
-  const result: ImportResult = { inserted: [], updated: [], failed: [], flagged: [] };
+  const result: ImportResult = { inserted: [], updated: [], failed: [] };
 
   for (const entry of requireManifest(rawDir).documents) {
     if (entry.type !== type) continue;
     try {
-      const {
-        row,
-        summary,
-        warnings = [],
-      } = parse(readFileSync(join(rawDir, entry.file), 'utf8'), entry);
+      const { row, summary } = parse(readFileSync(join(rawDir, entry.file), 'utf8'), entry);
       const outcome = upsertDocument(db, {
         ...row,
         identifier: entry.identifier,
@@ -56,10 +49,6 @@ export function importDocuments(
       });
       result[outcome].push(entry.identifier);
       log(`${outcome === 'inserted' ? 'Inserted' : 'Updated'} ${entry.identifier}: ${summary}`);
-      if (warnings.length > 0) {
-        result.flagged.push(entry.identifier);
-        for (const warning of warnings) log(`Flagged ${entry.identifier}: ${warning}`);
-      }
     } catch (error) {
       const reason = describeError(error);
       result.failed.push({ identifier: entry.identifier, reason });

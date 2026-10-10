@@ -1,56 +1,69 @@
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import type { DatabaseSync } from 'node:sqlite';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { openDatabase } from '../db/database.js';
+import { migrate } from '../db/migrations.js';
 import { importLaws } from './import-laws.js';
-import type { ManifestEntry } from './manifest.js';
+import { writeManifest, type ManifestEntry } from './manifest.js';
 import type { LawStructure } from './structure.js';
-import { FETCHED_AT, createImportWorkspace, manifestEntry } from './test-helpers.js';
 
 const TODAY = '2026-10-10';
+const FETCHED_AT = '2026-10-10T08:00:00.000Z';
 
 function lawEntry(sfsNumber: string): ManifestEntry {
-  return manifestEntry({ type: 'law', identifier: `SFS ${sfsNumber}`, title: '', sfsNumber });
+  return {
+    type: 'law',
+    identifier: `SFS ${sfsNumber}`,
+    sourceUrl: `https://rkrattsbaser.gov.se/sfst?bet=${sfsNumber}`,
+    fetchedAt: FETCHED_AT,
+    file: `laws/SFS-${sfsNumber.replace(':', '-')}.html`,
+  };
 }
 
 const FHL = lawEntry('2018:558');
 const DL = lawEntry('2008:567');
 
 describe('importLaws', () => {
-  let workspace: ReturnType<typeof createImportWorkspace>;
+  let dir: string;
+  let rawDir: string;
   let db: DatabaseSync;
   let log: string[];
 
   beforeEach(() => {
-    workspace = createImportWorkspace();
-    workspace.copyFixture('law-sfs-2018-558.html', FHL);
-    workspace.copyFixture('law-sfs-2008-567.html', DL);
-    db = workspace.db;
+    dir = mkdtempSync(join(tmpdir(), 'import-laws-'));
+    rawDir = join(dir, 'raw');
+    mkdirSync(join(rawDir, 'laws'), { recursive: true });
+    copyFixture('law-sfs-2018-558.html', FHL);
+    copyFixture('law-sfs-2008-567.html', DL);
+    db = openDatabase(join(dir, 'test.db'));
+    migrate(db);
     log = [];
   });
 
-  afterEach(() => workspace.remove());
+  afterEach(() => {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
 
-  function run(entries: ManifestEntry[]) {
-    workspace.writeManifest(entries);
-    return importLaws({
-      db,
-      rawDir: workspace.rawDir,
-      today: TODAY,
-      log: (message) => log.push(message),
-    });
+  function copyFixture(name: string, entry: ManifestEntry): void {
+    copyFileSync(new URL(`./fixtures/${name}`, import.meta.url), join(rawDir, entry.file));
   }
 
-  const documents = () => workspace.documents();
+  function run(entries: ManifestEntry[]) {
+    writeManifest(rawDir, { documents: entries });
+    return importLaws({ db, rawDir, today: TODAY, log: (message) => log.push(message) });
+  }
+
+  function documents() {
+    return db.prepare('SELECT * FROM documents ORDER BY id').all();
+  }
 
   it('stores title, SFS number, dates, source and structure', () => {
     const result = run([FHL, DL]);
 
-    expect(result).toEqual({
-      inserted: ['SFS 2018:558', 'SFS 2008:567'],
-      updated: [],
-      failed: [],
-      flagged: [],
-    });
+    expect(result).toEqual({ inserted: ['SFS 2018:558', 'SFS 2008:567'], updated: [], failed: [] });
     const [fhl] = documents();
     expect(fhl).toMatchObject({
       type: 'law',
@@ -80,12 +93,7 @@ describe('importLaws', () => {
     const before = documents();
     const second = run([{ ...FHL, fetchedAt: '2026-10-11T08:00:00.000Z' }, DL]);
 
-    expect(second).toEqual({
-      inserted: [],
-      updated: ['SFS 2018:558', 'SFS 2008:567'],
-      failed: [],
-      flagged: [],
-    });
+    expect(second).toEqual({ inserted: [], updated: ['SFS 2018:558', 'SFS 2008:567'], failed: [] });
     const after = documents();
     expect(after.map((row) => row.id)).toEqual(before.map((row) => row.id));
     expect(after[0]!.fetched_at).toBe('2026-10-11T08:00:00.000Z');
@@ -93,7 +101,7 @@ describe('importLaws', () => {
 
   it('logs a broken law and imports the rest', () => {
     const broken = lawEntry('1982:80');
-    workspace.writeRaw(broken, '<html>Sökningen gav inga träffar</html>');
+    writeFileSync(join(rawDir, broken.file), '<html>Sökningen gav inga träffar</html>');
     const missing = lawEntry('1977:480');
 
     const result = run([broken, FHL, missing]);
@@ -122,7 +130,7 @@ describe('importLaws', () => {
   });
 
   it('asks for data:fetch when there is no manifest', () => {
-    expect(() => importLaws({ db, rawDir: join(workspace.dir, 'empty'), today: TODAY })).toThrow(
+    expect(() => importLaws({ db, rawDir: join(dir, 'empty'), today: TODAY })).toThrow(
       'run npm run data:fetch first',
     );
   });

@@ -4,7 +4,7 @@
 - **Labels:** `E2 Data ingestion`
 - **Phase:** 2. Data
 - **Depends on:** E1-3 (#3), E2-1 (#4); builds on E2-2 (#5) for the `structure` column
-- **Status:** Implemented — all acceptance criteria verified (npm ci, lint, format:check, typecheck, 175 tests (171 backend, 4 frontend) and build exit 0; a real `npm run data:import:rulings` imported all 50 rulings with court, reference, case numbers and date, none flagged or failed, and a second run updated all 50)
+- **Status:** Approved
 
 ## Summary
 
@@ -45,12 +45,12 @@ Parse the raw case-law API records fetched by E2-1 into `documents` rows with co
 
 ## Tasks
 
-- [x] Ruling record parser: fields, HTML paragraphs to text (entities decoded, tags stripped), cut to the deciding court's part, heading detection, section tree.
-- [x] Ruling variant of the structure type shared with E2-2.
-- [x] Ruling importer: read manifest ruling entries, parse, upsert by identifier in one transaction per ruling, collect failures and flags.
-- [x] CLI command and scripts `data:import:rulings` (backend and root).
-- [x] Fixtures and unit tests for every criterion; tests run without network.
-- [x] README: the command, in the data section.
+- [ ] Ruling record parser: fields, HTML paragraphs to text (entities decoded, tags stripped), cut to the deciding court's part, heading detection, section tree.
+- [ ] Ruling variant of the structure type shared with E2-2.
+- [ ] Ruling importer: read manifest ruling entries, parse, upsert by identifier in one transaction per ruling, collect failures and flags.
+- [ ] CLI command and scripts `data:import:rulings` (backend and root).
+- [ ] Fixtures and unit tests for every criterion; tests run without network.
+- [ ] README: the command, in the data section.
 
 ## Decisions
 
@@ -64,26 +64,6 @@ Parse the raw case-law API records fetched by E2-1 into `documents` rows with co
 - **Clerk and footer lines** ("Rättssekreterare: …", "Sekreterare: …", "Dom 1994-06-08, målnummer …", "HD:s dom meddelad: …") are dropped (default).
 - **Upsert keeps the row's `id`, one transaction per ruling, non-zero exit on failures** (default), as in E2-2.
 - **No new dependency** (default): the API's HTML is a flat list of `<p>` (and occasionally `<h1>`/`<h2>`) elements, so a small extractor is enough.
-- **HD's part starts at "HD (justitieråden …)"** (settled while implementing, for correct citations): the paragraph "Högsta domstolen" in an NJA report is followed by the parties' appeal and the reporting clerk's proposed judgment ("Föredraganden … föreslog … följande dom"), which has its own Domskäl and Domslut. Starting there would cite the clerk's proposal as HD's reasoning. All five NJA reports open HD's own decision with a paragraph starting "HD (", so the import starts there. This departs from the spec's "starts at the paragraph `Högsta domstolen`".
-- **Main sections depend on where they appear** (settled while implementing): in the data, "Tvisten", "Rättegångskostnader", "Bakgrund" and "Utredningen" often appear inside Domskäl as sub-sections. So Bakgrund, Yrkanden, Parternas …, Grunder, Utveckling av talan, Utredning, Bevisning and Överklagad dom only open a main section before the court's reasons. After Domskäl, only Domslut-like headings (Domslut, Beslut, HD:s domslut, HD:s avgörande, Arbetsdomstolens ställningstagande/beslut/avgörande) and a dissent or addition do. "Skäl" counts as Domskäl, which AD uses for decisions. "Tvisten" and "Rättegångskostnader" are therefore not in the main list, which departs from the spec's list.
-- **Inline headings in old NJA reports** (settled while implementing): reports from the 1980s and 1990s start sections inside a paragraph ("HD (…) beslöt följande dom: Domskäl. När …"). Such a paragraph is split into the intro, the heading and the text.
-- **Dissents and additions** (settled while implementing): a paragraph like "Ledamoten X skiljaktiga mening", "Justitierådet X var skiljaktig …" or "JustR X … tillade följande" opens a main section "Skiljaktig mening" or "Tillägg". The line itself is kept as its first paragraph, so the judge's name stays in the text.
-- **Opening lines** (settled while implementing): before the first main heading, AD's party block ("Nr 13", claimant, "mot", respondent) stays as paragraphs of Inledning. Short lines after it become sub-sections of Inledning, as in AD rulings whose statement of the parties' cases has no main heading.
-- **Headings** (settled while implementing): a heading is at most 80 characters, starts with a capital letter, and does not end in `.`, `,`, `;` or `:`. It contains no colon followed by a space, so "Överklagade domen: Kalmar tingsrätts dom …" is text while "HD:s bedömning" is a heading. Headings in capitals are normalised ("DOMSKÄL" → "Domskäl").
-- **Title** (settled while implementing): the first sentence of the summary ends at a full stop followed by a capital letter or the end of the text, but not after an abbreviation such as "s.k." or "bl.a.".
-- **Flagged rulings are counted in the shared import result** (settled while implementing): `ImportResult.flagged` and a "Flagged …" log line per warning. The summary line reads "Inserted …, updated …, failed …, flagged …" for laws too, where flagged is always 0.
-- **Fixtures are trimmed real records** (settled while implementing): the three records keep their fields. The full text is cut to the headings, the opening lines, the paragraph after each heading, the HD decision and dissent markers, and the BILAGA line, with long paragraphs shortened to 400 characters.
-- **Checked against all 50 real rulings**: every ruling gets Domskäl/Skäl and Domslut-like sections, none is flagged, and none fails.
-- **Each section records its role** (clean code): `RulingSection.role` is `opening`, `proceedings`, `reasons`, `ruling`, `dissent`, `addition` or `whole`. E2-4 and later retrieval can then tell the court's reasons from the parties' cases, and headings the importer made up (Inledning, Skiljaktig mening, Tillägg, Domen) from the court's own, without matching heading text again.
-- **Shared importer test workspace** (clean code): `ingest/test-helpers.ts` (excluded from the build) creates the temporary raw directory and migrated database, and builds manifest entries with `fetch-raw`'s own file naming.
-- **Code review fixes, checked against all 50 real rulings**:
-  - A Bakgrund, Grunder … heading that repeats for each party (AD 2015 nr 35, AD 2018 nr 25 and others), or that follows a party's empty heading, stays a sub-section instead of opening a second main "Bakgrund".
-  - Only all-caps headings with a word of five or more letters, or known section headings ("SKÄL"), are normalised, so "DO", "QQFS" and "III" keep their capitals.
-  - A short line followed by a list item ("(1)", "a)", "- ", soft hyphen) or by text in lower case introduces a list and is not a heading (e.g. "Förbundet har yrkat att Arbetsdomstolen ska"). Known section headings such as "Domslut" before a numbered list are exempt.
-  - The party block runs to the respondent after the last "mot" before the first main heading, which covers joined cases (AD 2023 nr 8).
-  - A sub-heading that ends in a word like "och" or "hos" and has no text joins with the next line, for headings the source splits over two paragraphs (AD 2020 nr 18, AD 2002 nr 115).
-  - A judge paragraph with "skiljaktig" is a dissent even if it also says "tillade", and old plural forms ("JustR:n A och B voro skiljaktiga") are recognised.
-  - Paragraph tags are matched case-insensitively. A full text that yields no paragraphs fails instead of being imported as an empty "Domen".
 
 ## Open Questions
 

@@ -56,16 +56,6 @@ npm run data:import:laws   # parse data/raw/laws/ into the documents table (safe
 
 The import applies any pending migrations, then reads the laws listed in the manifest and stores each one with its title, identifier (`SFS 1982:80`), issue date, the last amendment included (`consolidated_through`) and a JSON structure tree in `documents.structure`. The tree holds chapters, sections and paragraphs (stycken), plus the transitional provisions. Amendment notes such as "Lag (2014:958)." are moved out of the text into the tree. Repealed sections, and section versions that are not in force on the day of the import, are left out. Re-running updates each law in place. A law that cannot be parsed is logged, and the command exits non-zero at the end.
 
-### Importing rulings
-
-```bash
-npm run data:import:rulings   # parse data/raw/rulings/ into the documents table (safe to re-run)
-```
-
-Each ruling is stored with its court (`AD` or `HD`), its reference number as identifier (`AD 2024 nr 13`, `NJA 2015 s. 741`), its decision date and a title. The title is the API's name for the case, or the first sentence of its summary. The JSON structure tree in `documents.structure` holds the case numbers, all reference numbers, the summary, and the sections (Bakgrund, Yrkanden, Domskäl, Domslut, Skiljaktig mening …) with their sub-sections.
-
-Only the deciding court's own text is imported, so every source reference points to AD's or HD's reasoning. For AD, the district court's judgment attached as BILAGA is left out. For HD, the lower courts and the reporting clerk's proposal are left out. A ruling whose sections cannot be recognised is imported as one section, "Domen", and flagged in the log. A record that cannot be read is logged, and the command exits non-zero at the end.
-
 ## LLM configuration
 
 Each LLM role (tagger, query translator, judge, generator) gets its provider and model from `.env`, so switching needs no code change:
