@@ -29,17 +29,24 @@ const PRICES: Record<string, ModelPrice> = {
 
 const TOKENS_PER_MILLION = 1_000_000;
 
+// Anthropic bills cache writes (5-minute cache) and cache reads as multiples of the input rate.
+const CACHE_WRITE_MULTIPLIER = 1.25;
+const CACHE_READ_MULTIPLIER = 0.1;
+
 /** Estimated cost in USD, or `undefined` for a model not in the price table. */
 export function estimateCostUsd(model: string, usage: LlmUsage): number | undefined {
   const price = PRICES[model];
   if (!price) return undefined;
 
+  const promptTokens = usage.inputTokens + usage.cacheWriteTokens + usage.cacheReadTokens;
   const rates =
-    price.longPrompt && usage.inputTokens > price.longPrompt.thresholdTokens
-      ? price.longPrompt
-      : price;
+    price.longPrompt && promptTokens > price.longPrompt.thresholdTokens ? price.longPrompt : price;
+  const inputEquivalent =
+    usage.inputTokens +
+    usage.cacheWriteTokens * CACHE_WRITE_MULTIPLIER +
+    usage.cacheReadTokens * CACHE_READ_MULTIPLIER;
   return (
-    (usage.inputTokens * rates.inputPerMTok + usage.outputTokens * rates.outputPerMTok) /
+    (inputEquivalent * rates.inputPerMTok + usage.outputTokens * rates.outputPerMTok) /
     TOKENS_PER_MILLION
   );
 }

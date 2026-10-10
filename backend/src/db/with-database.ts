@@ -7,11 +7,11 @@ import { migrate } from './migrations.js';
  * Opens the database at `DATABASE_PATH`, applies pending migrations, runs `work` and closes the
  * database, for CLI commands that read or write it.
  */
-export function withDatabase<T>(work: (db: DatabaseSync) => T): T {
+export async function withDatabase<T>(work: (db: DatabaseSync) => T | Promise<T>): Promise<T> {
   const db = openDatabase(resolveDatabasePath(process.env.DATABASE_PATH));
   try {
     migrate(db);
-    return work(db);
+    return await work(db);
   } finally {
     db.close();
   }

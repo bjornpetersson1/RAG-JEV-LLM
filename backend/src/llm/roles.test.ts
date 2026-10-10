@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { LlmError } from './client.js';
 import { createFakeLlmClient } from './fakes.js';
 import {
   createLlmGenerator,
@@ -7,25 +8,171 @@ import {
   createLlmTagger,
 } from './roles.js';
 
-const VOCABULARY = [{ name: 'employment', description: 'Employment law' }, { name: 'termination' }];
+const VOCABULARY = [
+  { slug: 'lon', label: 'Lön', description: 'lön och lönevillkor', area: 'lon' },
+  { slug: 'bonus', label: 'Bonus', description: 'bonus', area: 'lon' },
+  { slug: 'provision', label: 'Provision', description: 'provision', area: 'lon' },
+  { slug: 'vite', label: 'Vite', description: 'avtalat vite', area: 'skadestand' },
+  { slug: 'skadestand', label: 'Skadestånd', description: 'skadestånd', area: 'skadestand' },
+  { slug: 'ranta', label: 'Ränta', description: 'ränta', area: 'skadestand' },
+  { slug: 'forlikning', label: 'Förlikning', description: 'förlikning', area: 'skadestand' },
+  { slug: 'preskription', label: 'Preskription', description: 'preskription', area: 'skadestand' },
+  { slug: 'bevisborda', label: 'Bevisbörda', description: 'bevisbörda', area: 'skadestand' },
+];
+
+const CHUNK = {
+  text: 'Arbetstagaren har rätt till lön och bonus.',
+  context: 'Lag (1982:80) om anställningsskydd › 7 §',
+  source: 'SFS 1982:80 7 §',
+};
+
+const USAGE = { inputTokens: 10, outputTokens: 5, cacheWriteTokens: 1000, cacheReadTokens: 0 };
+
+/** A fake client that answers the tagger's calls with `answers` in turn. */
+function answering(...answers: string[][]) {
+  let call = 0;
+  const client = createFakeLlmClient(() => ({
+    tags: answers[Math.min(call++, answers.length - 1)],
+  }));
+  return {
+    ...client,
+    complete: async (request: Parameters<typeof client.complete>[0]) => ({
+      ...(await client.complete(request)),
+      usage: USAGE,
+    }),
+  };
+}
 
 describe('LLM-backed roles', () => {
-  it('tagger sends the vocabulary and text and keeps only known, unique tags', async () => {
-    const client = createFakeLlmClient(() => ({ tags: ['employment', 'made-up', 'employment'] }));
+  describe('tagger', () => {
+    it('sends the vocabulary grouped by area as a cached system prompt and the chunk as prompt', async () => {
+      const client = answering(['lon', 'bonus', 'provision']);
 
-    const tags = await createLlmTagger(client).tag('An employee may be dismissed…', VOCABULARY);
+      await createLlmTagger(client).tag(CHUNK, VOCABULARY);
 
-    expect(tags).toEqual(['employment']);
-    expect(client.requests[0].prompt).toContain('- employment: Employment law\n- termination');
-    expect(client.requests[0].prompt).toContain('An employee may be dismissed…');
+      const [request] = client.requests;
+      expect(request.cacheSystem).toBe(true);
+      expect(request.system).toContain('Välj 3–8 taggar');
+      expect(request.system).toContain('## lon\n- lon: Lön – lön och lönevillkor\n- bonus: Bonus');
+      expect(request.system).toContain('## skadestand\n- vite: Vite – avtalat vite');
+      expect(request.prompt).toBe(
+        'Källa: SFS 1982:80 7 §\nSammanhang: Lag (1982:80) om anställningsskydd › 7 §\n' +
+          'Text:\nArbetstagaren har rätt till lön och bonus.',
+      );
+    });
+
+    it('discards unknown slugs and stores duplicates once', async () => {
+      const client = answering(['lon', 'made-up', 'bonus', 'lon', 'provision', 'made-up', 'other']);
+
+      const result = await createLlmTagger(client).tag(CHUNK, VOCABULARY);
+
+      expect(result).toEqual({
+        tags: ['lon', 'bonus', 'provision'],
+        discarded: ['made-up', 'other'],
+        overLimit: [],
+        retried: false,
+        usage: USAGE,
+      });
+      expect(client.requests).toHaveLength(1);
+    });
+
+    it('asks once more, naming the invalid slugs, when fewer than 3 known tags come back', async () => {
+      const client = answering(['lon', 'made-up', 'lon'], ['lon', 'bonus', 'vite']);
+
+      const result = await createLlmTagger(client).tag(CHUNK, VOCABULARY);
+
+      expect(client.requests).toHaveLength(2);
+      expect(client.requests[1].prompt).toContain(
+        'Ditt förra svar gav 1 giltiga taggar. Dessa slugs finns inte i vokabulären: made-up.',
+      );
+      expect(client.requests[1].prompt).toContain(
+        'Text:\nArbetstagaren har rätt till lön och bonus.',
+      );
+      expect(result).toMatchObject({
+        tags: ['lon', 'bonus', 'vite'],
+        discarded: ['made-up'],
+        retried: true,
+      });
+      expect(result.usage).toEqual({
+        inputTokens: 20,
+        outputTokens: 10,
+        cacheWriteTokens: 2000,
+        cacheReadTokens: 0,
+      });
+    });
+
+    it('accepts fewer than 3 tags after the one retry', async () => {
+      const client = answering(['lon'], ['bonus']);
+
+      const result = await createLlmTagger(client).tag(CHUNK, VOCABULARY);
+
+      expect(client.requests).toHaveLength(2);
+      expect(client.requests[1].prompt).toContain('Det var för få taggar.');
+      expect(result).toMatchObject({ tags: ['bonus', 'lon'], retried: true });
+    });
+
+    it("uses the retry's answer when it has enough tags, without counting the first as cut", async () => {
+      const retryAnswer = [
+        'vite',
+        'skadestand',
+        'ranta',
+        'forlikning',
+        'preskription',
+        'bevisborda',
+      ];
+      const client = answering(['lon', 'bonus'], retryAnswer);
+
+      const result = await createLlmTagger(client).tag(CHUNK, VOCABULARY);
+
+      expect(result).toMatchObject({ tags: retryAnswer, overLimit: [], retried: true });
+    });
+
+    it('matches slugs regardless of case and surrounding whitespace', async () => {
+      const client = answering([' Lon', 'BONUS ', 'vite']);
+
+      const result = await createLlmTagger(client).tag(CHUNK, VOCABULARY);
+
+      expect(result).toMatchObject({ tags: ['lon', 'bonus', 'vite'], discarded: [] });
+      expect(client.requests).toHaveLength(1);
+    });
+
+    it('carries the tokens of the calls made so far when the retry fails', async () => {
+      let call = 0;
+      const client = {
+        requests: [] as unknown[],
+        async complete() {
+          call += 1;
+          if (call === 2) throw new LlmError('Anthropic API returned 529', { retryable: true });
+          return { data: { tags: ['lon'] }, usage: USAGE };
+        },
+      };
+
+      const failure = await createLlmTagger(client)
+        .tag(CHUNK, VOCABULARY)
+        .catch((error: unknown) => error);
+
+      expect(failure).toBeInstanceOf(LlmError);
+      expect(failure).toMatchObject({ message: 'Anthropic API returned 529', usage: USAGE });
+    });
+
+    it("keeps the first 8 known tags in the model's order", async () => {
+      const slugs = VOCABULARY.map((tag) => tag.slug).reverse();
+      const client = answering(slugs);
+
+      const result = await createLlmTagger(client).tag(CHUNK, VOCABULARY);
+
+      expect(result.tags).toEqual(slugs.slice(0, 8));
+      expect(result.overLimit).toEqual([slugs[8]]);
+      expect(client.requests).toHaveLength(1);
+    });
   });
 
   it('query translator keeps only known tags', async () => {
-    const client = createFakeLlmClient(() => ({ tags: ['termination', 'other'] }));
+    const client = createFakeLlmClient(() => ({ tags: ['lon', 'other'] }));
 
     await expect(
       createLlmQueryTranslator(client).translate('Draft a termination clause', VOCABULARY),
-    ).resolves.toEqual(['termination']);
+    ).resolves.toEqual(['lon']);
   });
 
   it('judge returns the judgement with the score clamped to 0–1', async () => {
