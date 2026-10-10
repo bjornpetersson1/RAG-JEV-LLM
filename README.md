@@ -66,6 +66,23 @@ Each ruling is stored with its court (`AD` or `HD`), its reference number as ide
 
 Only the deciding court's own text is imported, so every source reference points to AD's or HD's reasoning. For AD, the district court's judgment attached as BILAGA is left out. For HD, the lower courts and the reporting clerk's proposal are left out. A ruling whose sections cannot be recognised is imported as one section, "Domen", and flagged in the log. A record that cannot be read is logged, and the command exits non-zero at the end.
 
+### Chunking
+
+```bash
+npm run data:chunk                              # chunk every imported document (safe to re-run)
+npm run data:chunk -- --document "SFS 1982:80"  # chunk one document
+```
+
+Chunks follow the structure tree. A law gives one chunk per section and per transitional entry, and a ruling gives one per section and sub-section. A chunk is split further when it is longer than `CHUNK_MAX_CHARS` (default 2000 characters): first on paragraph boundaries, then on sentences, then on spaces. Pieces shorter than `CHUNK_MIN_CHARS` (default 200) are merged with a neighbour from the same section.
+
+Each chunk stores:
+
+- `source_ref`, the exact place in the source: `SFS 1982:80 7 §`, `SFS 2008:567 2 kap. 3 §`, `SFS 1982:80 7 § st. 2`, `AD 1994 nr 79, Domskäl, Tystnadsplikt` or `…, del 2/3`;
+- `context`, the title and heading path, which later roles put in front of the text;
+- `token_count`, an estimate (characters / 3.5).
+
+Re-chunking matches chunks by `source_ref`. A chunk whose text and context are unchanged keeps its id and tags, even if its reference changed (for example `del 2/3` becoming `del 2/4`). A chunk whose text or context changed keeps its id but loses its tags, since tags are made from both. Renaming a title or heading therefore drops the tags of every chunk under it. Chunks that are no longer produced are deleted. The command prints chunks and min/median/max length per document, plus the totals.
+
 ## LLM configuration
 
 Each LLM role (tagger, query translator, judge, generator) gets its provider and model from `.env`, so switching needs no code change:

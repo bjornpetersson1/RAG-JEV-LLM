@@ -43,6 +43,22 @@ export function inTransaction<T>(db: DatabaseSync, work: () => T): T {
 }
 
 /**
+ * Wraps `prepare` so its statements are prepared once per connection and reused, for code that
+ * runs the same statements for every document.
+ */
+export function preparedOnce<T>(prepare: (db: DatabaseSync) => T): (db: DatabaseSync) => T {
+  const cache = new WeakMap<DatabaseSync, T>();
+  return (db) => {
+    let statements = cache.get(db);
+    if (!statements) {
+      statements = prepare(db);
+      cache.set(db, statements);
+    }
+    return statements;
+  };
+}
+
+/**
  * Deletes the database file and SQLite's side files, if they exist. Refuses a file that is not a
  * SQLite database, so a mistyped path cannot delete something else.
  */

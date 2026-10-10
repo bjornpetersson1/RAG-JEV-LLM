@@ -1,7 +1,10 @@
+import type { DatabaseSync } from 'node:sqlite';
 import { resolveDatabasePath } from '../db/config.js';
 import { openDatabase } from '../db/database.js';
 import { migrate } from '../db/migrations.js';
 import { describeError } from '../errors.js';
+import { loadChunkConfig } from './chunk-config.js';
+import { chunkDocuments, describeLengths } from './chunk-documents.js';
 import { fetchRaw } from './fetch-raw.js';
 import type { ImportOptions, ImportResult } from './import-documents.js';
 import { importLaws } from './import-laws.js';
@@ -9,7 +12,8 @@ import { importRulings } from './import-rulings.js';
 import { RAW_DATA_DIR, SELECTION_PATH } from './paths.js';
 import { loadSelection } from './selection.js';
 
-const USAGE = 'Usage: data <fetch [--force] | import:laws | import:rulings>';
+const USAGE =
+  'Usage: data <fetch [--force] | import:laws | import:rulings | chunk [--document <identifier>]>';
 
 const [command, ...flags] = process.argv.slice(2);
 
@@ -28,6 +32,10 @@ async function run(): Promise<number> {
     return runImport((options) => importLaws({ ...options, today: localDate() }));
   }
   if (command === 'import:rulings' && flags.length === 0) return runImport(importRulings);
+  if (command === 'chunk' && flags.length === 0) return runChunk(undefined);
+  if (command === 'chunk' && flags.length === 2 && flags[0] === '--document') {
+    return runChunk(flags[1]);
+  }
   console.error(USAGE);
   return 1;
 }
@@ -46,17 +54,36 @@ async function runFetch(force: boolean): Promise<number> {
   return reportFailures(result.failed);
 }
 
-/** Opens the database, applies pending migrations and runs `importer` over the raw files. */
+/** Runs `importer` over the raw files. */
 function runImport(importer: (options: ImportOptions) => ImportResult): number {
-  const db = openDatabase(resolveDatabasePath(process.env.DATABASE_PATH));
-  try {
-    migrate(db);
+  return withDatabase((db) => {
     const result = importer({ db, rawDir: RAW_DATA_DIR });
     console.log(summarize(result));
     return reportFailures(result.failed);
+  });
+}
+
+/** Opens the database, applies pending migrations, runs `work` and closes the database. */
+function withDatabase(work: (db: DatabaseSync) => number): number {
+  const db = openDatabase(resolveDatabasePath(process.env.DATABASE_PATH));
+  try {
+    migrate(db);
+    return work(db);
   } finally {
     db.close();
   }
+}
+
+function runChunk(identifier: string | undefined): number {
+  const config = loadChunkConfig(process.env);
+  return withDatabase((db) => {
+    const result = chunkDocuments({ db, config, identifier });
+    console.log(
+      `Total: ${result.lengths.length} chunks, ${describeLengths(result.lengths)}; ` +
+        `inserted ${result.inserted}, updated ${result.updated}, unchanged ${result.unchanged}, deleted ${result.deleted}`,
+    );
+    return reportFailures(result.failed);
+  });
 }
 
 function summarize(result: ImportResult): string {
