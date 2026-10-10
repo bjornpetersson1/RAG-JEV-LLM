@@ -89,6 +89,8 @@ Each area in the file has a slug as above; the Swedish display name lives in cod
 - **Code review fixes**: a tag with another problem (e.g. an unknown area) no longer also makes the presets that use it fail as "unknown slug", and per-area counts are skipped while an area is unknown, so the error points at the real problem; labels must be unique ignoring case, and labels and descriptions must not have surrounding whitespace; a file that is not valid JSON is reported with its path; an entry with an empty slug is named by index alone; `syncVocabulary` rejects a repeated slug instead of failing on the unique key; the committed file is loaded in `beforeAll`, so an invalid file fails the tests instead of test collection; the test workspace adds documents through `upsertDocument`.
 - **One version for the whole vocabulary, not per tag** (code review finding, not changed): the owner chose a content hash of the whole vocabulary. Any edit therefore re-tags every chunk, which with the E3-2 tagger costs around 1 USD. A per-tag version would save that, but it would also leave old chunks tagged without newly added tags, since a new tag can apply to any chunk.
 
+- **`DEFAULT_LIMITS` is module-private** (PR review): it is only the default parameter; callers pass their own `VocabularyLimits`.
+
 ## Open Questions
 
 - None.

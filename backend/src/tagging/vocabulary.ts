@@ -43,7 +43,7 @@ export interface VocabularyLimits {
   perPreset: { min: number; max: number };
 }
 
-export const DEFAULT_LIMITS: VocabularyLimits = {
+const DEFAULT_LIMITS: VocabularyLimits = {
   tags: { min: 100, max: 300 },
   perArea: { min: 5, max: 30 },
   perPreset: { min: 10, max: 25 },
