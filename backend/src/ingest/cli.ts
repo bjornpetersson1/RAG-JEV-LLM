@@ -5,10 +5,11 @@ import { describeError } from '../errors.js';
 import { fetchRaw } from './fetch-raw.js';
 import type { ImportOptions, ImportResult } from './import-documents.js';
 import { importLaws } from './import-laws.js';
+import { importRulings } from './import-rulings.js';
 import { RAW_DATA_DIR, SELECTION_PATH } from './paths.js';
 import { loadSelection } from './selection.js';
 
-const USAGE = 'Usage: data <fetch [--force] | import:laws>';
+const USAGE = 'Usage: data <fetch [--force] | import:laws | import:rulings>';
 
 const [command, ...flags] = process.argv.slice(2);
 
@@ -26,6 +27,7 @@ async function run(): Promise<number> {
   if (command === 'import:laws' && flags.length === 0) {
     return runImport((options) => importLaws({ ...options, today: localDate() }));
   }
+  if (command === 'import:rulings' && flags.length === 0) return runImport(importRulings);
   console.error(USAGE);
   return 1;
 }
@@ -58,7 +60,7 @@ function runImport(importer: (options: ImportOptions) => ImportResult): number {
 }
 
 function summarize(result: ImportResult): string {
-  return `Inserted ${result.inserted.length}, updated ${result.updated.length}, failed ${result.failed.length}`;
+  return `Inserted ${result.inserted.length}, updated ${result.updated.length}, failed ${result.failed.length}, flagged ${result.flagged.length}`;
 }
 
 function reportFailures(failed: { identifier: string }[]): number {
