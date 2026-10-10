@@ -106,6 +106,8 @@ At indexing time an LLM picks 3–8 tags from the E3-1 vocabulary for every chun
 
 - **No live API run** (verification): `.env` has `LLM_PROVIDER=fake` and no API key, so the Haiku prompt, prompt caching and the real cost were not exercised. The request shape (`cache_control` on the system block, cache token fields) is covered by the Anthropic client tests with a faked `fetch`. The first `npm run index:tag -- --limit 20` with a key shows the real cost and whether caching applies (`cacheReadTokens` > 0 from the second chunk).
 
+- **`.env.example` calls the cost an estimate** (PR review): no live run has measured it yet.
+
 ## Open Questions
 
 - None.
