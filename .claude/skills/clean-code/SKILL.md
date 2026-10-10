@@ -1,12 +1,12 @@
 ---
 name: clean-code
-description: Clean-code pass over the uncommitted changes (or the branch diff against develop) without changing behaviour. Use for /clean-code, as step 3 of /ship-issue and after fixing PR review comments.
-argument-hint: <optional path or KEY>
+description: Clean-code pass over the uncommitted changes (or the branch diff against develop, or against another base) without changing behaviour. Use for /clean-code, as step 3 of /ship-issue, after fixing PR review comments, and with `base origin/main` in /release-check.
+argument-hint: <optional path, KEY, or "base <ref>">
 ---
 
 # Clean-code pass
 
-Scope: the changes on this branch — `git diff origin/develop...` plus uncommitted and untracked files (`git status --porcelain`). Do not touch code outside that diff. Behaviour must not change.
+Scope: the changes on this branch — `git diff origin/develop...` plus uncommitted and untracked files (`git status --porcelain`). With the argument `base <ref>` (e.g. `base origin/main` for a release), the scope is `git diff <ref>...` instead. Do not touch code outside that diff. Behaviour must not change.
 
 ## 1. Built-in simplification
 

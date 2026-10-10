@@ -23,6 +23,8 @@ Work is done issue by issue with `/ship-issue <issue number>`, which chains thes
 
 Each skill can also be run on its own.
 
+When an epic is done and `develop` is ready for `main`, run `/release-check <release PR number>`. It verifies the whole release, runs clean code over it, fixes what is wrong on a `feature/<EPIC>-release-check` branch (PR into `develop`) and posts a review on the release PR.
+
 ## Git and GitHub rules
 
 - `develop` is the integration branch; `main` is only updated by the owner. PRs always target `develop`.
