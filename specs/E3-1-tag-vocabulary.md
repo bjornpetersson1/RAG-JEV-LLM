@@ -4,7 +4,7 @@
 - **Labels:** `E3 Tagging`
 - **Phase:** 3. Tags and index
 - **Depends on:** E2-1 (#4)
-- **Status:** Approved
+- **Status:** Implemented — criteria 1–4 verified (npm ci, lint, format:check, typecheck, 257 tests (253 backend, 4 frontend) and build exit 0; `index:vocabulary` on a fresh database inserted 183 tags, a re-run left 183 unchanged, and an invalid file exited 1 and left the database unchanged); criterion 5 awaits the owner's approval of the list posted on #8
 
 ## Summary
 
@@ -56,13 +56,13 @@ Each area in the file has a slug as above; the Swedish display name lives in cod
 
 ## Tasks
 
-- [ ] Write `sources/tags.json`: about 150–200 tags over the 10 areas, covering the topics of the 11 laws and 50 rulings in `sources/selection.json` (e.g. tillsvidareanställning, provanställning, uppsägningstid, saklig grund, avskedande, konkurrensklausul, värvningsförbud, sekretessklausul, företagshemlighet, lojalitetsplikt, vite, skadestånd, jämkning enligt 36 § AvtL), plus the two presets.
-- [ ] Loader and validator, with the count limits as parameters (defaults from the criteria).
-- [ ] Vocabulary version (hash).
-- [ ] Sync into `tags` in one transaction; CLI command `index:vocabulary` (backend script plus a root script).
-- [ ] README: the vocabulary file, how to change it, and the command.
-- [ ] Unit tests per acceptance criteria 1–4.
-- [ ] Post the review comment on issue #8.
+- [x] Write `sources/tags.json`: 183 tags over the 10 areas, covering the topics of the 11 laws and 50 rulings in `sources/selection.json` (e.g. tillsvidareanställning, provanställning, uppsägningstid, saklig grund, avskedande, konkurrensklausul, värvningsförbud, sekretessklausul, företagshemlighet, lojalitetsplikt, vite, skadestånd, jämkning enligt 36 § AvtL), plus the two presets.
+- [x] Loader and validator, with the count limits as parameters (defaults from the criteria).
+- [x] Vocabulary version (hash).
+- [x] Sync into `tags` in one transaction; CLI command `index:vocabulary` (backend script plus a root script).
+- [x] README: the vocabulary file, how to change it, and the command.
+- [x] Unit tests per acceptance criteria 1–4.
+- [x] Post the review comment on issue #8.
 
 ## Decisions
 
@@ -76,6 +76,20 @@ Each area in the file has a slug as above; the Swedish display name lives in cod
 - **Labels unique too** (default): two tags with the same label would be indistinguishable to the tagger and in the UI.
 - **Version hash** (default): SHA-256 of the tags sorted by slug, serialised canonically, first 12 hex characters; presets are not part of the version since they do not affect tagging.
 - **Synced through the existing `tags` table** (default): no migration needed; the vocabulary version is not stored in the database by this issue, E3-2 stores it per tagged chunk.
+
+- **Descriptions are phrases, not full sentences** (settled while implementing): each starts in lower case without a final full stop, so it slots straight into "Handlar texten om <description>?".
+- **183 tags** (settled while implementing): 14–22 per area; `bisyssla` sits under `konkurrens` and `personuppgifter` under `sekretess`. Presets: 25 for `employment`, 23 for `nda`.
+- **All problems in one error** (settled while implementing): the loader lists every invalid field, duplicate and count in one error, so a hand-edited file is fixed in one pass.
+- **Code in `backend/src/tagging/`** (settled while implementing): `vocabulary.ts` (load, validate, version), `sync-vocabulary.ts` and `cli.ts`, which E3-2 and E3-3 extend with `index:tag` and `index:report`.
+- **Review comment** posted on issue #8 (criterion 5) with every tag grouped by area and the two presets.
+
+- **Shared database helpers** (clean code): `withDatabase` (open, migrate, run, close) moved from the ingest CLI to `db/with-database.ts`, and `createTestDatabase` to `db/test-helpers.ts`; the ingest and tagging CLIs and test workspaces use them. The sync compares tags through the loader's `TAG_FIELDS`, so a new field cannot be missed there.
+- **Skipped clean-code suggestions**: deriving the committed-file test from `DEFAULT_LIMITS` (the literal numbers guard the spec's ranges against a loosened default) and a shared plain-object guard with `llm/` (outside this diff).
+
+- **Code review fixes**: a tag with another problem (e.g. an unknown area) no longer also makes the presets that use it fail as "unknown slug", and per-area counts are skipped while an area is unknown, so the error points at the real problem; labels must be unique ignoring case, and labels and descriptions must not have surrounding whitespace; a file that is not valid JSON is reported with its path; an entry with an empty slug is named by index alone; `syncVocabulary` rejects a repeated slug instead of failing on the unique key; the committed file is loaded in `beforeAll`, so an invalid file fails the tests instead of test collection; the test workspace adds documents through `upsertDocument`.
+- **One version for the whole vocabulary, not per tag** (code review finding, not changed): the owner chose a content hash of the whole vocabulary. Any edit therefore re-tags every chunk, which with the E3-2 tagger costs around 1 USD. A per-tag version would save that, but it would also leave old chunks tagged without newly added tags, since a new tag can apply to any chunk.
+
+- **`DEFAULT_LIMITS` is module-private** (PR review): it is only the default parameter; callers pass their own `VocabularyLimits`.
 
 ## Open Questions
 

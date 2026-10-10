@@ -1,7 +1,4 @@
-import type { DatabaseSync } from 'node:sqlite';
-import { resolveDatabasePath } from '../db/config.js';
-import { openDatabase } from '../db/database.js';
-import { migrate } from '../db/migrations.js';
+import { withDatabase } from '../db/with-database.js';
 import { describeError } from '../errors.js';
 import { loadChunkConfig } from './chunk-config.js';
 import { chunkDocuments, describeLengths } from './chunk-documents.js';
@@ -62,17 +59,6 @@ function runImport(importer: (options: ImportOptions) => ImportResult): number {
     console.log(summarize(result));
     return reportFailures(result.failed);
   });
-}
-
-/** Opens the database, applies pending migrations, runs `work` and closes the database. */
-function withDatabase(work: (db: DatabaseSync) => number): number {
-  const db = openDatabase(resolveDatabasePath(process.env.DATABASE_PATH));
-  try {
-    migrate(db);
-    return work(db);
-  } finally {
-    db.close();
-  }
 }
 
 function runChunk(identifier: string | undefined): number {
