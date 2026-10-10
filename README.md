@@ -48,6 +48,14 @@ The raw files are stored unchanged under `data/raw/laws/` and `data/raw/rulings/
 
 Riksdagen's open data API (`data.riksdagen.se`) was considered for laws but refused connections when the sources were chosen.
 
+### Importing laws
+
+```bash
+npm run data:import:laws   # parse data/raw/laws/ into the documents table (safe to re-run)
+```
+
+The import applies any pending migrations, then reads the laws listed in the manifest and stores each one with its title, identifier (`SFS 1982:80`), issue date, the last amendment included (`consolidated_through`) and a JSON structure tree in `documents.structure`. The tree holds chapters, sections and paragraphs (stycken), plus the transitional provisions. Amendment notes such as "Lag (2014:958)." are moved out of the text into the tree. Repealed sections, and section versions that are not in force on the day of the import, are left out. Re-running updates each law in place. A law that cannot be parsed is logged, and the command exits non-zero at the end.
+
 ## LLM configuration
 
 Each LLM role (tagger, query translator, judge, generator) gets its provider and model from `.env`, so switching needs no code change:
