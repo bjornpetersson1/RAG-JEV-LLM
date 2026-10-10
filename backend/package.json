@@ -13,7 +13,8 @@
     "data:fetch": "tsx --env-file-if-exists=../.env src/ingest/cli.ts fetch",
     "data:import:laws": "tsx --env-file-if-exists=../.env src/ingest/cli.ts import:laws",
     "data:import:rulings": "tsx --env-file-if-exists=../.env src/ingest/cli.ts import:rulings",
-    "data:chunk": "tsx --env-file-if-exists=../.env src/ingest/cli.ts chunk"
+    "data:chunk": "tsx --env-file-if-exists=../.env src/ingest/cli.ts chunk",
+    "index:vocabulary": "tsx --env-file-if-exists=../.env src/tagging/cli.ts vocabulary"
   },
   "dependencies": {
     "fastify": "^5.12.5"

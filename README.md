@@ -83,6 +83,23 @@ Each chunk stores:
 
 Re-chunking matches chunks by `source_ref`. A chunk whose text and context are unchanged keeps its id and tags, even if its reference changed (for example `del 2/3` becoming `del 2/4`). A chunk whose text or context changed keeps its id but loses its tags, since tags are made from both. Renaming a title or heading therefore drops the tags of every chunk under it. Chunks that are no longer produced are deleted. The command prints chunks and min/median/max length per document, plus the totals.
 
+## Tag vocabulary
+
+Search is tag-based, so every chunk is tagged from a fixed vocabulary of Swedish tags, committed in `sources/tags.json`. Each tag has:
+
+- a `slug` (lowercase `a–z`, digits and hyphens, e.g. `jamkning-36-avtl`);
+- a Swedish `label`;
+- a `description` that completes the question "Handlar texten om …?";
+- an `area`: one of `anstallning`, `uppsagning`, `konkurrens`, `sekretess`, `lon`, `arbetstid`, `semester`, `diskriminering`, `avtalsratt`, `skadestand`.
+
+`presets.employment` and `presets.nda` list the tags each document template starts from.
+
+```bash
+npm run index:vocabulary   # validate sources/tags.json and sync it into the tags table (safe to re-run)
+```
+
+The file must hold 100–300 tags, 5–30 per area, with unique slugs and labels, and 10–25 known slugs per preset. An invalid file is rejected with every problem listed, and the database is left unchanged. The sync matches tags by slug: new tags are inserted, changed ones updated, and tags removed from the file are deleted together with their chunk links. The command prints the vocabulary version, a hash of the tags' content. The tagger stores it with every chunk it tags and re-tags chunks with another version, so any edit to a tag means the whole corpus is tagged again on the next tagging run.
+
 ## LLM configuration
 
 Each LLM role (tagger, query translator, judge, generator) gets its provider and model from `.env`, so switching needs no code change:
