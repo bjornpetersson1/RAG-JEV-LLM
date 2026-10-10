@@ -1,5 +1,5 @@
-import type { DatabaseSync, SQLInputValue } from 'node:sqlite';
-import { inTransaction } from '../db/database.js';
+import type { DatabaseSync } from 'node:sqlite';
+import { countRows, inTransaction } from '../db/database.js';
 import { describeError } from '../errors.js';
 import { LlmError, sumUsage, type LlmLogger, type LlmUsage } from '../llm/client.js';
 import { estimateCostUsd } from '../llm/pricing.js';
@@ -42,11 +42,19 @@ export interface TaggingSummary {
 }
 
 /**
- * Chunks to tag: every chunk with `:force`, otherwise those not tagged with this model and
- * vocabulary. They are taken untagged first, then oldest tagged first, so repeated
- * `--force --limit` runs work through the corpus instead of re-tagging the same chunks.
+ * SQL for a row of `chunks` (under `alias` in a join) tagged with the model `:model` and vocabulary
+ * version `:version`. `IS` makes an untagged chunk (NULLs) compare as not tagged.
  */
-const PENDING = ':force OR tagged_model IS NOT :model OR tagged_vocabulary_version IS NOT :version';
+export function currentlyTagged(alias = 'chunks'): string {
+  return `${alias}.tagged_model IS :model AND ${alias}.tagged_vocabulary_version IS :version`;
+}
+
+/**
+ * Chunks to tag: every chunk with `:force`, otherwise those not currently tagged. They are taken
+ * untagged first, then oldest tagged first, so repeated `--force --limit` runs work through the
+ * corpus instead of re-tagging the same chunks.
+ */
+const PENDING = `:force OR NOT (${currentlyTagged()})`;
 
 interface PendingChunk {
   id: number;
@@ -67,8 +75,8 @@ export async function tagChunks(options: TagChunksOptions): Promise<TaggingSumma
   syncVocabulary(db, vocabulary.tags);
 
   const pendingParams = { force: options.force ? 1 : 0, model, version: vocabulary.version };
-  const total = count(db, 'SELECT COUNT(*) AS n FROM chunks', {});
-  const pendingCount = count(
+  const total = countRows(db, 'SELECT COUNT(*) AS n FROM chunks');
+  const pendingCount = countRows(
     db,
     `SELECT COUNT(*) AS n FROM chunks WHERE ${PENDING}`,
     pendingParams,
@@ -146,10 +154,6 @@ export async function tagChunks(options: TagChunksOptions): Promise<TaggingSumma
 
 function isBelowMin(result: TaggingResult): boolean {
   return result.tags.length < TAGS_PER_CHUNK.min;
-}
-
-function count(db: DatabaseSync, sql: string, params: Record<string, SQLInputValue>): number {
-  return (db.prepare(sql).get(params) as { n: number }).n;
 }
 
 /** Replaces a chunk's tags and records its tagging state, in one transaction. */
