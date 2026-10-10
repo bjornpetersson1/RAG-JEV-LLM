@@ -21,7 +21,8 @@
     "db:reset": "npm run db:reset -w backend",
     "data:fetch": "npm run data:fetch -w backend --",
     "data:import:laws": "npm run data:import:laws -w backend",
-    "data:import:rulings": "npm run data:import:rulings -w backend"
+    "data:import:rulings": "npm run data:import:rulings -w backend",
+    "data:chunk": "npm run data:chunk -w backend --"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

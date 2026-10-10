@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
-import { describeError } from '../errors.js';
 import { upsertDocument, type DocumentRow } from './documents.js';
+import { forEachDocument, type Failure } from './failures.js';
 import { requireManifest, type ManifestEntry } from './manifest.js';
 
 export interface ImportOptions {
@@ -14,7 +14,7 @@ export interface ImportOptions {
 export interface ImportResult {
   inserted: string[];
   updated: string[];
-  failed: { identifier: string; reason: string }[];
+  failed: Failure[];
   /** Imported, but with warnings worth a look, e.g. a ruling whose sections were not recognised. */
   flagged: string[];
 }
@@ -39,10 +39,12 @@ export function importDocuments(
   const { db, rawDir, type, parse } = options;
   const log = options.log ?? console.log;
   const result: ImportResult = { inserted: [], updated: [], failed: [], flagged: [] };
+  const entries = requireManifest(rawDir).documents.filter((entry) => entry.type === type);
 
-  for (const entry of requireManifest(rawDir).documents) {
-    if (entry.type !== type) continue;
-    try {
+  result.failed = forEachDocument(
+    entries,
+    (entry) => entry.identifier,
+    (entry) => {
       const {
         row,
         summary,
@@ -60,11 +62,8 @@ export function importDocuments(
         result.flagged.push(entry.identifier);
         for (const warning of warnings) log(`Flagged ${entry.identifier}: ${warning}`);
       }
-    } catch (error) {
-      const reason = describeError(error);
-      result.failed.push({ identifier: entry.identifier, reason });
-      log(`Failed ${entry.identifier}: ${reason}`);
-    }
-  }
+    },
+    log,
+  );
   return result;
 }

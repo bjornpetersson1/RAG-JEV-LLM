@@ -46,13 +46,22 @@ describe('migrate', () => {
 
     const applied = migrate(db);
 
-    expect(applied.map(migrationLabel)).toEqual(['1_initial', '2_document_structure']);
+    expect(applied.map(migrationLabel)).toEqual([
+      '1_initial',
+      '2_document_structure',
+      '3_chunk_context',
+    ]);
     expect(tableNames(db)).toEqual(SCHEMA_TABLES);
     expect(recordedVersions(db)).toEqual([
       { version: 1, name: 'initial', applied_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/) },
       {
         version: 2,
         name: 'document_structure',
+        applied_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+      },
+      {
+        version: 3,
+        name: 'chunk_context',
         applied_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
       },
     ]);

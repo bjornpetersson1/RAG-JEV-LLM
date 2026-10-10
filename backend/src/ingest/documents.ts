@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { inTransaction } from '../db/database.js';
+import { inTransaction, preparedOnce } from '../db/database.js';
 import type { DocumentStructure } from './structure.js';
 
 export interface DocumentRow {
@@ -28,17 +28,8 @@ export function upsertDocument(db: DatabaseSync, row: DocumentRow): 'inserted' |
   });
 }
 
-const statements = new WeakMap<DatabaseSync, ReturnType<typeof prepareStatements>>();
-
 /** Prepared once per connection, since an import upserts every document through them. */
-function statementsFor(db: DatabaseSync) {
-  let prepared = statements.get(db);
-  if (!prepared) {
-    prepared = prepareStatements(db);
-    statements.set(db, prepared);
-  }
-  return prepared;
-}
+const statementsFor = preparedOnce(prepareStatements);
 
 function prepareStatements(db: DatabaseSync) {
   return {
