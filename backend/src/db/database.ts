@@ -26,6 +26,23 @@ export function openDatabase(path: string): DatabaseSync {
 }
 
 /**
+ * Runs `work` in a transaction that takes the write lock at once, committing on success and rolling
+ * back on error.
+ */
+export function inTransaction<T>(db: DatabaseSync, work: () => T): T {
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const result = work();
+    db.exec('COMMIT');
+    return result;
+  } catch (error) {
+    // SQLite may already have rolled back, e.g. after a full disk.
+    if (db.isTransaction) db.exec('ROLLBACK');
+    throw error;
+  }
+}
+
+/**
  * Deletes the database file and SQLite's side files, if they exist. Refuses a file that is not a
  * SQLite database, so a mistyped path cannot delete something else.
  */

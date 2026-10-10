@@ -4,7 +4,7 @@
 - **Labels:** `E2 Data ingestion`
 - **Phase:** 2. Data
 - **Depends on:** E1-3 (#3), E2-1 (#4)
-- **Status:** Approved
+- **Status:** Implemented — all acceptance criteria verified (npm ci, lint, format:check, typecheck, 141 tests (137 backend, 4 frontend) and build exit 0; a real `npm run data:import:laws` imported all 11 laws with exit 0, and a second run updated all 11 with the same ids)
 
 ## Summary
 
@@ -45,17 +45,17 @@ Parse the raw SFST law pages fetched by E2-1 into `documents` rows with title, S
 
 ## Tasks
 
-- [ ] `backend/migrations/0002_document_structure.sql`: nullable `structure` (JSON text) and `consolidated_through` on `documents`.
-- [ ] SFST page parser: header fields, body text decoded from HTML entities, hard line breaks within a paragraph joined, then split into chapters, headings, sections, paragraphs and transitional provisions.
-- [ ] Structure tree type, shared with E2-3 and E2-4 (see Decisions).
-- [ ] Law importer: read manifest law entries, parse each raw file, upsert by identifier in one transaction per law, collect failures.
-- [ ] CLI command and scripts `data:import:laws` (backend and root).
-- [ ] Fixtures and unit tests for every criterion; tests run without network.
-- [ ] README: the command, in the data section added by E2-1.
+- [x] `backend/migrations/0002_document_structure.sql`: nullable `structure` (JSON text) and `consolidated_through` on `documents`.
+- [x] SFST page parser: header fields, body text decoded from HTML entities, hard line breaks within a paragraph joined, then split into chapters, headings, sections, paragraphs and transitional provisions.
+- [x] Structure tree type, shared with E2-3 and E2-4 (see Decisions).
+- [x] Law importer: read manifest law entries, parse each raw file, upsert by identifier in one transaction per law, collect failures.
+- [x] CLI command and scripts `data:import:laws` (backend and root).
+- [x] Fixtures and unit tests for every criterion; tests run without network.
+- [x] README: the command, in the data section added by E2-1.
 
 ## Decisions
 
-- **Structure as a JSON tree in a new `documents.structure` column** (owner): E2-4 reads the tree and does not have to parse text again; E2-3 stores ruling sections in the same column. `raw_text` holds the normalized law text (readable, used later for full-text search).
+- **Structure as a JSON tree in a new `documents.structure` column** (owner): E2-4 reads the tree and does not have to parse text again; E2-3 stores ruling sections in the same column. `raw_text` holds the law text as kept in the tree (readable, used later for full-text search).
 - **Law tree shape** (default): `{ kind: 'law', chapters: [{ number, title, sections: [{ number, heading, paragraphs, amendedBy }] }], transitional: [{ sfs, paragraphs }] }`. A law without chapters has one chapter with `number` and `title` `null`. `number` is a string (`'2 a'`). `heading` is the nearest heading above the section within its chapter (e.g. "Lagens ändamål"), or `null`.
 - **Both dates** (owner): `date` is the issue date ("Utfärdad"); `consolidated_through` (new column) is the last amendment included, so it is visible which version a source reference points to.
 - **Transitional provisions are imported** (owner) as their own part of the tree, one entry per amending act (e.g. `2008:567`) with its paragraphs. Departs from the recommended option; E2-4 chunks them like sections.
@@ -68,6 +68,25 @@ Parse the raw SFST law pages fetched by E2-1 into `documents` rows with title, S
 - **One transaction per law** (default), so a failure leaves no half-written row.
 - **Non-zero exit on any failure** (default), matching `data:fetch`.
 - **No new dependency** (default): the SFST body is plain preformatted text inside one element, so a small extractor plus entity decoding is enough; no HTML parser library.
+- **Two versions of a section** (owner, while implementing): SFST prints both the current and the coming version of a section that is about to change ("/Upphör att gälla U:2028-07-01/" and "/Träder i kraft I:2028-07-01/"). Only the version in force on the import date is kept; the other is counted as "not in force" in the summary. Affects 1995:584, 2008:567 and 2018:218 today.
+- **A repealed section's number can be reused** (settled while implementing): 1995:584 prints "9 § Har upphävts …" followed by a new 9 §; a section may repeat the previous number when that one was repealed or carries a version marker.
+- **Headings** (settled while implementing, sharpened in code review): a block is a heading when it is one short line (at most 120 characters) starting with a capital letter, without closing `,`, `;` or `:`, and ending in a full stop only as part of an abbreviation ("m.m.", "m. m.", "m.fl."). It must be followed by a section, a chapter or another heading. Text that belongs to no section stops the parse with an error rather than being dropped.
+- **Paragraph text has no section number** (settled while implementing): `paragraphs` hold the text after "N §" and any version marker; E2-4 adds the number back where it wants it.
+- **The import applies pending migrations first** (settled while implementing), so `data:import:laws` works on a fresh database without a separate `db:migrate`. E1-3's "no migration at server start" is about the server and still holds.
+- **Shared import pieces** (settled while implementing, clean code): `ingest/import-documents.ts` holds the manifest loop (read the raw file, parse, upsert, log, collect failures) that E2-3 reuses with its own parser; `ingest/documents.ts` holds `upsertDocument` (insert, or update by identifier keeping the id), which takes `documents.type` from `structure.kind`; `inTransaction` moved to `db/database.ts` and the migration runner uses it too; `requireManifest` sits next to `readManifest`.
+- **The manifest identifier must match the page** (settled while implementing): a page whose "SFS-nummer" differs from the manifest entry fails with a clear reason.
+- **Fixtures are trimmed real pages** (settled while implementing): `law-sfs-2018-558.html` (1–4 § and the transitional provisions) and `law-sfs-2008-567.html` (1 kap. 1–4 §, 2 kap. 1–6 § with both versions of 6 §, 3 kap. 1 §, two transitional entries). `backend/src/ingest/fixtures/` is in `.prettierignore` so the source HTML stays byte for byte.
+- **The migration runner test lists both migrations** (settled while implementing): `migrations.test.ts` asserted that only `1_initial` exists; it now expects `1_initial` and `2_document_structure`.
+- **Code review fixes, checked against all 11 real laws**:
+  - Headings ending in "m.m." were taken as paragraphs (seven laws).
+  - A heading followed by another heading or by a chapter was not recognised.
+  - Letter list items ("a.", "b.") now stay in their paragraph, as numbered ones do.
+  - An amendment note without a final full stop ("Lag (2022:836)") is moved too.
+  - A section only starts where the text after "N §" begins with a capital letter (or is "har upphävts …"), so running text such as "7 § första stycket gäller …" cannot open a false section.
+  - `raw_text` is rendered from the tree, so it holds only the text in force, without version markers, amendment notes or repealed sections, and matches the chunks.
+  - The import date is built from the local date parts instead of a locale format.
+  - `upsertDocument` prepares its statements once per connection.
+- **PR review** (test-only changes): a test now orders sections with letter suffixes (`2`, `2 a`, `2 b`, `3`) and treats a `2 a §` after `2 b §` as running text, as criterion 3 asks. The version-switch test now asserts wording that only the coming version of 2 kap. 6 § has.
 
 ## Open Questions
 

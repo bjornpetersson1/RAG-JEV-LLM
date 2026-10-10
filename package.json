@@ -19,7 +19,8 @@
     "build": "npm run build --workspaces",
     "db:migrate": "npm run db:migrate -w backend",
     "db:reset": "npm run db:reset -w backend",
-    "data:fetch": "npm run data:fetch -w backend --"
+    "data:fetch": "npm run data:fetch -w backend --",
+    "data:import:laws": "npm run data:import:laws -w backend"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

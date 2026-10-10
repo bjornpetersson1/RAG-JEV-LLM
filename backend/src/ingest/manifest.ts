@@ -29,3 +29,10 @@ export function readManifest(rawDir: string): Manifest | undefined {
 export function writeManifest(rawDir: string, manifest: Manifest): void {
   writeFileAtomically(join(rawDir, MANIFEST_FILE), `${JSON.stringify(manifest, null, 2)}\n`);
 }
+
+/** The manifest written by `data:fetch`, or an error telling the user to fetch first. */
+export function requireManifest(rawDir: string): Manifest {
+  const manifest = readManifest(rawDir);
+  if (!manifest) throw new Error(`No manifest in ${rawDir}: run npm run data:fetch first`);
+  return manifest;
+}
