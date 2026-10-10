@@ -4,7 +4,7 @@
 - **Labels:** `E3 Tagging`
 - **Phase:** 3. Tags and index
 - **Depends on:** E1-2 (#2), E2-4 (#7), E3-1 (#8)
-- **Status:** Approved
+- **Status:** Implemented — all acceptance criteria verified (npm ci, lint, format:check, typecheck, 290 tests (286 backend, 4 frontend) and build exit 0; `index:tag` with the fake provider on a copy of the real database tagged 2,116 chunks across `--limit 5` and a full run, and a third run skipped all). Not verified against the real Anthropic API: `.env` has no `ANTHROPIC_API_KEY`
 
 ## Summary
 
@@ -49,16 +49,16 @@ At indexing time an LLM picks 3–8 tags from the E3-1 vocabulary for every chun
 
 ## Tasks
 
-- [ ] `backend/migrations/0004_tagging.sql`: nullable `chunks.tagged_model`, `chunks.tagged_vocabulary_version`, `chunks.tagged_at`; table `tagging_runs` with the run summary fields.
-- [ ] E2-4's chunk writer: clear the tagging state together with the tags when a chunk's text or context changes.
-- [ ] LLM client: an optional cached prefix of the system prompt (`cache_control` on that system block); usage gains `cacheWriteTokens` and `cacheReadTokens`; the log entry and the price table account for them.
-- [ ] `Tag` carries the slug, label and description; the tagger reports the token usage of its calls.
-- [ ] The real tagger: a Swedish system prompt with instructions and the full vocabulary (slug, label, description, grouped by area) as the cached part; the chunk's source reference, context and text as the user content; a schema asking for an array of slugs; validation, the 3–8 rule and the single retry per criterion 1.
-- [ ] Tagging run: sync the vocabulary (E3-1) first, select chunks to tag, tag them with a concurrency limit, commit per chunk, log per chunk, summarise and store the run.
-- [ ] CLI `index:tag` with `--force` and `--limit <n>`; backend and root scripts.
-- [ ] `.env.example`: `TAGGER_CONCURRENCY` and a tagger model default; README: the command, its options and the expected cost.
-- [ ] Note on #15 that a JEV tagger can be added behind `Tagger`.
-- [ ] Unit tests per acceptance criterion.
+- [x] `backend/migrations/0004_tagging.sql`: nullable `chunks.tagged_model`, `chunks.tagged_vocabulary_version`, `chunks.tagged_at`; table `tagging_runs` with the run summary fields.
+- [x] E2-4's chunk writer: clear the tagging state together with the tags when a chunk's text or context changes.
+- [x] LLM client: an optional cached prefix of the system prompt (`cache_control` on that system block); usage gains `cacheWriteTokens` and `cacheReadTokens`; the log entry and the price table account for them.
+- [x] `Tag` carries the slug, label and description; the tagger reports the token usage of its calls.
+- [x] The real tagger: a Swedish system prompt with instructions and the full vocabulary (slug, label, description, grouped by area) as the cached part; the chunk's source reference, context and text as the user content; a schema asking for an array of slugs; validation, the 3–8 rule and the single retry per criterion 1.
+- [x] Tagging run: sync the vocabulary (E3-1) first, select chunks to tag, tag them with a concurrency limit, commit per chunk, log per chunk, summarise and store the run.
+- [x] CLI `index:tag` with `--force` and `--limit <n>`; backend and root scripts.
+- [x] `.env.example`: `TAGGER_CONCURRENCY` and a tagger model default; README: the command, its options and the expected cost.
+- [x] Note on #15 that a JEV tagger can be added behind `Tagger`.
+- [x] Unit tests per acceptance criterion.
 
 ## Decisions
 
@@ -75,6 +75,36 @@ At indexing time an LLM picks 3–8 tags from the E3-1 vocabulary for every chun
 - **USD only** (default): the price table is in USD; the issue's "estimated currency" is met by the USD estimate.
 - **`index:tag` syncs the vocabulary first** (default), like `data:chunk` applies migrations, so the stored tags always match the file the version is computed from.
 - **`--limit <n>`** (default): tags at most n chunks, so the cost of a full run can be checked on a sample first.
+
+- **`cacheSystem` caches the whole system prompt** (settled while implementing): the tagger's system prompt is the instructions plus the vocabulary, identical for every chunk, so the request has a boolean `cacheSystem` that sends the system prompt as one block with `cache_control` instead of a separately cached prefix. The user content carries the chunk.
+- **Cache pricing** (settled while implementing): cache writes cost 1.25× and cache reads 0.1× the input rate (5-minute cache). All prompt tokens, cached or not, count towards the long-prompt threshold. `LlmUsage` always carries `cacheWriteTokens` and `cacheReadTokens`, and every call's log entry includes them.
+- **`Tagger.tag(chunk, vocabulary)` returns a `TaggingResult`** (settled while implementing): `tags`, `discarded`, `overLimit`, `retried` and the summed `usage`. The run therefore logs and sums the effects of the 3–8 rule without knowing the prompt. `Tag` is now `{ slug, label, description, area }` (it was `{ name, description? }`); the query translator's placeholder uses the slug.
+- **The retry's answer leads** (settled while implementing, changed in code review): after a retry the kept tags are the retry's known slugs; when it still has fewer than 3, the first answer's known slugs are added. Only the retry's own excess counts as cut to 8, so merging two short answers never inflates `chunks_above_max`.
+- **The 3–8 rule lives in the tagger** (`TAGS_PER_CHUNK` in `llm/roles.ts`), and the run imports it for the "fewer than 3" count.
+- **Unknown slug from a tagger fails the chunk** (settled while implementing): the LLM tagger never returns one, but another `Tagger` (fake or a future JEV tagger) could. The chunk is then logged as failed rather than its tag being silently dropped.
+- **Code** (settled while implementing): `tagging/tag-chunks.ts` (the run), `tagging/config.ts` (`TAGGER_CONCURRENCY`), the `tag` command in `tagging/cli.ts`, and migration `0004_tagging.sql`. `withDatabase` is now async, so the tagging CLI can await the run. `readPositiveInteger` moved from `ingest/chunk-config.ts` to `src/env.ts` and is shared by both configs. `index:tag` prints one JSON line per LLM call and one per chunk, then the summary.
+- **Failed chunks' tokens are in the summary** (changed in code review): when a chunk's tagging fails, the tagger throws an `LlmError` that carries the tokens of every call made for the chunk so far. This includes a first call that succeeded before the retry failed, and a response that was billed but unusable. The run adds them to the summary and the stored run, so the cost is not understated.
+- **Fake-provider run on real data** (settled while implementing): on a copy of the database, `index:tag -- --limit 5` tagged 5 chunks and reported 2,111 left. The next run tagged the 2,111 and skipped the 5, and a third run skipped all 2,116.
+- **Note on #15** posted: a JEV tagger as a second `Tagger` implementation.
+
+- **Clean code**: the tagger builds its system prompt and slug set once per vocabulary rather than once per chunk. One `splitSlugs` serves the tagger and the query translator. The first chunk of a run is tagged alone, so the parallel calls after it read the prompt cache instead of each writing it. The pending chunks are counted and limited in SQL. `roleModel` in `llm/config.ts` gives the model a role calls (`fake` for the fake provider), and `parsePositiveInteger` in `env.ts` checks `--limit`. The CLI summary takes 3 and 8 from `TAGS_PER_CHUNK`.
+- **Skipped clean-code suggestions**:
+  - Putting `costUsd` on every `LlmResponse` would change the contract of every role, and the run already prices the usage it sums.
+  - Deriving "already tagged" from a content hash instead of clearing the tagging state in the chunk writer would replace the approved state columns. The chunk writer already owns deleting stale tags.
+  - Moving `TAGS_PER_CHUNK` out of `llm/` would separate it from the prompt that states the 3–8 rule.
+  - A `usage` option on the fake LLM client would serve only one test.
+
+- **Code review fixes**:
+  - Returned slugs are matched ignoring case and surrounding whitespace.
+  - The tag store keeps a repeated slug once, so another `Tagger` cannot fail the primary key.
+  - Pending chunks are taken untagged first, then oldest tagged first, so repeated `--force --limit` runs move through the corpus. An interrupted `--force` run is continued with `--force --limit <left>`; a plain re-run sees the chunks as current.
+  - After the warm-up chunk, only as many workers start as chunks remain.
+  - `NO_USAGE` is frozen.
+- **Not changed after code review**:
+  - An `enum` of the 183 slugs in the output schema would stop unknown slugs at the source. The limits of structured outputs for large enums were not verified, and a per-vocabulary schema could affect the prompt cache. Discarding and the single retry handle unknown slugs.
+  - A chunk whose only change is its source reference (e.g. `del 2/3` → `del 2/4`) keeps its tags, although the prompt shows the reference. The number of parts does not change what the text is about. The README says so.
+
+- **No live API run** (verification): `.env` has `LLM_PROVIDER=fake` and no API key, so the Haiku prompt, prompt caching and the real cost were not exercised. The request shape (`cache_control` on the system block, cache token fields) is covered by the Anthropic client tests with a faked `fetch`. The first `npm run index:tag -- --limit 20` with a key shows the real cost and whether caching applies (`cacheReadTokens` > 0 from the second chunk).
 
 ## Open Questions
 

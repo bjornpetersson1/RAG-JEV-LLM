@@ -73,7 +73,18 @@ describe('chunkDocuments', () => {
       `INSERT INTO chunk_tags (chunk_id, tag_id, model, vocabulary_version, created_at)
        SELECT ?, id, 'fake', 'v1', '2026-10-10T08:00:00.000Z' FROM tags WHERE slug = 't'`,
     ).run(chunkId);
+    db.prepare(
+      `UPDATE chunks SET tagged_model = 'fake', tagged_vocabulary_version = 'v1',
+         tagged_at = '2026-10-10T08:00:00.000Z' WHERE id = ?`,
+    ).run(chunkId);
   }
+
+  const taggedModel = (chunkId: number) =>
+    (
+      db.prepare('SELECT tagged_model FROM chunks WHERE id = ?').get(chunkId) as {
+        tagged_model: string | null;
+      }
+    ).tagged_model;
 
   const tagCount = (chunkId: number) =>
     (
@@ -136,7 +147,7 @@ describe('chunkDocuments', () => {
     expect(result.unchanged).toBe(result.lengths.length);
   });
 
-  it('keeps the id of a changed section but deletes its tags', () => {
+  it('keeps the id of a changed section but deletes its tags and tagging state', () => {
     run();
     const before = chunksOf('SFS 2018:558');
     tag(before[1]!.id);
@@ -154,6 +165,8 @@ describe('chunkDocuments', () => {
     });
     expect(tagCount(before[1]!.id)).toBe(0);
     expect(tagCount(before[2]!.id)).toBe(1);
+    expect(taggedModel(before[1]!.id)).toBeNull();
+    expect(taggedModel(before[2]!.id)).toBe('fake');
     expect(result).toMatchObject({ inserted: 0, updated: 1, unchanged: 4, deleted: 0 });
   });
 

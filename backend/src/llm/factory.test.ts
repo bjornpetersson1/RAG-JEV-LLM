@@ -4,20 +4,25 @@ import { createLlmRoles } from './factory.js';
 import { createCapturingLogger, createFakeFetch, messageResponse } from './test-helpers.js';
 import type { LlmRoles } from './types.js';
 
-const VOCABULARY = [{ name: 'employment' }];
+const VOCABULARY = ['employment', 'salary', 'notice'].map((slug) => ({
+  slug,
+  label: slug,
+  description: slug,
+  area: 'anstallning',
+}));
 const CHUNK = { id: 'c1', text: 'employment terms' };
 
 /** Answers each request with data that fits the schema the role asked for. */
 function answerForSchema(body: Record<string, unknown>): Response {
   const format = (body.output_config as { format: { schema: { properties: object } } }).format;
   const fields = Object.keys(format.schema.properties);
-  if (fields.includes('tags')) return messageResponse({ tags: ['employment'] });
+  if (fields.includes('tags')) return messageResponse({ tags: ['employment', 'salary', 'notice'] });
   if (fields.includes('relevant')) return messageResponse({ relevant: true, score: 0.9 });
   return messageResponse({ text: 'Draft', references: ['c1'] });
 }
 
 async function callEveryRole(roles: LlmRoles) {
-  await roles.tagger.tag('text', VOCABULARY);
+  await roles.tagger.tag({ text: 'text' }, VOCABULARY);
   await roles.queryTranslator.translate('instruction', VOCABULARY);
   await roles.judge.judge('instruction', CHUNK);
   await roles.generator.generate({ template: 'T', instruction: 'I', chunks: [CHUNK] });

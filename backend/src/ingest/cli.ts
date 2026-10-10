@@ -53,7 +53,7 @@ async function runFetch(force: boolean): Promise<number> {
 }
 
 /** Runs `importer` over the raw files. */
-function runImport(importer: (options: ImportOptions) => ImportResult): number {
+function runImport(importer: (options: ImportOptions) => ImportResult): Promise<number> {
   return withDatabase((db) => {
     const result = importer({ db, rawDir: RAW_DATA_DIR });
     console.log(summarize(result));
@@ -61,7 +61,7 @@ function runImport(importer: (options: ImportOptions) => ImportResult): number {
   });
 }
 
-function runChunk(identifier: string | undefined): number {
+function runChunk(identifier: string | undefined): Promise<number> {
   const config = loadChunkConfig(process.env);
   return withDatabase((db) => {
     const result = chunkDocuments({ db, config, identifier });

@@ -27,7 +27,12 @@ export interface AnthropicClientOptions {
 interface MessagesResponse {
   content?: unknown;
   stop_reason?: unknown;
-  usage?: { input_tokens?: number; output_tokens?: number };
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
+    cache_creation_input_tokens?: number;
+    cache_read_input_tokens?: number;
+  };
 }
 
 export function createAnthropicClient(options: AnthropicClientOptions): LlmClient {
@@ -59,7 +64,9 @@ export function createAnthropicClient(options: AnthropicClientOptions): LlmClien
     const body = JSON.stringify({
       model,
       max_tokens: request.maxTokens ?? DEFAULT_MAX_TOKENS,
-      system: request.system,
+      system: request.cacheSystem
+        ? [{ type: 'text', text: request.system, cache_control: { type: 'ephemeral' } }]
+        : request.system,
       messages: [{ role: 'user', content: request.prompt }],
       output_config: { format: { type: 'json_schema', schema: request.schema } },
     });
@@ -102,6 +109,8 @@ function parseMessage(body: unknown): LlmResponse {
   const usage: LlmUsage = {
     inputTokens: message.usage?.input_tokens ?? 0,
     outputTokens: message.usage?.output_tokens ?? 0,
+    cacheWriteTokens: message.usage?.cache_creation_input_tokens ?? 0,
+    cacheReadTokens: message.usage?.cache_read_input_tokens ?? 0,
   };
   const unusable = (reason: string) => new LlmError(reason, { retryable: false, usage });
 

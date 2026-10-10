@@ -1,7 +1,7 @@
 // Deterministic fakes for tests and for running without an API key (`LLM_PROVIDER=fake`).
 // Each fake takes an optional function that replaces its default answer.
 
-import type { LlmClient, LlmRequest, LlmResponse } from './client.js';
+import { NO_USAGE, type LlmClient, type LlmRequest, type LlmResponse } from './client.js';
 import type {
   Chunk,
   Draft,
@@ -12,6 +12,7 @@ import type {
   QueryTranslator,
   Tag,
   Tagger,
+  TaggingInput,
 } from './types.js';
 
 const MIN_KEYWORD_LENGTH = 4;
@@ -28,19 +29,31 @@ export function createFakeLlmClient(answer: (request: LlmRequest) => unknown): F
     requests,
     async complete(request): Promise<LlmResponse> {
       requests.push(request);
-      return { data: answer(request), usage: { inputTokens: 0, outputTokens: 0 } };
+      return { data: answer(request), usage: NO_USAGE };
     },
   };
 }
 
-/** Default: the vocabulary tags whose name appears in the text (case-insensitive). */
+/**
+ * Default: the vocabulary tags whose label appears in the text (case-insensitive). The answer is
+ * used as is, with no tokens.
+ */
 export function createFakeTagger(
-  answer: (chunkText: string, vocabulary: readonly Tag[]) => string[] = tagsMentionedIn,
+  answer: (chunk: TaggingInput, vocabulary: readonly Tag[]) => string[] = (chunk, vocabulary) =>
+    tagsMentionedIn(chunk.text, vocabulary),
 ): Tagger {
-  return { tag: async (chunkText, vocabulary) => answer(chunkText, vocabulary) };
+  return {
+    tag: async (chunk, vocabulary) => ({
+      tags: answer(chunk, vocabulary),
+      discarded: [],
+      overLimit: [],
+      retried: false,
+      usage: NO_USAGE,
+    }),
+  };
 }
 
-/** Default: the vocabulary tags whose name appears in the instruction (case-insensitive). */
+/** Default: the vocabulary tags whose label appears in the instruction (case-insensitive). */
 export function createFakeQueryTranslator(
   answer: (instruction: string, vocabulary: readonly Tag[]) => string[] = tagsMentionedIn,
 ): QueryTranslator {
@@ -63,7 +76,7 @@ export function createFakeGenerator(
 
 function tagsMentionedIn(text: string, vocabulary: readonly Tag[]): string[] {
   const lower = text.toLowerCase();
-  return vocabulary.filter((tag) => lower.includes(tag.name.toLowerCase())).map((tag) => tag.name);
+  return vocabulary.filter((tag) => lower.includes(tag.label.toLowerCase())).map((tag) => tag.slug);
 }
 
 function keywordOverlap(instruction: string, chunk: Chunk): Judgement {

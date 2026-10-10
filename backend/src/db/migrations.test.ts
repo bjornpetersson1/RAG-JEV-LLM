@@ -6,7 +6,14 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { openDatabase } from './database.js';
 import { migrate, migrationLabel, readMigrations } from './migrations.js';
 
-const SCHEMA_TABLES = ['chunk_tags', 'chunks', 'documents', 'schema_migrations', 'tags'];
+const SCHEMA_TABLES = [
+  'chunk_tags',
+  'chunks',
+  'documents',
+  'schema_migrations',
+  'tagging_runs',
+  'tags',
+];
 
 function tableNames(db: DatabaseSync): string[] {
   return db
@@ -50,6 +57,7 @@ describe('migrate', () => {
       '1_initial',
       '2_document_structure',
       '3_chunk_context',
+      '4_tagging',
     ]);
     expect(tableNames(db)).toEqual(SCHEMA_TABLES);
     expect(recordedVersions(db)).toEqual([
@@ -64,6 +72,7 @@ describe('migrate', () => {
         name: 'chunk_context',
         applied_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
       },
+      { version: 4, name: 'tagging', applied_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/) },
     ]);
   });
 

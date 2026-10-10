@@ -6,11 +6,39 @@ export interface LlmRequest {
   /** JSON schema the response must follow; objects need `additionalProperties: false`. */
   schema: JsonSchema;
   maxTokens?: number;
+  /**
+   * Marks the system prompt for prompt caching, for a long system prompt that many calls repeat
+   * unchanged (e.g. the tag vocabulary).
+   */
+  cacheSystem?: boolean;
 }
 
 export interface LlmUsage {
+  /** Input tokens billed at the normal rate, i.e. not written to or read from the cache. */
   inputTokens: number;
   outputTokens: number;
+  cacheWriteTokens: number;
+  cacheReadTokens: number;
+}
+
+export const NO_USAGE: LlmUsage = Object.freeze({
+  inputTokens: 0,
+  outputTokens: 0,
+  cacheWriteTokens: 0,
+  cacheReadTokens: 0,
+});
+
+/** The token counts of `usages` added up. */
+export function sumUsage(usages: readonly LlmUsage[]): LlmUsage {
+  return usages.reduce(
+    (total, usage) => ({
+      inputTokens: total.inputTokens + usage.inputTokens,
+      outputTokens: total.outputTokens + usage.outputTokens,
+      cacheWriteTokens: total.cacheWriteTokens + usage.cacheWriteTokens,
+      cacheReadTokens: total.cacheReadTokens + usage.cacheReadTokens,
+    }),
+    NO_USAGE,
+  );
 }
 
 export interface LlmResponse {
