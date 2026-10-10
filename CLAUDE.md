@@ -23,13 +23,13 @@ Work is done issue by issue with `/ship-issue <issue number>`, which chains thes
 
 Each skill can also be run on its own.
 
-When an epic is done and `develop` is ready for `main`, run `/release-check <release PR number>`. It verifies the whole release, runs clean code over it, fixes what is wrong on a `feature/<EPIC>-release-check` branch (PR into `develop`) and posts a review on the release PR.
+When an epic is done and `develop` is ready for `main`, run `/release-check <release PR number>`. It verifies the whole release, runs clean code over it, fixes what is wrong on a `feature/<EPIC>-release-check` branch, merges that fix PR into `develop` and posts a review on the release PR. The owner's only step is merging the release PR into `main`.
 
 ## Git and GitHub rules
 
 - `develop` is the integration branch; `main` is only updated by the owner. PRs always target `develop`.
 - Branch per issue: `feature/<KEY>-<slug>`, e.g. `feature/E1-1-repo-and-skeleton`, created from `origin/develop`.
-- Never push to `develop` or `main`, never merge, never force-push, never rewrite pushed history.
+- Never push to `develop` or `main`, never merge, never force-push, never rewrite pushed history. The one exception: `/release-check` merges its own fix PR into `develop`.
 - Commit messages: `<KEY>: <imperative summary>`, ending with the trailer `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
 - Move issues on the board with `.claude/scripts/set-issue-status.sh <issue> "<Todo|In Progress|In Review|Done>"`.
 
