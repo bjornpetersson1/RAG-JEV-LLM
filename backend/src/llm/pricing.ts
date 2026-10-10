@@ -50,3 +50,8 @@ export function estimateCostUsd(model: string, usage: LlmUsage): number | undefi
     TOKENS_PER_MILLION
   );
 }
+
+/** An estimated cost for display, e.g. "0.0123 USD", or "unknown" without a price. */
+export function formatUsd(usd: number | null | undefined): string {
+  return usd === null || usd === undefined ? 'unknown' : `${usd.toFixed(4)} USD`;
+}

@@ -4,7 +4,7 @@
 - **Labels:** `E3 Tagging`
 - **Phase:** 3. Tags and index
 - **Depends on:** E3-2 (#9)
-- **Status:** Approved
+- **Status:** Implemented — all acceptance criteria verified (npm ci, lint, format:check, typecheck, 315 tests (311 backend, 4 frontend) and build exit 0; on a copy of the real database tagged by the fake provider, `index:tag` and `index:report` each printed the report and wrote it to `reports/`)
 
 ## Summary
 
@@ -40,13 +40,13 @@ A control report on the tagging: chunks per tag (including tags no chunk got), c
 
 ## Tasks
 
-- [ ] Report data from the database (one query function per section).
-- [ ] Terminal and Markdown formatting.
-- [ ] Report file writer in `reports/`; `.gitignore` entry.
-- [ ] `TAG_REPORT_BROAD_SHARE` config with validation; `.env.example`.
-- [ ] Print and write the report at the end of `index:tag`; CLI `index:report` with backend and root scripts.
-- [ ] README: the report, its sections and the setting.
-- [ ] Unit tests per acceptance criterion.
+- [x] Report data from the database (one query function per section).
+- [x] Terminal and Markdown formatting.
+- [x] Report file writer in `reports/`; `.gitignore` entry.
+- [x] `TAG_REPORT_BROAD_SHARE` config with validation; `.env.example`.
+- [x] Print and write the report at the end of `index:tag`; CLI `index:report` with backend and root scripts.
+- [x] README: the report, its sections and the setting.
+- [x] Unit tests per acceptance criterion.
 
 ## Decisions
 
@@ -57,6 +57,35 @@ A control report on the tagging: chunks per tag (including tags no chunk got), c
 - **Share of tagged chunks** (default): the broad share is computed over chunks with at least one tag, so untagged chunks do not hide broad tags.
 - **Discarded slugs and cost come from the latest `tagging_runs` row** (default, from E3-2): the report does not re-run anything and works the same from `index:report`.
 - **Report language** (default): headings and labels in English like the rest of the CLI output; tag labels and source references are shown as stored (Swedish).
+
+- **"Current" means the latest tagging run's model and the vocabulary file's version** (settled while implementing). Both commands take the model from the latest `tagging_runs` row that tagged at least one chunk (after a full `index:tag`, the run just made), so `index:report` needs no LLM config or API key; before any run there is no model and no chunk counts as tagged. Only chunks tagged with that model and version are counted per tag and listed, so tags left from an older vocabulary or model do not mix in. The rest count as "not yet tagged or out of date".
+- **"Fewer than 3" counts every tagged chunk below 3 tags, zero included** (settled while implementing), as the words say; zero-tag chunks are also listed on their own.
+- **Broad is strictly above the threshold** (settled while implementing): with 0.2 a tag on exactly 20 % is not broad. `TAG_REPORT_BROAD_SHARE` accepts plain decimals from 0 to 1 (`0`, `0.35`, `1`); `20%`, `1e-1` and values outside the range are rejected.
+- **Report file name** (settled while implementing): `tagging-YYYYMMDDTHHMMSSZ.md` in UTC.
+- **Code** (settled while implementing):
+  - `tagging/report.ts` builds the report data;
+  - `tagging/report-format.ts` formats it for the terminal and as Markdown, and writes the file;
+  - `tagging/commands.ts` holds `tagCommand` and `reportCommand`, which the CLI calls and the tests run directly. The run summary formatting moved there from `cli.ts`.
+- **Real data with the fake tagger** (settled while implementing): on a copy of the database tagged by the fake provider, `index:report` showed 2,116 tagged chunks. 627 got zero tags, 72 tags got no chunks, and one tag was broad (`skadestand`, 25 %). The terminal listed 50 zero-tag chunks and "… and 577 more", and the file was written to `reports/`. These numbers reflect the fake tagger's label matching, not real tagging.
+
+- **Clean code**:
+  - "Currently tagged" is one SQL predicate, `CURRENTLY_TAGGED` in `tag-chunks.ts`, shared by the tagger's pending query and the report. It uses `IS` so untagged (NULL) chunks compare correctly.
+  - `readShare` sits in `env.ts` next to `readPositiveInteger`.
+  - `formatUsd` (in `llm/pricing.ts`) formats every estimated cost.
+  - The run summary and the report are both formatted in `report-format.ts`.
+  - The report file is written through the existing `writeFileAtomically`.
+  - The latest run is read once, and the zero-tag count comes from the list itself.
+
+- **Code review fixes**:
+  - The run part of the report comes from the latest run that tagged chunks and says how many it tagged. A re-run that only skips no longer replaces the real run's discarded slugs and cost with zeros, and a `--limit` run's figures are visibly for its few chunks.
+  - `index:report` syncs the vocabulary before reporting, like `index:tag`, so the tag list matches the file the version comes from.
+  - The "currently tagged" predicate qualifies its columns with the table alias.
+  - A second report in the same second gets `-2`, `-3` … instead of overwriting the first.
+  - Pipes in labels and areas are escaped in the Markdown table.
+  - A share below half a percent shows as `<1%`, not `0%`.
+  - Row counting uses one helper, `countRows` in `db/database.ts`.
+  - `latestRun` is module-private.
+- **Unrelated working-tree change left alone**: `frontend/index.html` had an uncommitted title change, not made in this session. It was kept out of the commit and left as it was.
 
 ## Open Questions
 

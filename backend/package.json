@@ -15,7 +15,8 @@
     "data:import:rulings": "tsx --env-file-if-exists=../.env src/ingest/cli.ts import:rulings",
     "data:chunk": "tsx --env-file-if-exists=../.env src/ingest/cli.ts chunk",
     "index:vocabulary": "tsx --env-file-if-exists=../.env src/tagging/cli.ts vocabulary",
-    "index:tag": "tsx --env-file-if-exists=../.env src/tagging/cli.ts tag"
+    "index:tag": "tsx --env-file-if-exists=../.env src/tagging/cli.ts tag",
+    "index:report": "tsx --env-file-if-exists=../.env src/tagging/cli.ts report"
   },
   "dependencies": {
     "fastify": "^5.12.5"

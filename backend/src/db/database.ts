@@ -1,6 +1,6 @@
 import { closeSync, mkdirSync, openSync, readSync, rmSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
+import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 
 /** Suffixes of the database file and the side files SQLite keeps next to it in WAL mode. */
 export const DATABASE_FILE_SUFFIXES = ['', '-wal', '-shm'];
@@ -85,4 +85,13 @@ function isMissingOrSqlite(path: string): boolean {
   } finally {
     closeSync(fd);
   }
+}
+
+/** The `n` column of a `SELECT COUNT(*) AS n …` query. */
+export function countRows(
+  db: DatabaseSync,
+  sql: string,
+  params: Record<string, SQLInputValue> = {},
+): number {
+  return (db.prepare(sql).get(params) as { n: number }).n;
 }
