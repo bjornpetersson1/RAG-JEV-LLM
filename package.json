@@ -16,7 +16,9 @@
     "format:check": "prettier --check .",
     "typecheck": "npm run typecheck --workspaces",
     "test": "npm test --workspaces",
-    "build": "npm run build --workspaces"
+    "build": "npm run build --workspaces",
+    "db:migrate": "npm run db:migrate -w backend",
+    "db:reset": "npm run db:reset -w backend"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
