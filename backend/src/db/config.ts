@@ -1,8 +1,5 @@
 import { resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-// Three levels up from both src/db and dist/db is the repo root.
-export const REPO_ROOT = fileURLToPath(new URL('../../../', import.meta.url));
+import { REPO_ROOT } from '../repo-root.js';
 
 export const DEFAULT_DATABASE_PATH = 'data/rag.db';
 

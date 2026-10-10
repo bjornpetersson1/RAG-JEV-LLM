@@ -1,0 +1,105 @@
+import type { DatabaseSync } from 'node:sqlite';
+import { resolveDatabasePath } from '../db/config.js';
+import { openDatabase } from '../db/database.js';
+import { migrate } from '../db/migrations.js';
+import { describeError } from '../errors.js';
+import { loadChunkConfig } from './chunk-config.js';
+import { chunkDocuments, describeLengths } from './chunk-documents.js';
+import type { Failure } from './failures.js';
+import { fetchRaw } from './fetch-raw.js';
+import type { ImportOptions, ImportResult } from './import-documents.js';
+import { importLaws } from './import-laws.js';
+import { importRulings } from './import-rulings.js';
+import { RAW_DATA_DIR, SELECTION_PATH } from './paths.js';
+import { loadSelection } from './selection.js';
+
+const USAGE =
+  'Usage: data <fetch [--force] | import:laws | import:rulings | chunk [--document <identifier>]>';
+
+const [command, ...flags] = process.argv.slice(2);
+
+try {
+  process.exitCode = await run();
+} catch (error) {
+  console.error(describeError(error));
+  process.exitCode = 1;
+}
+
+async function run(): Promise<number> {
+  if (command === 'fetch' && flags.every((flag) => flag === '--force')) {
+    return runFetch(flags.includes('--force'));
+  }
+  if (command === 'import:laws' && flags.length === 0) {
+    return runImport((options) => importLaws({ ...options, today: localDate() }));
+  }
+  if (command === 'import:rulings' && flags.length === 0) return runImport(importRulings);
+  if (command === 'chunk' && flags.length === 0) return runChunk(undefined);
+  if (command === 'chunk' && flags.length === 2 && flags[0] === '--document') {
+    return runChunk(flags[1]);
+  }
+  console.error(USAGE);
+  return 1;
+}
+
+async function runFetch(force: boolean): Promise<number> {
+  const started = Date.now();
+  const result = await fetchRaw({
+    selection: loadSelection(SELECTION_PATH),
+    rawDir: RAW_DATA_DIR,
+    force,
+  });
+  const seconds = ((Date.now() - started) / 1000).toFixed(1);
+  console.log(
+    `Fetched ${result.fetched.length}, skipped ${result.skipped.length}, failed ${result.failed.length} in ${seconds} s (${RAW_DATA_DIR})`,
+  );
+  return reportFailures(result.failed);
+}
+
+/** Runs `importer` over the raw files. */
+function runImport(importer: (options: ImportOptions) => ImportResult): number {
+  return withDatabase((db) => {
+    const result = importer({ db, rawDir: RAW_DATA_DIR });
+    console.log(summarize(result));
+    return reportFailures(result.failed);
+  });
+}
+
+/** Opens the database, applies pending migrations, runs `work` and closes the database. */
+function withDatabase(work: (db: DatabaseSync) => number): number {
+  const db = openDatabase(resolveDatabasePath(process.env.DATABASE_PATH));
+  try {
+    migrate(db);
+    return work(db);
+  } finally {
+    db.close();
+  }
+}
+
+function runChunk(identifier: string | undefined): number {
+  const config = loadChunkConfig(process.env);
+  return withDatabase((db) => {
+    const result = chunkDocuments({ db, config, identifier });
+    console.log(
+      `Total: ${result.lengths.length} chunks, ${describeLengths(result.lengths)}; ` +
+        `inserted ${result.inserted}, updated ${result.updated}, unchanged ${result.unchanged}, deleted ${result.deleted}`,
+    );
+    return reportFailures(result.failed);
+  });
+}
+
+function summarize(result: ImportResult): string {
+  return `Inserted ${result.inserted.length}, updated ${result.updated.length}, failed ${result.failed.length}, flagged ${result.flagged.length}`;
+}
+
+function reportFailures(failed: Failure[]): number {
+  if (failed.length === 0) return 0;
+  console.error(`Failed: ${failed.map((failure) => failure.identifier).join(', ')}`);
+  return 1;
+}
+
+/** Today's date in the local time zone as `YYYY-MM-DD`. */
+function localDate(): string {
+  const now = new Date();
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}

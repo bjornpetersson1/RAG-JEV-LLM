@@ -6,8 +6,7 @@ CREATE TABLE documents (
   type TEXT NOT NULL CHECK (type IN ('law', 'ruling')),
   title TEXT NOT NULL,
   -- Unique key for re-imports: the SFS number for laws (e.g. 'SFS 1982:80'), and for rulings the
-  -- court-qualified case number (e.g. 'AD 2019 nr 35', 'HD T 1234-20'), since bare case numbers
-  -- repeat across courts.
+  -- reference number (e.g. 'AD 2019 nr 35', 'NJA 2015 s. 741'), which is unique across courts.
   identifier TEXT NOT NULL UNIQUE,
   -- Only for rulings.
   court TEXT,

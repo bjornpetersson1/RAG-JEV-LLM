@@ -1,0 +1,370 @@
+{
+  "documents": [
+    {
+      "type": "law",
+      "identifier": "SFS 1982:80",
+      "title": "Lag (1982:80) om anställningsskydd",
+      "sfsNumber": "1982:80"
+    },
+    {
+      "type": "law",
+      "identifier": "SFS 1915:218",
+      "title": "Lag (1915:218) om avtal och andra rättshandlingar på förmögenhetsrättens område",
+      "sfsNumber": "1915:218"
+    },
+    {
+      "type": "law",
+      "identifier": "SFS 2018:558",
+      "title": "Lag (2018:558) om företagshemligheter",
+      "sfsNumber": "2018:558"
+    },
+    {
+      "type": "law",
+      "identifier": "SFS 1977:480",
+      "title": "Semesterlag (1977:480)",
+      "sfsNumber": "1977:480"
+    },
+    {
+      "type": "law",
+      "identifier": "SFS 2008:567",
+      "title": "Diskrimineringslag (2008:567)",
+      "sfsNumber": "2008:567"
+    },
+    {
+      "type": "law",
+      "identifier": "SFS 1982:673",
+      "title": "Arbetstidslag (1982:673)",
+      "sfsNumber": "1982:673"
+    },
+    {
+      "type": "law",
+      "identifier": "SFS 1976:580",
+      "title": "Lag (1976:580) om medbestämmande i arbetslivet",
+      "sfsNumber": "1976:580"
+    },
+    {
+      "type": "law",
+      "identifier": "SFS 1995:584",
+      "title": "Föräldraledighetslag (1995:584)",
+      "sfsNumber": "1995:584"
+    },
+    {
+      "type": "law",
+      "identifier": "SFS 2018:218",
+      "title": "Lag (2018:218) med kompletterande bestämmelser till EU:s dataskyddsförordning",
+      "sfsNumber": "2018:218"
+    },
+    {
+      "type": "law",
+      "identifier": "SFS 2002:293",
+      "title": "Lag (2002:293) om förbud mot diskriminering av deltidsarbetande arbetstagare och arbetstagare med tidsbegränsad anställning",
+      "sfsNumber": "2002:293"
+    },
+    {
+      "type": "law",
+      "identifier": "SFS 2012:854",
+      "title": "Lag (2012:854) om uthyrning av arbetstagare",
+      "sfsNumber": "2012:854"
+    },
+    {
+      "type": "ruling",
+      "identifier": "AD 1994 nr 79",
+      "title": "En processoperatör vid ett industriföretag sägs upp från sin anställning på grund av att han enligt arbetsgivarens mening varit illojal mot …",
+      "publicationId": "3c621343-2b45-46fe-97ca-c528fd5daebc"
+    },
+    {
+      "type": "ruling",
+      "identifier": "AD 1998 nr 80",
+      "title": "Tre arbetstagare A, B och C lämnade sina anställningar hos ett företag D, som bedrev personaluthyrning.",
+      "publicationId": "f18cdb90-081a-4003-992f-f4cb47ba34da"
+    },
+    {
+      "type": "ruling",
+      "identifier": "AD 1999 nr 61",
+      "title": "En konsult i databranschen sade upp anställningen med en månads uppsägningstid och lämnade samtidigt ett anbud på ett arbete hos en uppdragsgivare …",
+      "publicationId": "7e78a465-eba4-4a8d-878e-c7a4242961f0"
+    },
+    {
+      "type": "ruling",
+      "identifier": "AD 2000 nr 3",
+      "title": "En försäljare hos ett företag som säljer datavårdsprodukter har under sin anställning sålt produkter åt ett annat företag som bedrev konkurrerande …",
+      "publicationId": "3ffb12d1-09a0-4dfc-a4c0-39cb9aadf471"
+    },
+    {
+      "type": "ruling",
+      "identifier": "AD 2001 nr 91",
+      "title": "Fråga om giltighet av konkurrensklausul i anställningsavtal.",
+      "publicationId": "1a3b01ca-0f35-46ab-9fed-8dd5d6baeb21"
+    },
+    {
+      "type": "ruling",
+      "identifier": "AD 2002 nr 15",
+      "title": "En flygförare med anställning vid Försvarsmakten har åtagit sig att under en tid av fem år stanna kvar i anställningen och att erlägga ett visst …",
+      "publicationId": "8e2820de-a633-4ba6-a67e-69e6cc1f7e4c"
+    },
+    {
+      "type": "ruling",
+      "identifier": "AD 2002 nr 38",
+      "title": "Det har ansetts utrett att en försäljare i anslutning till att han sagt upp sin anställning i viss utsträckning har vidtagit av arbetsgivaren …",
+      "publicationId": "2bd76fb1-4eab-4a71-90f1-373ae0d00f64"
+    },
+    {
+      "type": "ruling",
+      "identifier": "AD 2002 nr 115",
+      "title": "En arbetstagare som arbetat hos ett redovisningsföretag som självständig handläggare hade i sitt anställningsavtal en konkurrensklausul.",
+      "publicationId": "c3f37c78-3254-4402-abaa-41ac5a6c79a3"
+    },
+    {
+      "type": "ruling",
+      "identifier": "AD 2003 nr 21",
+      "title": "En verksamhetschef, A, lämnade sin anställning hos ett företag, B, som bedrev personlig assistans åt funktionshindrade enligt lagen (1993:387) om …",
+      "publicationId": "990b184c-6d07-46aa-81ab-9031e0603eb7"
+    },
+    {
+      "type": "ruling",
+      "identifier": "AD 2006 nr 49",
+      "title": "En arbetstagare lämnade sin anställning hos ett företag som bedrev personaluthyrning och inledde en verksamhet i konkurrens med företaget.",
+      "publicationId": "ecd9625c-1eb4-496b-9f8c-ef5b27e243d9"
+    },
+    {
+      "type": "ruling",
+      "identifier": "AD 2009 nr 11",
+      "title": "Ett företag i biluthyrningsbranschen har annonserat ut en ledig anställning som biluthyrare/bilvårdare.",
+      "publicationId": "a96c9360-e040-4db6-9435-c917ed4ce62b"
+    },
+    {
+      "type": "ruling",
+      "identifier": "AD 2009 nr 63",
+      "title": "Tre arbetstagare hos ett bolag A, som är verksamt inom IT-branschen, slutade sina anställningar där och bildade ett annat bolag B som verkar inom …",
+      "publicationId": "5088a267-a62b-4ede-bf85-4782520d6b6c"
+    },
+    {
+      "type": "ruling",
+      "identifier": "AD 2010 nr 27",
+      "title": "Ett bolag med verksamhet inom området IT-säkerhet yrkade vid tingsrätten att en tidigare arbetstagare hos bolaget skulle åläggas förbud att …",
+      "publicationId": "c4daae63-56b6-4433-a932-9c9852aae275"
+    },
+    {
+      "type": "ruling",
+      "identifier": "AD 2010 nr 42",
+      "title": "En arbetstagare har under sin anställningstid hos arbetsgivaren, som driver verksamhet med personlig assistans, bl.a.",
+      "publicationId": "ab62cf5f-52c5-4320-a495-8997d661f647"
+    },
+    {
+      "type": "ruling",
+      "identifier": "AD 2010 nr 90",
+      "title": "En säljare av konsulttjänster, som ingick i arbetsgivarens ledningsgrupp, uppgav för en av arbetsgivarens kunder att han hade blivit uppsagd.",
+      "publicationId": "8850361c-73e9-46f9-be95-d64ab7ca6640"
+    },
+    {
+      "type": "ruling",
+      "identifier": "AD 2011 nr 11",
+      "title": "Fråga om en arbetstagare har ådragit sig skadeståndsansvar mot sin arbetsgivare för brott mot lagen (1990:409) om skydd för företagshemligheter, …",
+      "publicationId": "92cc6c41-a61f-442f-a393-5c2e689a15ea"
+    },
+    {
+      "type": "ruling",
+      "identifier": "AD 2012 nr 40",
+      "title": "Huvudsakligen fråga om det funnits laga skäl för avskedande på grund av illojalitet.",
+      "publicationId": "1fbe2425-0738-4ede-b29b-7df6ba4d2569"
+    },
+    {
+      "type": "ruling",
+      "identifier": "AD 2013 nr 24",
+      "title": "En arbetstagare vid ett factoringbolag har sagt upp sig och tagit anställning hos en konkurrent.",
+      "publicationId": "ccf9ebac-f12f-42ce-a06f-74f5894b5808"
+    },
+    {
+      "type": "ruling",
+      "identifier": "AD 2015 nr 8",
+      "title": "En revisor och hans arbetsgivare har träffat ett avtal med en konkurrensklausul.",
+      "publicationId": "2eb5e681-366d-46d7-9df7-9f64aff02e4b"
+    },
+    {
+      "type": "ruling",
+      "identifier": "AD 2015 nr 35",
+      "title": "En anställd frisör har efter att ha bytt anställning kontaktat några av den tidigare arbetsgivarens kunder genom bl.a.",
+      "publicationId": "4e901921-6b08-4539-8d90-ef2964e6bc85"
+    },
+    {
+      "type": "ruling",
+      "identifier": "AD 2015 nr 39",
+      "title": "En arbetstagare har sagt upp sig och tagit anställning hos en konkurrent.",
+      "publicationId": "979b5ae2-8765-478a-a2d7-f30f5e01bfe7"
+    },
+    {
+      "type": "ruling",
+      "identifier": "AD 2016 nr 21",
+      "title": "Ett företag har sagt upp en arbetstagare på grund av arbetsbrist.",
+      "publicationId": "4a8b5a06-ade7-461b-ba71-f8e6a9cab80a"
+    },
+    {
+      "type": "ruling",
+      "identifier": "AD 2017 nr 12",
+      "title": "Två arbetstagare har startat ett nytt, med arbetsgivaren konkurrerande, företag och därefter sagt upp sig.",
+      "publicationId": "d45ebc54-3e3e-4a66-ac04-032c3d000284"
+    },
+    {
+      "type": "ruling",
+      "identifier": "AD 2017 nr 44",
+      "title": "Med stöd av en avtalad konkurrensklausul förbjöd en arbetsgivare en arbetstagare, en säljare, som sagt upp sig, att under ett års tid ta …",
+      "publicationId": "95ef109e-9a69-4d78-941b-065e77d4b36d"
+    },
+    {
+      "type": "ruling",
+      "identifier": "AD 2017 nr 57",
+      "title": "En regionchef vid ett bolag som tillhandahåller hushållsnära tjänster hade en konkurrensklausul i sitt anställningsavtal.",
+      "publicationId": "453daa24-b1c0-476d-8e5f-fafea5e0d2ab"
+    },
+    {
+      "type": "ruling",
+      "identifier": "AD 2018 nr 25",
+      "title": "Tre arbetstagare vid ett logistikföretag har sagt upp sig för att arbeta hos ett konkurrerande företag.",
+      "publicationId": "e8e5b91e-ef8d-48a7-98ce-828842921a31"
+    },
+    {
+      "type": "ruling",
+      "identifier": "AD 2018 nr 31",
+      "title": "Fyra arbetstagare vid ett företag som anordnar personlig assistans har sagt upp sig för att börja arbeta hos ett konkurrerande företag.",
+      "publicationId": "8cef8b6f-3572-4fcf-9c35-71fc7e968dfd"
+    },
+    {
+      "type": "ruling",
+      "identifier": "AD 2018 nr 48",
+      "title": "En tandhygienist har avskedats efter att han flera gånger i mejl till Migrationsverket lämnat uppgifter om patienter som han behandlat, som var …",
+      "publicationId": "1fe8a5da-9b3b-4ee4-a3ed-f553bef956d2"
+    },
+    {
+      "type": "ruling",
+      "identifier": "AD 2018 nr 49",
+      "title": "Fyra arbetstagare vid ett låsföretag har sagt upp sig för att verka för ett konkurrerande företag.",
+      "publicationId": "ace0b75d-1649-4dee-813d-22e2a4252a44"
+    },
+    {
+      "type": "ruling",
+      "identifier": "AD 2018 nr 61",
+      "title": "Fråga om förutsättningar för interimistiskt förordnande enligt 15 kap.",
+      "publicationId": "7c0d53ef-1abf-47f8-bd39-a98b13ef6c50"
+    },
+    {
+      "type": "ruling",
+      "identifier": "AD 2019 nr 12",
+      "title": "Fråga om förutsättningar föreligger för att interimistiskt vid vite förbjuda en verkställande direktör att bedriva en med arbetsgivaren …",
+      "publicationId": "53ed1e32-748e-4ad6-a205-0bfc3a544359"
+    },
+    {
+      "type": "ruling",
+      "identifier": "AD 2019 nr 22",
+      "title": "Sju arbetstagare anställda hos bolag i en mediekoncern träffade avtal med sina respektive arbetsgivarbolag om att deras anställningar skulle …",
+      "publicationId": "0a4b76bf-cd4c-4132-9d79-4dae2674899a"
+    },
+    {
+      "type": "ruling",
+      "identifier": "AD 2019 nr 38",
+      "title": "En arbetstagare vid Migrationsverket har avskedats med påstående om att han gjort ett stort antal otillåtna slagningar i Migrationsverkets databas.",
+      "publicationId": "3ba8c9fc-1602-42ed-8fdb-9142a4426d52"
+    },
+    {
+      "type": "ruling",
+      "identifier": "AD 2020 nr 11",
+      "title": "Ett företag som tillhandahåller en internetbaserad tjänst för kemikaliehantering har väckt talan mot tre tidigare anställda, två bolag samt tre …",
+      "publicationId": "7b499ce2-084a-4ff2-99bc-166860ab5037"
+    },
+    {
+      "type": "ruling",
+      "identifier": "AD 2020 nr 18",
+      "title": "Fråga bl.a.",
+      "publicationId": "a370c27b-b9cd-4476-88fa-af1721082519"
+    },
+    {
+      "type": "ruling",
+      "identifier": "AD 2020 nr 26",
+      "title": "En projektledare vid ett installationsföretag, i praktiken platschef för ett av företagets kontor, har avskedats sedan det framkommit att han, vid …",
+      "publicationId": "dd85889b-8d39-431b-bef8-e682911264aa"
+    },
+    {
+      "type": "ruling",
+      "identifier": "AD 2020 nr 53",
+      "title": "En provanställd handläggare vid Försäkringskassan var föräldraledig under huvuddelen av prövotiden.",
+      "publicationId": "f7c2d7eb-6135-40fa-b9e6-d75e455aa6d3"
+    },
+    {
+      "type": "ruling",
+      "identifier": "AD 2021 nr 1",
+      "title": "En arbetstagare har tillsammans med en affärskompanjon bildat ett bolag som säljer prefabricerade betongbyggnader i konkurrens med arbetstagarens …",
+      "publicationId": "ab9f3211-bc67-4c83-977c-5590bab92331"
+    },
+    {
+      "type": "ruling",
+      "identifier": "AD 2021 nr 24",
+      "title": "Ett bolag har avskedat sin försäljningschef och bl.a.",
+      "publicationId": "3ed30ece-7880-4e9e-af56-d7e243ad5b5b"
+    },
+    {
+      "type": "ruling",
+      "identifier": "AD 2021 nr 67",
+      "title": "En lagerarbetare har avskedats eftersom han, enligt arbetsgivaren, dels vid flera tillfällen medverkat till en kollegas våld och trakasserier mot …",
+      "publicationId": "8821adb1-2619-459b-af87-f6db006ef06d"
+    },
+    {
+      "type": "ruling",
+      "identifier": "AD 2022 nr 3",
+      "title": "Polismyndigheten beslutade att en hos myndigheten anställd polis inte längre var godkänd för placering i säkerhetsklassat arbete.",
+      "publicationId": "328e7ff0-fdfb-4982-96f6-968e44f9519a"
+    },
+    {
+      "type": "ruling",
+      "identifier": "AD 2023 nr 8",
+      "title": "Flera tvister om skadeståndsskyldighet på grund av brott mot bl.a.",
+      "publicationId": "650d3526-9dd0-4b81-a70b-28a6ea1cd8bb"
+    },
+    {
+      "type": "ruling",
+      "identifier": "AD 2023 nr 29",
+      "title": "Ett bolag bedrev på entreprenad delar av en regions busslinjetrafik.",
+      "publicationId": "bf610757-4c9c-4123-baf6-43717cd0dcfc"
+    },
+    {
+      "type": "ruling",
+      "identifier": "AD 2023 nr 39",
+      "title": "En arbetstagare har under flera års tid begärt och beviljats ledigt från sitt arbete för studier.",
+      "publicationId": "36b83152-773e-435d-9c15-35d20a44d87d"
+    },
+    {
+      "type": "ruling",
+      "identifier": "AD 2024 nr 13",
+      "title": "En arbetstagares anställning på ett s.k.",
+      "publicationId": "33b15e27-87a2-4dde-b35d-95a0b767ca63"
+    },
+    {
+      "type": "ruling",
+      "identifier": "NJA 1984 s. 665",
+      "title": "En försäljningsingenjör slutar sin anställning och startar ett eget företag som övertar agenturer för två tyska företag från den tidigare …",
+      "publicationId": "446a9fe7-81ed-4614-90bb-e3def33c91bd"
+    },
+    {
+      "type": "ruling",
+      "identifier": "NJA 1999 s. 469",
+      "title": "En banks tio år gamla interna kreditinstruktion har ansetts utgöra företagshemlighet.",
+      "publicationId": "6a75b9f7-a5f0-4334-be30-bcd410c68e59"
+    },
+    {
+      "type": "ruling",
+      "identifier": "NJA 2009 s. 672",
+      "title": "Fråga om återförsäljningsavtal slutet på obestämd tid och utan villkor om uppsägning kunnat sägas upp med omedelbar verkan eller endast med skälig …",
+      "publicationId": "a85f2dd8-65d1-407d-83b5-80bac4440a97"
+    },
+    {
+      "type": "ruling",
+      "identifier": "NJA 2010 s. 629",
+      "title": "Mellan en beställare och en underentreprenör har avtalats att visst vite ska utgå ifall omhändertagen egendom förkommer.",
+      "publicationId": "70d9c51b-fce6-4679-b588-54649de63351"
+    },
+    {
+      "type": "ruling",
+      "identifier": "NJA 2015 s. 741",
+      "title": "Partneravtalet",
+      "publicationId": "187ddcee-2d7d-4c0e-9496-3804520c6c32"
+    }
+  ]
+}

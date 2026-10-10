@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { DatabaseSync } from 'node:sqlite';
+import { inTransaction } from './database.js';
 
 // backend/migrations, reached from both src/db and dist/db.
 const MIGRATIONS_DIR = fileURLToPath(new URL('../../migrations/', import.meta.url));
@@ -60,19 +61,16 @@ export function migrate(db: DatabaseSync, dir: string = MIGRATIONS_DIR): Migrati
   db.exec('PRAGMA foreign_keys = OFF');
   try {
     for (const migration of readMigrations(dir)) {
-      // IMMEDIATE takes the write lock before the check, so a concurrent run waits and then skips.
-      db.exec('BEGIN IMMEDIATE');
       try {
-        if (!isApplied.get(migration.version)) {
+        // The write lock is taken before the check, so a concurrent run waits and then skips.
+        inTransaction(db, () => {
+          if (isApplied.get(migration.version)) return;
           db.exec(migration.sql);
           assertForeignKeysHold(db);
           record.run(migration.version, migration.name, new Date().toISOString());
           applied.push(migration);
-        }
-        db.exec('COMMIT');
+        });
       } catch (error) {
-        // SQLite may already have rolled back, e.g. after a full disk.
-        if (db.isTransaction) db.exec('ROLLBACK');
         throw new Error(`Migration ${migrationLabel(migration)} failed`, { cause: error });
       }
     }

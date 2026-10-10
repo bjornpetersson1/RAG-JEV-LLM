@@ -26,6 +26,39 @@ export function openDatabase(path: string): DatabaseSync {
 }
 
 /**
+ * Runs `work` in a transaction that takes the write lock at once, committing on success and rolling
+ * back on error.
+ */
+export function inTransaction<T>(db: DatabaseSync, work: () => T): T {
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const result = work();
+    db.exec('COMMIT');
+    return result;
+  } catch (error) {
+    // SQLite may already have rolled back, e.g. after a full disk.
+    if (db.isTransaction) db.exec('ROLLBACK');
+    throw error;
+  }
+}
+
+/**
+ * Wraps `prepare` so its statements are prepared once per connection and reused, for code that
+ * runs the same statements for every document.
+ */
+export function preparedOnce<T>(prepare: (db: DatabaseSync) => T): (db: DatabaseSync) => T {
+  const cache = new WeakMap<DatabaseSync, T>();
+  return (db) => {
+    let statements = cache.get(db);
+    if (!statements) {
+      statements = prepare(db);
+      cache.set(db, statements);
+    }
+    return statements;
+  };
+}
+
+/**
  * Deletes the database file and SQLite's side files, if they exist. Refuses a file that is not a
  * SQLite database, so a mistyped path cannot delete something else.
  */
