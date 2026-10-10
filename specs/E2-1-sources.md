@@ -4,7 +4,7 @@
 - **Labels:** `E2 Data ingestion`
 - **Phase:** 2. Data
 - **Depends on:** E1-1 (#1)
-- **Status:** Approved
+- **Status:** Implemented — all acceptance criteria verified (npm ci, lint, format:check, typecheck, 108 tests (104 backend, 4 frontend) and build exit 0; a real `npm run data:fetch` from an empty `data/raw/` fetched all 61 documents in 36.3 s with exit 0, and a re-run skipped all 61)
 
 ## Summary
 
@@ -58,13 +58,13 @@ Topics: non-compete clauses, trade secrets, confidentiality and loyalty duty (mo
 
 ## Tasks
 
-- [ ] Selection file committed in the repo (outside the git-ignored `data/`), with per document: type, identifier, title, and what is needed to fetch it (SFS number; the API's publication id for rulings).
-- [ ] Fetcher for SFST law pages and for single rulings from the case-law API, using Node's built-in `fetch`.
-- [ ] `data:fetch` CLI: sequential requests with a short delay, a descriptive `User-Agent`, a timeout per request, skip-existing and `--force`, per-document error logging, a final summary (fetched, skipped, failed, time) and non-zero exit on failures.
-- [ ] Manifest writer for `data/raw/manifest.json`.
-- [ ] Backend script `data:fetch` and a root script that calls it.
-- [ ] README "Data sources" section.
-- [ ] Unit tests per acceptance criterion 1 and 4, with a faked `fetch`.
+- [x] Selection file committed in the repo (outside the git-ignored `data/`), with per document: type, identifier, title, and what is needed to fetch it (SFS number; the API's publication id for rulings).
+- [x] Fetcher for SFST law pages and for single rulings from the case-law API, using Node's built-in `fetch`.
+- [x] `data:fetch` CLI: sequential requests with a short delay, a descriptive `User-Agent`, a timeout per request, skip-existing and `--force`, per-document error logging, a final summary (fetched, skipped, failed, time) and non-zero exit on failures.
+- [x] Manifest writer for `data/raw/manifest.json`.
+- [x] Backend script `data:fetch` and a root script that calls it.
+- [x] README "Data sources" section.
+- [x] Unit tests per acceptance criterion 1 and 4, with a faked `fetch`.
 
 ## Decisions
 
@@ -79,6 +79,16 @@ Topics: non-compete clauses, trade secrets, confidentiality and loyalty duty (mo
 - **License** (default): both sources publish public documents from Swedish authorities; laws and court decisions are not protected by copyright (1 kap. 9 § upphovsrättslagen 1960:729). The README states this and links each source's terms page as found during implementation.
 - **No new dependency** (default): Node's built-in `fetch`; the CLI runs through `tsx` like `db:migrate`.
 - **Only the fetch is tested against fakes** (default): tests must not use the network (CLAUDE.md); the real sources are checked by the manual run in criterion 2.
+- **Selection file at `sources/selection.json`** (settled while implementing): per document `type`, `identifier`, `title` and `sfsNumber` (laws) or `publicationId` (rulings). A ruling's title is the API's `benamning` or the first sentence of its summary, cut to about 150 characters. Every API publication id was resolved from the reference number when the list was curated.
+- **Raw file names** (settled while implementing): the identifier with every run of non-alphanumeric characters replaced by `-`, e.g. `laws/SFS-1982-80.html`, `rulings/NJA-2015-s-741.json`.
+- **Fetch details** (settled while implementing): 500 ms between requests, a 30 s timeout per request, a `User-Agent` naming the project, and files and the manifest written through a temporary file, so an interrupted run never leaves a half-written file that a later run would skip. A failed forced re-fetch keeps the earlier file and its manifest entry. A raw file without a manifest entry (e.g. a deleted manifest) gets its file time as `fetchedAt`.
+- **Law page check** (settled while implementing): the page, with HTML entities decoded, must contain the law's title from the selection. A small entity decoder (`ingest/html.ts`) is shared with E2-2.
+- **Error formatting shared** (settled while implementing): `describeError` moved from the `db` CLI to `backend/src/errors.ts`, so both CLIs print errors the same way.
+- **Measured fetch time** (criterion 2): a full fetch of all 61 documents took 35.5 s (4.5 MB) and, after the code-review changes, 36.3 s; a re-run that skipped everything took 0.0 s.
+- **Terms** (criterion 3): Domstolsverket publishes case law as open data ("Öppna data är offentlig information som du kan ta del av och använda"); no separate license page was found for SFST, so the README relies on 1 kap. 9 § upphovsrättslagen for both sources.
+- **Manifest robustness** (code review): the manifest starts from every raw file already on disk and is saved after each fetched document, so a run that is cut short still leaves a complete, correct manifest. A document whose source URL differs from its manifest entry (e.g. a corrected publication id) is fetched again even without `--force`. A raw file without a manifest entry keeps an entry dated by its file time, also when a forced re-fetch of it fails.
+- **Stricter content checks** (code review): a ruling record must be a JSON object whose `id` is the requested publication id; law titles are compared with whitespace normalised (so `&nbsp;` in a title still matches); two identifiers that would map to the same raw file name stop the run before anything is fetched; a failed atomic write removes its temporary file.
+- **`REPO_ROOT` in `backend/src/repo-root.ts`** (code review), shared by the `db` and `ingest` modules instead of living in the database config.
 
 ## Open Questions
 
