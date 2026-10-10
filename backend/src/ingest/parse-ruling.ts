@@ -1,4 +1,4 @@
-import { decodeHtmlEntities } from './html.js';
+import { collapseWhitespace, decodeHtmlEntities } from './html.js';
 import type { RulingSection, RulingSectionRole, RulingStructure } from './structure.js';
 
 export interface ParsedRuling {
@@ -135,9 +135,7 @@ function strings(value: unknown): string[] {
 function extractParagraphs(html: string): string[] {
   return [...html.matchAll(PARAGRAPH)]
     .map(([, , content = '']) =>
-      decodeHtmlEntities(content.replace(/<[^>]*>/g, ' '))
-        .replace(/\s+/g, ' ')
-        .trim(),
+      collapseWhitespace(decodeHtmlEntities(content.replace(/<[^>]*>/g, ' '))),
     )
     .filter((paragraph) => /[\p{L}\p{N}]/u.test(paragraph));
 }

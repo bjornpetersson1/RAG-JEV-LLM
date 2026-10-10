@@ -1,4 +1,4 @@
-import { decodeHtmlEntities } from './html.js';
+import { collapseWhitespace, decodeHtmlEntities } from './html.js';
 import type { LawChapter, LawSection, LawStructure, TransitionalEntry } from './structure.js';
 
 export interface ParsedLaw {
@@ -46,7 +46,7 @@ const MAX_HEADING_LENGTH = 120;
  */
 export function parseLawPage(html: string, today: string): ParsedLaw {
   const page = decodeHtmlEntities(html);
-  const title = page.match(TITLE)?.[1]?.replace(/\s+/g, ' ').trim();
+  const title = collapseWhitespace(page.match(TITLE)?.[1] ?? '');
   if (!title) throw new LawParseError('No law title found');
   const sfsNumber = page.match(SFS_NUMBER)?.[1];
   if (!sfsNumber) throw new LawParseError('No SFS number found');
@@ -84,7 +84,7 @@ export function parseLawPage(html: string, today: string): ParsedLaw {
 function splitBlocks(body: string): string[] {
   return body
     .split(/\r?\n[ \t\u00a0]*\r?\n/)
-    .map((block) => block.replace(/\s+/g, ' ').trim())
+    .map(collapseWhitespace)
     .filter((block) => block !== '');
 }
 

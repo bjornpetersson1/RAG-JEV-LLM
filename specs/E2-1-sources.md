@@ -49,7 +49,7 @@ Pick open Swedish sources for laws and court rulings, commit a fixed selection o
 
 1982:80 (LAS), 1915:218 (avtalslagen), 2018:558 (företagshemligheter), 1977:480 (semesterlag), 2008:567 (diskrimineringslag), 1982:673 (arbetstidslag), 1976:580 (MBL), 1995:584 (föräldraledighetslag), 2018:218 (dataskyddslagen), 2002:293 (deltids- och visstidsanställda), 2012:854 (uthyrning av arbetstagare).
 
-**Rulings (50)**, identifier = court-qualified reference (see E1-3):
+**Rulings (50)**, identifier = reference number (see E2-3):
 
 - **AD (45):** AD 1994 nr 79, AD 1998 nr 80, AD 1999 nr 61, AD 2000 nr 3, AD 2001 nr 91, AD 2002 nr 15, AD 2002 nr 38, AD 2002 nr 115, AD 2003 nr 21, AD 2006 nr 49, AD 2009 nr 11, AD 2009 nr 63, AD 2010 nr 27, AD 2010 nr 42, AD 2010 nr 90, AD 2011 nr 11, AD 2012 nr 40, AD 2013 nr 24, AD 2015 nr 8, AD 2015 nr 35, AD 2015 nr 39, AD 2016 nr 21, AD 2017 nr 12, AD 2017 nr 44, AD 2017 nr 57, AD 2018 nr 25, AD 2018 nr 31, AD 2018 nr 48, AD 2018 nr 49, AD 2018 nr 61, AD 2019 nr 12, AD 2019 nr 22, AD 2019 nr 38, AD 2020 nr 11, AD 2020 nr 18, AD 2020 nr 26, AD 2020 nr 53, AD 2021 nr 1, AD 2021 nr 24, AD 2021 nr 67, AD 2022 nr 3, AD 2023 nr 8, AD 2023 nr 29, AD 2023 nr 39, AD 2024 nr 13.
 - **HD (5):** NJA 1984 s. 665, NJA 1999 s. 469, NJA 2009 s. 672, NJA 2010 s. 629, NJA 2015 s. 741.
