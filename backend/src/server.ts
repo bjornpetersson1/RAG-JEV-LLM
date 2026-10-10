@@ -1,10 +1,8 @@
 import { buildApp } from './app.js';
-import { LlmConfigError, loadLlmConfig } from './llm/config.js';
+import { loadLlmConfig } from './llm/config.js';
 import { resolvePort } from './port.js';
 
-const port = resolvePort(process.env.PORT);
-// Fail fast on invalid LLM settings; later issues build the roles from this config for their routes.
-exitOnInvalidLlmConfig();
+const port = readStartupConfig();
 const app = buildApp();
 
 try {
@@ -14,12 +12,15 @@ try {
   process.exit(1);
 }
 
-function exitOnInvalidLlmConfig(): void {
+/** Validates `.env` before listening; an invalid value prints its message and exits, no stack trace. */
+function readStartupConfig(): number {
   try {
+    const port = resolvePort(process.env.PORT);
+    // Fail fast on invalid LLM settings; later issues build the roles from this config for their routes.
     loadLlmConfig(process.env);
+    return port;
   } catch (error) {
-    if (!(error instanceof LlmConfigError)) throw error;
-    console.error(error.message);
+    console.error(error instanceof Error ? error.message : String(error));
     process.exit(1);
   }
 }
