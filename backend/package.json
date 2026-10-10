@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "db:migrate": "tsx --env-file-if-exists=../.env src/db/cli.ts migrate",
-    "db:reset": "tsx --env-file-if-exists=../.env src/db/cli.ts reset"
+    "db:reset": "tsx --env-file-if-exists=../.env src/db/cli.ts reset",
+    "data:fetch": "tsx --env-file-if-exists=../.env src/ingest/cli.ts fetch"
   },
   "dependencies": {
     "fastify": "^5.12.5"
