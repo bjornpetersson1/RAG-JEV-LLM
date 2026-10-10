@@ -30,6 +30,14 @@ gh issue view <N> --json number,title,state,body --jq '{number,title,state}'
 ## Steps
 
 1. **Spec** — `spec-from-issue` with the issue number. Continues only once the owner has approved the spec. Produces the branch `feature/<KEY>-<slug>` with the spec committed.
+
+   **Spec already approved:** `/ship-epic` approves specs up front. If `specs/<KEY>-*.md` is on `origin/develop` with Status `Approved`, skip `spec-from-issue` and the approval stop:
+   - Move the issue to In Progress.
+   - Run `git switch -c feature/<KEY>-<slug> origin/develop`.
+   - Compare the spec with what has been merged since it was approved: the Decisions in the dependency specs and the code on `develop`.
+     - If something it assumed changed, update the spec, note the change in its Decisions and commit it as `<KEY>: update spec`.
+     - If that would change an acceptance criterion, ask the owner first.
+   - Continue at step 2.
 2. **Implement** — `implement-spec` with the KEY.
 3. **Clean code** — `clean-code`.
 4. **Code review** — stage everything first so new files are part of the diff (`git add -A`), then invoke the built-in `code-review` skill with args `high`. Fix **every** finding it reports (or, for one you judge wrong, write down why in the spec's Decisions). Re-run the narrowest check that covers each fix.
@@ -44,4 +52,4 @@ gh issue view <N> --json number,title,state,body --jq '{number,title,state}'
 - One line per acceptance criterion: PASS and the evidence.
 - What the code review and the PR review found, and what was changed.
 - Anything unverified, skipped or deliberately left out of scope — plainly.
-- Say that the PR is ready for the owner's review and merge into `develop`.
+- Say that the PR is ready for the owner's review and merge into `develop` — or, when run from `/ship-epic`, that `/ship-epic` merges it next.

@@ -1,6 +1,6 @@
 ---
 name: release-check
-description: Check a release pull request from develop into main when an epic is done - verify the whole release, run clean code over all of it, fix what is wrong on a fix branch, and post a review on the release PR. Use for /release-check <PR number> whenever an epic is finished and develop is about to be merged into main.
+description: Check a release pull request from develop into main when an epic is done - verify the whole release, run clean code over all of it, fix what is wrong on a fix branch and merge it into develop, and post a review on the release PR, so the owner only has to merge develop into main. Use for /release-check <PR number> whenever an epic is finished and develop is about to be merged into main.
 argument-hint: <release PR number — optional, defaults to the open PR from develop into main>
 ---
 
@@ -15,7 +15,7 @@ Every feature PR has already had its own spec, code review and PR review. This c
 - Is the code clean across issues, not just within each one?
 - Is the release ready for `main`?
 
-The owner merges; you never push to `develop` or `main`.
+The goal is that the owner's only step is merging the release PR into `main`. So you merge your own fix PR into `develop` (step 5) — the one exception to the no-merge rule in `CLAUDE.md`. You never push directly to `develop` or `main`, and never merge anything into `main`.
 
 ## 0. Preflight
 
@@ -104,6 +104,11 @@ Fix every FAIL from steps 2–4 that has a clear fix, on the worktree branch `fe
 - After the fixes, run the full checks from step 2.1 again; all must pass.
 - Commit as `<EPIC>: <imperative summary>`, with a body listing the fixes and the Co-Authored-By trailer from `CLAUDE.md`.
 - Push and open a PR **against `develop`** with title `<EPIC> · release-check fixes`. Its body lists each fix and the verification, and ends with the Claude Code line.
+- **Merge the fix PR into `develop`** yourself:
+  1. `git fetch origin` and check that `origin/develop` has not moved since the worktree was created (it is an ancestor of the fix branch). If it moved, stop and ask the owner.
+  2. Check `gh pr view <fix PR> --json mergeable,statusCheckRollup`: it must be `MERGEABLE` and no check may be failing. Otherwise stop and ask.
+  3. `gh pr merge <fix PR> --merge` (a merge commit, like the feature PRs; keep the branch).
+  4. `git fetch origin` and confirm that the release PR's `headRefOid` is now the new `origin/develop`.
 
 If nothing needs fixing, skip this step and delete the empty branch.
 
@@ -111,9 +116,9 @@ If nothing needs fixing, skip this step and delete the empty branch.
 
 Post one review on the release PR with `event: "COMMENT"` (the owner cannot request changes on their own PR), through `gh api repos/<owner>/<repo>/pulls/<PR>/reviews --method POST --input <file>`. Build the JSON payload in the scratchpad.
 
-- **Body**: verdict (ready to merge, ready after the fix PR, or blocked), the epic's "Done when" lines with PASS/FAIL, and the fix PR link.
+- **Body**: verdict (ready to merge, or blocked), the epic's "Done when" lines with PASS/FAIL, and the merged fix PR link.
 - **Inline comments**: one per finding, on a line of the release diff:
-  - for a fixed finding, what was wrong and "fixed in #<fix PR>";
+  - for a fixed finding, what was wrong and "fixed in #<fix PR> (merged into `develop`)";
   - for an open finding, what is wrong, why it matters and what to do.
 
   Mark minor ones `nit:`.
@@ -121,18 +126,15 @@ Post one review on the release PR with `event: "COMMENT"` (the owner cannot requ
   - the epic and its issues;
   - what the release delivers (one line per issue);
   - how it was verified;
-  - the merge order (fix PR into `develop` first, then this PR);
+  - the merged fix PR, if there is one (its changes are already part of this PR);
   - the Claude Code line.
 
 ## 7. Report to the owner (in Swedish)
 
-- Release PR link, and the fix PR link if there is one.
+- Release PR link, and the merged fix PR link if there is one.
 - One line per check from step 2 and per "Done when" line: PASS or FAIL and the evidence.
 - What clean code and the review found; what was fixed and what is left for the owner.
-- What the owner does next:
-  1. Merge the fix PR into `develop`.
-  2. Check that the release PR updated.
-  3. Merge it into `main`.
-  4. Move any epic issue not yet `Done` on the board (`.claude/scripts/set-issue-status.sh`).
+- Before reporting, move every epic issue not yet `Done` on the board to `Done` (`.claude/scripts/set-issue-status.sh <issue> Done`).
+- What the owner does next: only merge the release PR into `main` — or, if the verdict is blocked, what has to be decided first.
 - Anything unverified, plainly.
 - Remove the worktree when done (`git worktree remove <path>`), keeping the branch.
