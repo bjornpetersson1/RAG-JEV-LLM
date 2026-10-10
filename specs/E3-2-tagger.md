@@ -108,6 +108,8 @@ At indexing time an LLM picks 3–8 tags from the E3-1 vocabulary for every chun
 
 - **`.env.example` calls the cost an estimate** (PR review): no live run has measured it yet.
 
+- **A run's cost is the sum of its chunks' costs** (fixed after the first live run): the summary priced the summed tokens of the whole run. For Haiku that applied the long-prompt rate (5×), which is per request, as soon as the run passed 100,000 prompt tokens. The first live run (`--limit 20`) reported 0.0386 USD where its chunks cost 0.0077 USD in total. Measured: about 0.0004 USD per chunk, so about 0.80 USD for the whole corpus. Its `tagging_runs` row keeps the overstated figure.
+
 ## Open Questions
 
 - None.
