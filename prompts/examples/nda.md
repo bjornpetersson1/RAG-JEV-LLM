@@ -6,7 +6,7 @@ A real run of `npm run query` (E6-2) on 2026-10-11, kept to show what the `nda` 
 npm run query -- "Sekretessavtal för en konsult som får tillgång till kunddata och affärsplaner." --template nda
 ```
 
-Settings: `LLM_PROVIDER=claude-code` (the Claude Code subscription, no API key), query translator and judge `claude-haiku-5-5`, generator `claude-sonnet-5-5`, `JUDGE_IMPL=llm` (no JEV key yet, so the LLM judged, as in E5-3; its scores came from the judge cache of the E5-3 evaluation where available), default context limits.
+Settings: `LLM_PROVIDER=claude-code` (the Claude Code subscription, no API key), query translator and judge `claude-haiku-5-5`, generator `claude-sonnet-5-5`, `JUDGE_IMPL=llm` (no JEV key yet, so the LLM judged, as in E5-3; its scores came from the judge cache of the E5-3 evaluation where available), default context limits. The source accuracy and flagged references below were added afterwards by running the E6-3 post-check over this draft and its submitted chunks; the run itself printed E6-2's interim line "Citations outside the submitted chunks: 0".
 
 ## Query
 
@@ -124,7 +124,8 @@ Sources used (18):
 Unused sources (2):
   [K:1537] AD 2020 nr 11, Domskäl, Allmänt om händelseförloppet, del 6/7
   [K:1586] AD 2020 nr 18, Domskäl, Tvisten
-Citations outside the submitted chunks: 0
+Source accuracy: 100 % (35 of 35 references)
+Flagged references (0):
 
 Context limit reached: 5 approved chunks were left out (--max-chunks 20).
 To include every approved chunk, run again with a larger context:

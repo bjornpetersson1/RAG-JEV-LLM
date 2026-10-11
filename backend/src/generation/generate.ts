@@ -3,6 +3,7 @@ import { NO_USAGE, type LlmUsage } from '../llm/client.js';
 import type { Chunk, Generator } from '../llm/types.js';
 import type { ContextLimits } from './config.js';
 import { selectContext, type ContextSelection } from './context.js';
+import { checkDraft, type PostCheck } from './post-check.js';
 import { findCitations, loadPromptTemplate } from './templates.js';
 
 export interface DraftRequest {
@@ -36,8 +37,8 @@ export interface GenerationResult {
   unused: Chunk[];
   /** Approved chunks the context limits kept out, in rank order. */
   leftOut: Chunk[];
-  /** Cited ids that are not among the submitted chunks, in order of first citation. */
-  outsideCitations: string[];
+  /** The references in `text` checked against the submitted chunks (E6-3); absent without text. */
+  check?: PostCheck;
   context: ContextReport;
   elapsedMs: number;
   usage: LlmUsage;
@@ -57,20 +58,22 @@ export async function generateDraft(
   const { submitted, leftOut, limitedBy, needed } = selectContext(request.chunks, limits);
   const context = { limits, limitedBy, needed };
   if (submitted.length === 0) {
-    const nothingSent = { used: [], unused: [], outsideCitations: [], usage: NO_USAGE };
+    const nothingSent = { used: [], unused: [], usage: NO_USAGE };
     return { ...nothingSent, leftOut, context, elapsedMs: elapsedMs(started) };
   }
 
   const draft = await generator.generate({ ...request, chunks: submitted });
   const byId = new Map(submitted.map((chunk) => [chunk.id, chunk]));
   // A Set keeps insertion order, so this is the cited ids in order of first citation.
-  const cited = new Set(findCitations(draft.text).map(({ id }) => id));
+  const text = withDisclaimer(draft.text, disclaimer);
+  const citations = findCitations(text);
+  const cited = new Set(citations.map(({ id }) => id));
   return {
-    text: withDisclaimer(draft.text, disclaimer),
+    text,
     used: [...cited].flatMap((id) => byId.get(id) ?? []),
     unused: submitted.filter((chunk) => !cited.has(chunk.id)),
     leftOut,
-    outsideCitations: [...cited].filter((id) => !byId.has(id)),
+    check: checkDraft(text, submitted, citations),
     context,
     elapsedMs: elapsedMs(started),
     usage: draft.usage,

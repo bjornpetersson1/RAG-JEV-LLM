@@ -249,7 +249,7 @@ npm run query -- "<instruction>" --template nda --max-chunks 30 --max-context-ch
 - the number of candidates, approved chunks and chunks sent to the generator;
 - the draft;
 - the sources it cites and the sources it does not cite;
-- the number of citations to chunks that were not sent;
+- the post-check (E6-3): the source accuracy (the share of `[K:]` citations and free-text legal references such as "7 § LAS" or "AD 2019 nr 35" that match a chunk sent to the generator) and every flagged reference with its position in the draft;
 - the time in ms and the tokens for each step.
 
 The approved chunks go to the generator best first, up to `GENERATOR_MAX_CHUNKS` (default 20) and `GENERATOR_MAX_CONTEXT_CHARS` (default 60 000). When the limits leave chunks out, the output says how many and prints the same command with `--max-chunks` and `--max-context-chars` large enough to include them all. Running it again repeats the whole flow. Judge scores that are cached (from JEV, or from the LLM with `JUDGE_IMPL=llm`) are reused, but LLM fallback answers under `jev-with-fallback` are not cached, and an LLM query translator may pick other tags, so the rerun can find somewhat different chunks. When the judge approves nothing, or no approved chunk fits the limits, no draft is written.

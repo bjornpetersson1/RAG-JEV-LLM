@@ -11,7 +11,7 @@ const DRAFT: GenerationResult = {
   used: [{ id: '11', text: 'a', source: 'SFS 1982:80 7 §' }],
   unused: [{ id: '12', text: 'b', source: 'SFS 1982:80 11 §' }],
   leftOut: [],
-  outsideCitations: [],
+  check: { flags: [], references: 1, valid: 1, sourceAccuracy: 1 },
   context: {
     limits: { maxChunks: 20, maxContextChars: 60_000 },
     limitedBy: [],
@@ -62,7 +62,8 @@ describe('formatQueryResult', () => {
         '  [K:11] SFS 1982:80 7 §',
         'Unused sources (1):',
         '  [K:12] SFS 1982:80 11 §',
-        'Citations outside the submitted chunks: 0',
+        'Source accuracy: 100 % (1 of 1 references)',
+        'Flagged references (0):',
         '',
         'Time (ms): translation 800 · search 15 · judging 3000 · generation 900 · total 4715',
         'Tokens: translation in 2 + cache 898 / out 40 · judging in 0 / out 0 · generation in 5000 / out 1200',
@@ -70,10 +71,53 @@ describe('formatQueryResult', () => {
     );
   });
 
-  it('lists citations outside the submitted chunks', () => {
-    const output = formatQueryResult(REQUEST, result({ ...DRAFT, outsideCitations: ['99'] }));
+  it('prints the source accuracy and each flagged reference with its position', () => {
+    const check = {
+      flags: [
+        {
+          kind: 'citation' as const,
+          text: '[K:99]',
+          start: 40,
+          end: 46,
+          reason: 'chunk 99 was not submitted',
+        },
+        {
+          kind: 'free-text' as const,
+          text: '8 § LAS',
+          start: 60,
+          end: 67,
+          reason: 'no submitted chunk is from SFS 1982:80 8 §',
+        },
+      ],
+      references: 3,
+      valid: 1,
+      sourceAccuracy: 1 / 3,
+    };
 
-    expect(output).toContain('Citations outside the submitted chunks: 1 ([K:99])');
+    expect(formatQueryResult(REQUEST, result({ ...DRAFT, check }))).toContain(
+      [
+        'Source accuracy: 33 % (1 of 3 references)',
+        'Flagged references (2):',
+        '  40–46 citation "[K:99]": chunk 99 was not submitted',
+        '  60–67 free-text "8 § LAS": no submitted chunk is from SFS 1982:80 8 §',
+      ].join('\n'),
+    );
+  });
+
+  it('rounds the source accuracy down, so a flagged draft never shows 100 %', () => {
+    const check = { flags: [], references: 250, valid: 249, sourceAccuracy: 249 / 250 };
+
+    expect(formatQueryResult(REQUEST, result({ ...DRAFT, check }))).toContain(
+      'Source accuracy: 99 % (249 of 250 references)',
+    );
+  });
+
+  it('shows a draft without references as having no source accuracy', () => {
+    const check = { flags: [], references: 0, valid: 0, sourceAccuracy: null };
+
+    expect(formatQueryResult(REQUEST, result({ ...DRAFT, check }))).toContain(
+      'Source accuracy: – (no references)',
+    );
   });
 
   it('says when the context limit left chunks out, with a command that includes them all', () => {

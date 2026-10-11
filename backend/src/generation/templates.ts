@@ -26,7 +26,8 @@ const SLOTS: Partial<Record<Part, readonly string[]>> = {
 const SLOT_PATTERN = /\{\{([^}]*)\}\}/g;
 
 // A bracket group of citations: `[K:12]`, or several ids as `[K:12, K:40]` or `[K:12, 40]`.
-const CITATION_GROUP_PATTERN = /\[K:([^\]]*)\]/g;
+// Within one line, so a stray `[K:` cannot swallow the text up to a later `]`.
+const CITATION_GROUP_PATTERN = /\[K:([^\]\n]*)\]/g;
 
 /** One cited chunk id, with the offsets of the bracket group it was written in. */
 export interface FoundCitation {
