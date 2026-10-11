@@ -101,6 +101,9 @@ The relevance step moves behind one `Reranker` interface, chosen in `.env` with 
   - **`eval:run` does not read `RERANK_TOP_K`** (it keeps every relevant chunk) and builds one reranker per distinct name, so without a JEV key both judge modes share one.
   - **`createReranker` reads the reranker's settings once**: only `loadRerankerConfig` (startup) runs `validate`.
   - **The example drafts' settings note that `JUDGE_IMPL=llm` is now `RERANKER=llm`.**
+- **PR review fixes**:
+  - **`eval:run` builds the `llm` reranker once** and reuses it for `tags+jev` without a JEV key, instead of a memoising map.
+  - **The eval setup test asserts that all three chunks are kept** (threshold 0), so it fails if eval ever cuts at a top-K.
 - **Not changed (code review)**:
   - **`returned` for the judge modes is best first instead of candidate order**: only its length and set-based precision/recall are used, so the report is unchanged.
   - **`answeredBy` counts are judge-only**: a reranker without `answeredBy` (bge) would count as answered by neither; `eval:run`'s judge modes only use `jev` and `llm` until E8-5 reworks the report per reranker.

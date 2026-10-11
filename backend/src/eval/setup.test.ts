@@ -14,13 +14,14 @@ describe('createEvalSetup', () => {
 
   it('ignores RERANK_TOP_K and keeps every relevant chunk', async () => {
     database = createEvalDatabase();
-    const env = { LLM_PROVIDER: 'fake', QUERY_TRANSLATOR_IMPL: 'llm', RERANK_TOP_K: '0' };
+    // Every chunk is relevant at threshold 0; RERANK_TOP_K=0 would fail if it were read.
+    const env = { LLM_PROVIDER: 'fake', JUDGE_THRESHOLD: '0', RERANK_TOP_K: '0' };
 
     const setup = createEvalSetup(database.db, env, logger);
     const chunks = setup.loadChunks(['11', '12', '21']);
     const result = await setup.judge('tags+llm', 'Uppsägning', chunks);
 
-    expect(result.ranked).toHaveLength(result.stats.relevant);
+    expect(result.ranked).toHaveLength(3);
   });
 
   it('judges tags+jev with the llm reranker when there is no JEV key', () => {

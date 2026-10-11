@@ -17,14 +17,6 @@ import {
   type SearchDependencies,
 } from './run.js';
 
-/**
- * The reranker each judge mode forces, whatever `RERANKER` says. Without a JEV key, `tags+jev` is
- * judged by the LLM, as in the first evaluation, and the report says so.
- */
-function rerankerFor(mode: JudgeMode, env: Env): 'jev' | 'llm' {
-  return mode === 'tags+jev' && hasJevKey(env) ? 'jev' : 'llm';
-}
-
 export interface SearchSetup extends SearchDependencies {
   /** What the run used, for the report, e.g. `{ 'query translator': 'claude-code claude-haiku-5-5' }`. */
   settings: Record<string, string>;
@@ -68,16 +60,19 @@ export function createSearchSetup(
  */
 export function createEvalSetup(db: DatabaseSync, env: Env, logger: LlmLogger): EvalSetup {
   const llmConfig = loadLlmConfig(env);
-  const byName = new Map<string, Reranker>();
-  const rerankerNamed = (name: string) => {
-    if (!byName.has(name)) {
-      // Eval keeps every relevant chunk, so RERANK_TOP_K is not read.
-      const rerankerEnv = { ...env, RERANKER: name, RERANK_TOP_K: undefined, JUDGE_CACHE: 'on' };
-      byName.set(name, createReranker(rerankerEnv, { db, llmConfig, logger }).reranker);
-    }
-    return byName.get(name)!;
+  // Eval keeps every relevant chunk, so RERANK_TOP_K is not read.
+  const build = (name: 'jev' | 'llm'): Reranker =>
+    createReranker(
+      { ...env, RERANKER: name, RERANK_TOP_K: undefined, JUDGE_CACHE: 'on' },
+      { db, llmConfig, logger },
+    ).reranker;
+  const llm = build('llm');
+  // Without a JEV key, tags+jev is judged by the LLM, as in the first evaluation, and the report
+  // says so.
+  const rerankers: Record<JudgeMode, Reranker> = {
+    'tags+jev': hasJevKey(env) ? build('jev') : llm,
+    'tags+llm': llm,
   };
-  const rerankers = byJudgeMode((mode) => rerankerNamed(rerankerFor(mode, env)));
   return {
     ...createSearchSetup(db, env, logger, llmConfig),
     judge(mode, instruction, chunks) {
