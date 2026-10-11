@@ -95,10 +95,13 @@ export function createJevClient(options: JevClientOptions): JevClient {
         logger.info({ ...entry, latencyMs: elapsedMs(started), ...response.usage }, 'JEV call');
         return response;
       } catch (error) {
-        logger.error(
-          { ...entry, latencyMs: elapsedMs(started), error: describeError(error) },
-          'JEV call failed',
-        );
+        const failure = { ...entry, latencyMs: elapsedMs(started), error: describeError(error) };
+        // A cancellation is the caller's decision (e.g. a timeout of its own), not a JEV failure.
+        if (error instanceof JevError && error.kind === 'aborted') {
+          logger.info(failure, 'JEV call cancelled');
+        } else {
+          logger.error(failure, 'JEV call failed');
+        }
         throw error;
       }
     },

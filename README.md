@@ -184,6 +184,19 @@ A judge decides whether a candidate chunk is relevant to the lawyer's instructio
 
 JEV gets `JUDGE_TIMEOUT_MS` (default 10000) per judgement and is not retried. Chunks are sent whole; one that JEV refuses as too large falls back like any other JEV error.
 
+### Parallel judging and the judge cache
+
+`judgeAll(instruction, chunks, deps, { cache })` judges a query's candidate chunks with the judge from `createJudging` (the judge, its cache identity and the threshold, from one config) in parallel, at most `JUDGE_CONCURRENCY` (default 8) calls at a time. A chunk whose judgement fails, or takes longer than `JUDGE_CHUNK_TIMEOUT_MS` (default 30000, fallback included), is `unknown`: it counts as not relevant, and a warning names it. When `JUDGE_TOTAL_TIMEOUT_MS` (default 60000) is reached, calls in flight are cancelled, every chunk not yet judged is `unknown`, and the judgements finished so far are returned.
+
+Scores are cached in the `judge_cache` table:
+
+- The key is the question asked about the instruction (trimmed, lower-cased, whitespace collapsed), the judge (JEV for `jev` and `jev-with-fallback`, else the LLM), its model and the chunk. A chunk whose text has changed is judged again.
+- Only the primary judge's scores are stored, so an LLM fallback answer is asked for again next time.
+- Relevance is decided against the current `JUDGE_THRESHOLD` when the score is read, so changing the threshold needs no new calls.
+- `JUDGE_CACHE=off`, or `{ cache: false }` per call, skips the cache entirely, e.g. for timing measurements. Deleting the table's rows clears it.
+
+The result has each chunk's status (`judged`, `cached` or `unknown`), score, relevance, judge and time, plus the total time, cache hits, judge calls, unknown chunks and tokens used.
+
 ### JEV limits
 
 TypeSafe does not document JEV's maximum state size, pricing or rate limits. `npm run jev:probe` measures them against the real API with the judge's timeout `JUDGE_TIMEOUT_MS` (needs `JEV_API_KEY`; the calls are billed): latency over 10 sequential calls, the largest state accepted (doubling from 1,000 characters) and how a burst of 20 concurrent calls is answered.

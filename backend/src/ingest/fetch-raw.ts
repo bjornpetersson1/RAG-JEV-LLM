@@ -4,7 +4,8 @@ import { setTimeout } from 'node:timers/promises';
 import { describeError } from '../errors.js';
 import type { Failure } from './failures.js';
 import { writeFileAtomically } from './files.js';
-import { collapseWhitespace, decodeHtmlEntities } from './html.js';
+import { collapseWhitespace } from '../text.js';
+import { decodeHtmlEntities } from './html.js';
 import { readManifest, writeManifest, type ManifestEntry } from './manifest.js';
 import type { SelectedDocument } from './selection.js';
 

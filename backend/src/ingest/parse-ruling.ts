@@ -1,4 +1,5 @@
-import { collapseWhitespace, decodeHtmlEntities } from './html.js';
+import { collapseWhitespace } from '../text.js';
+import { decodeHtmlEntities } from './html.js';
 import type { RulingSection, RulingSectionRole, RulingStructure } from './structure.js';
 
 export interface ParsedRuling {

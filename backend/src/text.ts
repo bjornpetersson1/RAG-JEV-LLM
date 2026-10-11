@@ -9,3 +9,8 @@ export function words(text: string): string[] {
     .split(/[^\p{L}\p{N}]+/u)
     .filter((word) => word.length > 0);
 }
+
+/** Any run of whitespace, including the non-breaking spaces `&nbsp;` decodes to, as one space, trimmed. */
+export function collapseWhitespace(text: string): string {
+  return text.replace(/\s+/g, ' ').trim();
+}

@@ -16,6 +16,7 @@ const SCHEMA_TABLES = [
   'chunks_fts_docsize',
   'chunks_fts_idx',
   'documents',
+  'judge_cache',
   'schema_migrations',
   'tagging_runs',
   'tags',
@@ -65,6 +66,7 @@ describe('migrate', () => {
       '3_chunk_context',
       '4_tagging',
       '5_chunks_fts',
+      '6_judge_cache',
     ]);
     expect(tableNames(db)).toEqual(SCHEMA_TABLES);
     expect(recordedVersions(db)).toEqual([
@@ -83,6 +85,11 @@ describe('migrate', () => {
       {
         version: 5,
         name: 'chunks_fts',
+        applied_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+      },
+      {
+        version: 6,
+        name: 'judge_cache',
         applied_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
       },
     ]);
