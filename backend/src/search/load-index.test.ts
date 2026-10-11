@@ -75,6 +75,7 @@ describe('loadTagIndex', () => {
 
     expect(index).toBe(EMPTY_TAG_INDEX);
     expectWarning(logger, 'pending migrations (1_initial, ', 'npm run db:migrate');
+    expect(logger.warn.mock.calls[0][1]).not.toContain('index:tag');
   });
 
   it('gives an empty index and a warning when the database has no chunks', () => {

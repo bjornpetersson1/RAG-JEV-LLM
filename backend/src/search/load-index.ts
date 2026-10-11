@@ -52,7 +52,9 @@ function readChunkTags(databasePath: string): { chunkTags: ChunkTag[] } | { empt
     const pending = pendingMigrations(db);
     if (pending.length > 0) {
       const labels = pending.map(migrationLabel).join(', ');
-      return { emptyReason: `the database has pending migrations (${labels}); ${SET_UP}` };
+      return {
+        emptyReason: `the database has pending migrations (${labels}); run \`npm run db:migrate\``,
+      };
     }
     const chunkTags = selectChunkTags(db);
     if (chunkTags.length > 0) return { chunkTags };
