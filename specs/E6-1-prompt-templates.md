@@ -4,7 +4,7 @@
 - **Labels:** `E6 Generation`
 - **Phase:** 4. Judging and generation
 - **Depends on:** E1-2 (#2)
-- **Status:** Approved
+- **Status:** Implemented — all acceptance criteria verified (npm ci, lint, format:check, typecheck, 552 tests (548 backend, 4 frontend) and build exit 0); the real-LLM example drafts are verified in E6-2
 
 ## Summary
 
@@ -49,11 +49,11 @@ Two prompt templates, one for employment agreements (`employment`) and one for N
 
 ## Tasks
 
-- [ ] Write `prompts/employment.md` and `prompts/nda.md` in Swedish: role/system text, required sections, citation rule, placeholder rule, Markdown output, disclaimer line, default fictional parties, and the user part with the three slots.
-- [ ] Write `prompts/README.md` (in English): file structure of a template, the slots, the citation format, the placeholder convention, how to add a template.
-- [ ] Backend module (in `backend/src/generation/`) that loads and validates the prompt template for a template id (`TEMPLATES`), and renders it to `{ system, prompt }` from instruction, chunks and optional parties.
-- [ ] Make sure `prompts/` is formatted consistently with Prettier (or excluded, if Prettier would rewrite the prompt text).
-- [ ] Unit tests for every acceptance criterion.
+- [x] Write `prompts/employment.md` and `prompts/nda.md` in Swedish: role/system text, required sections, citation rule, placeholder rule, Markdown output, disclaimer line, default fictional parties, and the user part with the three slots.
+- [x] Write `prompts/README.md` (in English): file structure of a template, the slots, the citation format, the placeholder convention, how to add a template.
+- [x] Backend module (in `backend/src/generation/`) that loads and validates the prompt template for a template id (`TEMPLATES`), and renders it to `{ system, prompt }` from instruction, chunks and optional parties.
+- [x] Make sure `prompts/` is formatted consistently with Prettier (it is formatted, not excluded; Prettier leaves the prompt text unchanged).
+- [x] Unit tests for every acceptance criterion.
 
 ## Decisions
 
@@ -67,6 +67,16 @@ Two prompt templates, one for employment agreements (`employment`) and one for N
 - **Plain `{{name}}` replacement, no template library** (default): three slots do not need a dependency.
 - **Chunk rendering in `{{chunks}}`** (default): each chunk as `[K:<id>]`, its source reference and its text, in the order given (E6-2 orders them by score).
 - **Disclaimer as a fixed line in the template** (default): E6-2 decides whether to also enforce it in code.
+- **Four parts per file** (implementation): `## System`, `## Användare`, `## Standardparter` and `## Friskrivning`. The disclaimer has its own part and reaches the system prompt through a `{{disclaimer}}` slot, so E6-2 can read the exact line to enforce it. Loading fails on a missing part, a missing slot or an unknown slot.
+- **Required sections are numbered in the system prompt** (implementation): the test checks each section name as a numbered line, which also fixes their order in the draft.
+- **Chunk without a source reference** (implementation): rendered as `[K:<id>]` and its text only.
+- **Stricter template validation** (code review): an unknown or repeated `##` part, an empty part, and anything in double braces that is not a known slot (e.g. `{{ lön }}`) fail loading, since each would silently cut or leak prompt text.
+- **At least one chunk** (code review): rendering with no chunks throws; E6-2 stops before generation when nothing is approved, so an empty source list is a caller error.
+- **Parties wording** (code review): the templates say to use the parties under "Parter" exactly as given, instead of calling them fictional, since a caller may pass real parties.
+- **Shared citation format** (code review): `citation()` and `CITATION_PATTERN` are exported from the template module, so E6-2 and E6-3 parse the same format the prompt writes.
+- **Templates read once** (code review): loaded templates are kept per file path.
+- **Left to E6-2** (code review findings, not fixed here): the placeholder generator in `llm/roles.ts` still formats chunks as `[id] (source)`, and `GenerateInput` has no `parties`; E6-2 replaces that generator with the template and adds optional parties to its input, as its spec says.
+- **README** (implementation): a short "Prompt templates" section in the root README points to `prompts/README.md`.
 
 ## Open Questions
 
