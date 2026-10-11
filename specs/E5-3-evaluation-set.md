@@ -4,7 +4,7 @@
 - **Labels:** `E5 JEV`
 - **Phase:** 5. UI and measurement
 - **Depends on:** E4-1 (#11), E4-3 (#13), E5-2 (#16); builds on E4-4 (#14) and E5-1 (#15)
-- **Status:** Approved
+- **Status:** Implemented — all acceptance criteria verified (npm ci, lint, format:check, typecheck, 524 tests (520 backend, 4 frontend) and build exit 0; `eval:run` with `claude-code` evaluated all 20 queries and validated the set against the real database). The `tags+jev` row was answered by the LLM: no `JEV_API_KEY`
 
 ## Summary
 
@@ -50,13 +50,13 @@ An evaluation set of 20 queries with marked relevant chunks, a labelling helper,
 
 ## Tasks
 
-- [ ] `claude-code` provider: client via the `claude` CLI, config validation, factory wiring, tests, `.env.example`, README.
-- [ ] Query file format, loader and validation against the database.
-- [ ] `eval:label` CLI.
-- [ ] Metrics, the four modes, the sweep, terminal table and report file; `eval:run` CLI.
-- [ ] Write the 20 queries and mark their relevant chunks.
-- [ ] Run `eval:run` once with `claude-code` and commit the report.
-- [ ] Tests per acceptance criterion.
+- [x] `claude-code` provider: client via the `claude` CLI, config validation, factory wiring, tests, `.env.example`, README.
+- [x] Query file format, loader and validation against the database.
+- [x] `eval:label` CLI.
+- [x] Metrics, the four modes, the sweep, terminal table and report file; `eval:run` CLI.
+- [x] Write the 20 queries and mark their relevant chunks.
+- [x] Run `eval:run` once with `claude-code` and commit the report.
+- [x] Tests per acceptance criterion.
 
 ## Decisions
 
@@ -75,6 +75,50 @@ An evaluation set of 20 queries with marked relevant chunks, a labelling helper,
   - The three tag modes judge or return the candidates of candidate search mode `tags` (E4-3), so they are compared on the same candidates. `fts` uses mode `fts`.
 - **`sourceRef` is the stored source reference** (spec update): `chunks.source_ref` already starts with the document identifier, e.g. `SFS 1982:80 4 b §` or `AD 2001 nr 91, Domskäl, del 3/3`. A relevant chunk is therefore `{ document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 4 b §' }`, looked up by both.
 - **The `claude-code` provider calls `claude -p`** (checked before implementing): it sends the system prompt, `--json-schema`, `--output-format json`, `--model` and no tools, and reads `structured_output` and `usage` from the JSON result. A trial call took about 4 s. It goes through E1-2's retry and logging wrapper like the Anthropic transport.
+
+- **Code layout** (settled while implementing):
+  - `src/llm/claude-code-client.ts` is a single-attempt transport wrapped by E1-2's `withRetryAndLogging`. A non-zero exit or a timeout is retried; a missing CLI, non-JSON output, an error result or missing structured output is not. The process runner is injected for tests (`runProcess` in `LlmDependencies`).
+  - `src/eval/`: `queries.ts` (parse and resolve), `metrics.ts`, `run.ts` (`runEvaluation` over injected dependencies), `report.ts`, `label.ts`, `setup.ts` (the real dependencies from `.env`) and `cli.ts`.
+  - `writeMarkdownReport` and `escapeCell` moved from the tagging report to `src/reports.ts`, shared with the evaluation report.
+- **Each query has a `kind`** (`employment` | `nda`; settled while implementing): this is how the "at least 8 of each" rule is checked. Every query also has free text, because the judges need an instruction to ask about; 6 also choose a template, which adds its preset tags.
+- **F1 is the harmonic mean of the macro-averaged precision and recall** (settled while implementing). A query whose judge returned nothing has precision 0.
+- **`yaml` 2.9.1 added** to the backend, as the spec allowed: no YAML parser was in the repo.
+- **How the labels were made** (settled while labelling):
+  - Claude read every candidate `eval:label` listed (39–58 per query, tag search plus full text).
+  - It marked the chunks a lawyer drafting that clause would use: the statute provisions that regulate it and the rulings that discuss it.
+  - A few central provisions outside the candidates were added by lookup: 36 § and 38 § avtalslagen, and 7, 12 and 18 §§ anställningsskyddslagen.
+  - That gives 266 references, 7–29 per query. Recall is therefore measured against one labeller's view, mostly within what the two searches find.
+
+- **Clean code**:
+  - The search part of the setup (`createSearchSetup`: translator, candidate search, chunk loading, report settings) is separate from the judges, so `eval:label` builds no judges, and E5-4 can reuse it.
+  - Searches take only the query's text (`QueryText`).
+  - The per-mode records come from `byJudgeMode` / `byEvalMode`.
+  - `toLlmUsage` is shared by the Anthropic and Claude Code clients. `sum` and `mean` are in `stats.ts`.
+  - The factory builds the shared client options once.
+  - `eval:label` parses its arguments with `node:util` `parseArgs`.
+- **Skipped clean-code suggestions**:
+  - Running queries, or the two judge modes, in parallel. Without a JEV key the second mode must read the first one's cached scores, and with a key the gain only matters for timing, which this evaluation does not measure.
+  - Reusing an LLM fallback score from `tags+jev` as the `tags+llm` judgement. It is only possible with a JEV key, and E5-2 deliberately does not cache fallback answers.
+  - A generic "named retrievers" runner for E5-4. `metrics.ts`, `queries.ts` and `createSearchSetup` are already independent of the modes, and E5-4 can reshape the runner when it adds the reference RAG.
+  - A shared console logger. Three CLIs have small variants.
+
+- **Code review fixes**:
+  - **`claude-code` never bills the API.** The CLI is started without `ANTHROPIC_API_KEY` and `ANTHROPIC_AUTH_TOKEN`, because a key in the environment takes precedence over the Claude Code login. This was confirmed live: a call with an invalid key in the environment succeeded on the subscription. **Before this fix, the 20 `eval:label` translations and a first `eval:run` (stopped after 15 queries) inherited the key from `.env` and were billed to the API, an estimated 0.5 USD with Haiku.** Its judge scores (same model) stay in the judge cache and are reused.
+  - The CLI also runs in the system temp directory, so the project's CLAUDE.md cannot reach the prompts.
+  - A timed-out process gets SIGTERM, then SIGKILL after 5 s, and the call settles at once. A broken stdin pipe is not an uncaught error.
+  - An error result on a non-zero exit (not logged in, unknown model) fails without retrying.
+  - Calls through `claude-code` are logged without an API cost estimate (`priced: false`).
+  - **Both judge modes use one judgement when they have the same judge** (no JEV key), so their rows agree exactly instead of depending on timeouts twice.
+  - **A failing query is listed in the report and left out of the averages, and `eval:run` exits non-zero.** One failure no longer loses the run.
+  - A query's `template` must match its `kind`. The LLM config is loaded once for the setup.
+  - The README gives the larger judge timeouts a `claude-code` run needs.
+- **Not fixed (code review): a tagging run through `claude-code` still stores an API cost estimate in `tagging_runs`.** Tagging with that provider is not a workflow this issue supports; the per-call log is now unpriced.
+
+- **The first run's report is committed as `eval/report-2026-10-11.md`** (settled while verifying): `reports/` is git-ignored, so the copy sits next to the queries it measures. The run used `claude-code` with `claude-haiku-5-5` for the translator and the judge.
+  - Tag search: precision 0.213, recall 0.491.
+  - Tag search plus judge: precision 0.364, recall 0.473. Without a JEV key, `tags+jev` and `tags+llm` are the same LLM judge.
+  - Full-text search: precision 0.205, recall 0.440.
+  - The sweep recommends threshold **0.6** for the LLM judge (F1 0.424 against 0.411 at 0.5). `JUDGE_THRESHOLD` is left at 0.5 for the owner to decide, as the Non-goals say.
 
 ## Open Questions
 

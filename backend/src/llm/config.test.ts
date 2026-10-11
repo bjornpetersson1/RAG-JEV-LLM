@@ -68,18 +68,20 @@ describe('loadLlmConfig', () => {
   });
 
   it('reports a missing LLM_PROVIDER', () => {
-    expect(issuesFor({})).toEqual(['LLM_PROVIDER is required (expected one of: anthropic, fake)']);
+    expect(issuesFor({})).toEqual([
+      'LLM_PROVIDER is required (expected one of: anthropic, claude-code, fake)',
+    ]);
   });
 
   it('reports an unknown default provider', () => {
     expect(issuesFor({ ...VALID, LLM_PROVIDER: 'openai' })).toEqual([
-      'LLM_PROVIDER "openai" is not supported (expected one of: anthropic, fake)',
+      'LLM_PROVIDER "openai" is not supported (expected one of: anthropic, claude-code, fake)',
     ]);
   });
 
   it('reports an unknown per-role provider', () => {
     expect(issuesFor({ ...VALID, LLM_QUERY_TRANSLATOR_PROVIDER: 'jev' })).toEqual([
-      'LLM_QUERY_TRANSLATOR_PROVIDER "jev" is not supported (expected one of: anthropic, fake)',
+      'LLM_QUERY_TRANSLATOR_PROVIDER "jev" is not supported (expected one of: anthropic, claude-code, fake)',
     ]);
   });
 

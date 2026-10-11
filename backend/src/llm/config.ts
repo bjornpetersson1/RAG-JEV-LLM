@@ -1,12 +1,15 @@
 import { MAX_TIMER_MS } from '../http.js';
 import { ROLE_NAMES, type RoleName } from './types.js';
 
-const PROVIDERS = ['anthropic', 'fake'] as const;
+const PROVIDERS = ['anthropic', 'claude-code', 'fake'] as const;
 
 type Provider = (typeof PROVIDERS)[number];
 
 export type RoleConfig =
-  { provider: 'anthropic'; model: string; apiKey: string } | { provider: 'fake' };
+  | { provider: 'anthropic'; model: string; apiKey: string }
+  /** The local `claude` CLI on the owner's Claude Code subscription; no API key. */
+  | { provider: 'claude-code'; model: string }
+  | { provider: 'fake' };
 
 export interface LlmConfig {
   roles: Record<RoleName, RoleConfig>;
@@ -85,11 +88,15 @@ export function loadLlmConfig(env: Env): LlmConfig {
     const provider = override ?? defaultProvider;
     if (provider === 'fake') {
       roles[role] = { provider };
-    } else if (provider === 'anthropic') {
-      anthropicRoles.push(role);
+    } else if (provider !== undefined && isProvider(provider)) {
+      if (provider === 'anthropic') anthropicRoles.push(role);
       const model = read(modelKey) ?? read('LLM_MODEL');
       if (model === undefined) {
-        issues.push(`${modelKey} or LLM_MODEL is required because ${role} uses provider anthropic`);
+        issues.push(
+          `${modelKey} or LLM_MODEL is required because ${role} uses provider ${provider}`,
+        );
+      } else if (provider === 'claude-code') {
+        roles[role] = { provider, model };
       } else if (apiKey !== undefined) {
         roles[role] = { provider, model, apiKey };
       }

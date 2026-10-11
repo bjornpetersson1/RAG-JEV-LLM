@@ -203,11 +203,39 @@ TypeSafe does not document JEV's maximum state size, pricing or rate limits. `np
 
 **Observed so far: nothing.** The project has no JEV key yet, so the limits are not measured, and JEV's request shape is only checked against the documentation with faked responses. Run the probe once a key exists and record the results here.
 
+## Evaluation
+
+`eval/queries.yaml` holds 20 lawyer instructions (10 employment agreements, 10 NDAs, 6 with a template). Each lists the chunks relevant to it, by document identifier and stored source reference. Claude drafted the queries and marked the chunks from the candidates `eval:label` lists, and the owner reviews the file.
+
+```bash
+npm run eval:label -- anst-01 [--chars 300]   # candidates for one query: tag search, then full text
+npm run eval:run                              # precision, recall and the threshold sweep
+```
+
+`eval:run` runs every query through four modes and prints precision and recall (macro averages over the queries):
+
+- `tags`: tag-search candidates (E4-1);
+- `tags+jev`: those candidates as approved by the judge with `JUDGE_IMPL=jev-with-fallback`;
+- `tags+llm`: the same, with `JUDGE_IMPL=llm`;
+- `fts`: full-text candidates only (E4-3).
+
+For each judge mode, thresholds from 0.1 to 0.9 are applied to the judge's scores, and the threshold with the highest F1 is recommended. The judge cache is on, so the sweep and repeated runs cost no new calls. The full report, with one row per query, goes to `reports/eval-<timestamp>.md`.
+
+Without `JEV_API_KEY`, `tags+jev` is answered by the LLM, and the report says so. To run without the paid API, use the Claude Code provider. It starts the `claude` CLI without `ANTHROPIC_API_KEY`, so the calls go to your subscription even when `.env` has a key. A `claude` call takes several seconds, so give the judge more time than the defaults, which are sized for JEV and the API:
+
+```bash
+LLM_PROVIDER=claude-code LLM_MODEL=claude-haiku-5-5 LLM_TIMEOUT_MS=120000 \
+  JUDGE_CHUNK_TIMEOUT_MS=150000 JUDGE_TOTAL_TIMEOUT_MS=600000 npm run eval:run
+```
+
+The first run's report is kept in `eval/report-2026-10-11.md`. A query that fails, e.g. because the CLI keeps failing, is listed in the report and left out of the averages, and the command exits non-zero.
+
 ## LLM configuration
 
 Each LLM role (tagger, query translator, judge, generator) gets its provider and model from `.env`, so switching needs no code change:
 
-- `LLM_PROVIDER` (`anthropic` or `fake`) and `LLM_MODEL` are the defaults for every role.
+- `LLM_PROVIDER` (`anthropic`, `claude-code` or `fake`) and `LLM_MODEL` are the defaults for every role.
+  - `claude-code` runs the local `claude` CLI in print mode (no tools, structured JSON output) on your Claude Code subscription, so it needs no `ANTHROPIC_API_KEY`. A call takes a few seconds, so it suits evaluation runs, not timing.
 - `LLM_<ROLE>_PROVIDER` and `LLM_<ROLE>_MODEL` override them for one role, where `ROLE` is `TAGGER`, `QUERY_TRANSLATOR`, `JUDGE` or `GENERATOR`.
 - `LLM_TIMEOUT_MS` and `LLM_MAX_RETRIES` tune the request timeout and retries.
 
