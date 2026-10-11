@@ -33,7 +33,7 @@ One TypeScript interface per LLM role (Tagger, QueryTranslator, Judge, Generator
 ## Acceptance Criteria
 
 1. **Switching model or provider for any role requires only an `.env` change.**
-   - `LLM_PROVIDER` and `LLM_MODEL` set the default for all roles; `LLM_<ROLE>_PROVIDER` and `LLM_<ROLE>_MODEL` (`ROLE` ∈ `TAGGER`, `QUERY_TRANSLATOR`, `JUDGE`, `GENERATOR`) override them per role. Supported providers: `anthropic`, `fake`.
+   - `LLM_PROVIDER` and `LLM_MODEL` set the default for all roles; `LLM_<ROLE>_PROVIDER` and `LLM_<ROLE>_MODEL` (`ROLE` ∈ `TAGGER`, `QUERY_TRANSLATOR`, `JUDGE`, `GENERATOR`) override them per role. Supported providers: `anthropic`, `fake` (**extended by E5-3** with `claude-code`, the local Claude Code CLI).
    - Unit tests show that, given only different environment values, the factory builds each role with the expected provider and model (e.g. default `anthropic`/model A, generator overridden to model B, judge overridden to `fake`), and that the Anthropic request body for a role carries that role's model.
    - No code change is needed between those cases: the tests call the same factory with different env objects.
 2. **The full test suite runs with no network access (fakes used in tests).**
@@ -58,7 +58,7 @@ One TypeScript interface per LLM role (Tagger, QueryTranslator, Judge, Generator
   - `Generator.generate({ template, instruction, chunks }) → Promise<{ text: string; references: string[] }>` (references are chunk ids)
 - [x] Low-level `LlmClient` interface: one call taking system prompt, user content and a JSON schema, returning the parsed JSON plus usage.
 - [x] Anthropic implementation via `fetch`: structured outputs (`output_config.format`, JSON schema) for structured JSON output, `AbortSignal` timeout, retry with exponential backoff on network errors, timeouts, 429, 5xx and 529 (honouring `retry-after`), no retry on other 4xx; clear error when the response does not match the schema shape.
-- [x] Logger interface compatible with Fastify/pino (`info`/`error` with an object); the server passes `app.log`.
+- [x] Logger interface compatible with Fastify/pino (`info`/`error` with an object; **E5-1 added `warn`**); the server passes `app.log`.
 - [x] Price table for known Claude models (USD per million input/output tokens) and cost estimation; unknown model → no `costUsd`.
 - [x] LLM-backed role implementations with placeholder prompts; tagger and query translator drop tags not in the vocabulary; judge clamps/validates score.
 - [x] Fake client and fake roles: deterministic defaults, overridable with fixed answers or a function.
@@ -70,7 +70,7 @@ One TypeScript interface per LLM role (Tagger, QueryTranslator, Judge, Generator
 
 ## Decisions
 
-- **Anthropic only** (owner): the real provider for now. "Switching provider" is shown between `anthropic` and `fake`; the provider union and factory are the extension point for more. Departs from the issue's open-ended "chosen cloud provider" by fixing it.
+- **Anthropic only** (owner; **superseded by E5-3**, which adds `claude-code` for evaluation runs on the Claude Code subscription): the real provider for now. "Switching provider" is shown between `anthropic` and `fake`; the provider union and factory are the extension point for more. Departs from the issue's open-ended "chosen cloud provider" by fixing it.
 - **Default + per-role override** (owner): `LLM_PROVIDER`/`LLM_MODEL` plus `LLM_<ROLE>_PROVIDER`/`LLM_<ROLE>_MODEL`.
 - **Built-in `fetch`, no SDK** (owner): no new dependency; retry and timeout are implemented in the client, and tests inject `fetch`.
 - **No streaming** (owner): can be added when the UI (E7) needs it.
