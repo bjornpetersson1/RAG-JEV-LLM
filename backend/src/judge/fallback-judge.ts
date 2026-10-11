@@ -12,16 +12,16 @@ export function createFallbackJudge(
   logger: LlmLogger,
 ): ScoringJudge {
   return {
-    async judge(instruction, chunk) {
+    async judge(instruction, chunk, signal) {
       try {
-        return await jev.judge(instruction, chunk);
+        return await jev.judge(instruction, chunk, signal);
       } catch (error) {
         if (!(error instanceof JevError) || error.kind === 'aborted') throw error;
         logger.warn(
           { role: 'judge', chunkId: chunk.id, kind: error.kind, error: error.message },
           'JEV failed, judging with the LLM instead',
         );
-        return llm.judge(instruction, chunk);
+        return llm.judge(instruction, chunk, signal);
       }
     },
   };

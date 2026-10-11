@@ -3,7 +3,7 @@ import { loadLlmConfig } from '../llm/config.js';
 import { createLlmRoles } from '../llm/factory.js';
 import { createCapturingLogger, createFakeFetch, messageResponse } from '../llm/test-helpers.js';
 import { loadJudgeConfig } from './config.js';
-import { createJudge } from './factory.js';
+import { createJudge, createJudging } from './factory.js';
 
 const CHUNK = { id: 'c7', text: 'Uppsägningstiden är en månad.', source: 'SFS 1982:80 11 §' };
 const JEV_URL = 'https://api.typesafe.ai/v1/systemone';
@@ -174,5 +174,30 @@ describe('createJudge', () => {
     });
 
     await expect(judge.judge('x', CHUNK)).rejects.toThrow('LLM down');
+  });
+
+  it('builds the judging for judgeAll: JEV keyed by the JEV model, else the LLM by its model', async () => {
+    const llmConfig = loadLlmConfig({
+      LLM_PROVIDER: 'anthropic',
+      LLM_MODEL: 'claude-opus-5-5',
+      LLM_JUDGE_MODEL: 'claude-haiku-5-5',
+      ANTHROPIC_API_KEY: 'a',
+    });
+    const anthropic = createFakeFetch(() => messageResponse({ score: 0.4 }));
+    const deps = { llmConfig, logger: createCapturingLogger(), fetch: anthropic.fetch };
+
+    const jev = createJudging(loadJudgeConfig({ JEV_API_KEY: 'k', JUDGE_THRESHOLD: '0.6' }), deps);
+    const llm = createJudging(loadJudgeConfig({}), deps);
+
+    expect(jev).toMatchObject({ primary: { impl: 'jev', model: 'jev-latest' }, threshold: 0.6 });
+    expect(llm).toMatchObject({
+      primary: { impl: 'llm', model: 'claude-haiku-5-5' },
+      threshold: 0.5,
+    });
+    await expect(llm.judge.judge('x', CHUNK)).resolves.toMatchObject({
+      score: 0.4,
+      judgedBy: 'llm',
+    });
+    expect(anthropic.requests[0].body.model).toBe('claude-haiku-5-5');
   });
 });

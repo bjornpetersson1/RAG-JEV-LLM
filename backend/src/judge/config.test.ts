@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { loadJudgeConfig } from './config.js';
+import { loadJudgeConfig, loadJudgingConfig } from './config.js';
 
 const JEV_KEY = { JEV_API_KEY: 'jev-key' };
 
@@ -53,5 +53,36 @@ describe('loadJudgeConfig', () => {
     [{ ...JEV_KEY, JUDGE_IMPL: 'jev', JEV_TIMEOUT_MS: 'abc' }, 'Invalid JEV_TIMEOUT_MS "abc"'],
   ])('rejects %o', (env, message) => {
     expect(() => loadJudgeConfig({ ...env })).toThrow(message);
+  });
+});
+
+describe('loadJudgingConfig', () => {
+  it('defaults to 8 calls at a time, 30 s per chunk, 60 s in total and the cache on', () => {
+    expect(loadJudgingConfig({})).toEqual({
+      concurrency: 8,
+      chunkTimeoutMs: 30_000,
+      totalTimeoutMs: 60_000,
+      cache: true,
+    });
+  });
+
+  it('reads every setting', () => {
+    expect(
+      loadJudgingConfig({
+        JUDGE_CONCURRENCY: '3',
+        JUDGE_CHUNK_TIMEOUT_MS: '5000',
+        JUDGE_TOTAL_TIMEOUT_MS: '20000',
+        JUDGE_CACHE: 'off',
+      }),
+    ).toEqual({ concurrency: 3, chunkTimeoutMs: 5000, totalTimeoutMs: 20_000, cache: false });
+  });
+
+  it.each([
+    [{ JUDGE_CONCURRENCY: '0' }, 'Invalid JUDGE_CONCURRENCY "0"'],
+    [{ JUDGE_CHUNK_TIMEOUT_MS: 'soon' }, 'Invalid JUDGE_CHUNK_TIMEOUT_MS "soon"'],
+    [{ JUDGE_TOTAL_TIMEOUT_MS: '-1' }, 'Invalid JUDGE_TOTAL_TIMEOUT_MS "-1"'],
+    [{ JUDGE_CACHE: 'yes' }, 'Invalid JUDGE_CACHE "yes": expected on or off'],
+  ])('rejects %o', (env, message) => {
+    expect(() => loadJudgingConfig({ ...env })).toThrow(message);
   });
 });

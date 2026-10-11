@@ -1,6 +1,6 @@
 import { buildApp } from './app.js';
 import { resolveDatabasePath } from './db/config.js';
-import { loadJudgeConfig } from './judge/config.js';
+import { loadJudgeConfig, loadJudgingConfig } from './judge/config.js';
 import { loadLlmConfig } from './llm/config.js';
 import { resolvePort } from './port.js';
 import { loadQueryTranslatorConfig } from './query/config.js';
@@ -35,6 +35,7 @@ function readStartupConfig(): {
     loadLlmConfig(process.env);
     loadQueryTranslatorConfig(process.env);
     const judgeConfig = loadJudgeConfig(process.env);
+    loadJudgingConfig(process.env);
     return {
       port,
       judgeWarning: judgeConfig.warning,

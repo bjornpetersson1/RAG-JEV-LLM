@@ -103,11 +103,12 @@ export interface QueryTranslator {
 
 /** Scores a chunk's relevance to an instruction; `createJudge` applies the threshold to it. */
 export interface ScoringJudge {
-  judge(instruction: string, chunk: Chunk): Promise<JudgeScore>;
+  /** `signal` cancels a JEV call; an LLM call cannot be cancelled and runs to its end. */
+  judge(instruction: string, chunk: Chunk, signal?: AbortSignal): Promise<JudgeScore>;
 }
 
 export interface Judge {
-  judge(instruction: string, chunk: Chunk): Promise<Judgement>;
+  judge(instruction: string, chunk: Chunk, signal?: AbortSignal): Promise<Judgement>;
 }
 
 export interface Generator {
