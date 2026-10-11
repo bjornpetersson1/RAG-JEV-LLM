@@ -143,9 +143,13 @@ describe('createCandidateSearch', () => {
 
     expect(result.tagCandidates).toBe(0);
     expect(result.candidates.every((candidate) => candidate.origin === 'fts')).toBe(true);
-    expect(result.candidates.map((candidate) => candidate.chunkId).sort()).toEqual(
-      [chunkIds[0], chunkIds[2], chunkIds[3]].sort(),
-    );
+    // bm25 order: the fourth chunk matches two terms ("månads"* and the label's "lön"*); of the
+    // two that match only "uppsägn"*, the shorter text ranks first.
+    expect(result.candidates.map((candidate) => candidate.chunkId)).toEqual([
+      chunkIds[3],
+      chunkIds[2],
+      chunkIds[0],
+    ]);
     expect(logger.info.mock.calls[0][0]).toMatchObject({ mode: 'fts', fallbackUsed: true });
   });
 
