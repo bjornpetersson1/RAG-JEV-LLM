@@ -34,10 +34,11 @@ describe('fake roles', () => {
 
     await expect(
       judge.judge('notice period termination', { id: 'c1', text: 'The notice period is…' }),
-    ).resolves.toEqual({ relevant: true, score: 2 / 3 });
+    ).resolves.toEqual({ score: 2 / 3, judgedBy: 'llm', usage: NO_USAGE });
     await expect(judge.judge('notice period', { id: 'c2', text: 'Unrelated' })).resolves.toEqual({
-      relevant: false,
       score: 0,
+      judgedBy: 'llm',
+      usage: NO_USAGE,
     });
   });
 
@@ -47,7 +48,7 @@ describe('fake roles', () => {
         id: 'c1',
         text: 'Uppsägningstiden är en månad.',
       }),
-    ).resolves.toEqual({ relevant: true, score: 0.5 });
+    ).resolves.toMatchObject({ score: 0.5 });
   });
 
   it('generator echoes its input and cites every chunk', async () => {
@@ -74,11 +75,11 @@ describe('fake roles', () => {
       createFakeQueryTranslator(() => ['y']).translate('t', VOCABULARY),
     ).resolves.toEqual({ tags: [{ slug: 'y' }] });
     await expect(
-      createFakeJudge(() => ({ relevant: false, score: 0.1 })).judge('t', chunk),
-    ).resolves.toEqual({
-      relevant: false,
-      score: 0.1,
-    });
+      createFakeJudge(() => ({ score: 0.1, judgedBy: 'jev' })).judge('t', chunk),
+    ).resolves.toEqual({ score: 0.1, judgedBy: 'jev', usage: NO_USAGE });
+    await expect(
+      createFakeJudge(() => ({ score: 0.1, usage: undefined })).judge('t', chunk),
+    ).resolves.toEqual({ score: 0.1, judgedBy: 'llm', usage: NO_USAGE });
     await expect(
       createFakeGenerator(() => draft).generate({ template: '', instruction: '', chunks: [] }),
     ).resolves.toEqual(draft);

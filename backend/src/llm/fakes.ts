@@ -7,9 +7,9 @@ import type {
   Draft,
   GenerateInput,
   Generator,
-  Judge,
-  Judgement,
+  JudgeScore,
   QueryTranslator,
+  ScoringJudge,
   Tag,
   Tagger,
   TaggingInput,
@@ -17,7 +17,6 @@ import type {
 import { words } from '../text.js';
 
 const MIN_KEYWORD_LENGTH = 4;
-const RELEVANCE_THRESHOLD = 0.5;
 
 /** Low-level fake: answers with `answer(request)` and records every request. */
 export interface FakeLlmClient extends LlmClient {
@@ -70,12 +69,22 @@ export function createFakeQueryTranslator(
   };
 }
 
-/** Default: score is the share of the instruction's keywords found in the chunk. */
+/**
+ * Default: score is the share of the instruction's keywords found in the chunk. An answer without
+ * `judgedBy` or `usage` gets `llm` and no tokens.
+ */
 export function createFakeJudge(
-  answer: (instruction: string, chunk: Chunk) => Judgement = keywordOverlap,
-): Judge {
-  return { judge: async (instruction, chunk) => answer(instruction, chunk) };
+  answer: (instruction: string, chunk: Chunk) => FakeScore = keywordOverlap,
+): ScoringJudge {
+  return {
+    judge: async (instruction, chunk) => {
+      const { score, judgedBy, usage } = answer(instruction, chunk);
+      return { score, judgedBy: judgedBy ?? 'llm', usage: usage ?? NO_USAGE };
+    },
+  };
 }
+
+type FakeScore = Pick<JudgeScore, 'score'> & Partial<JudgeScore>;
 
 /** Default: a draft listing the template, the instruction and every chunk, citing all chunks. */
 export function createFakeGenerator(
@@ -89,14 +98,14 @@ function tagsMentionedIn(text: string, vocabulary: readonly Tag[]): string[] {
   return vocabulary.filter((tag) => lower.includes(tag.label.toLowerCase())).map((tag) => tag.slug);
 }
 
-function keywordOverlap(instruction: string, chunk: Chunk): Judgement {
+function keywordOverlap(instruction: string, chunk: Chunk): FakeScore {
   const keywords = words(instruction).filter((word) => word.length >= MIN_KEYWORD_LENGTH);
   const text = chunk.text.toLowerCase();
   const score =
     keywords.length === 0
       ? 0
       : keywords.filter((word) => text.includes(word)).length / keywords.length;
-  return { relevant: score >= RELEVANCE_THRESHOLD, score };
+  return { score };
 }
 
 function echoDraft({ template, instruction, chunks }: GenerateInput): Draft {

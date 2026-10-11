@@ -210,12 +210,36 @@ describe('LLM-backed roles', () => {
     });
   });
 
-  it('judge returns the judgement with the score clamped to 0–1', async () => {
-    const client = createFakeLlmClient(() => ({ relevant: true, score: 1.4 }));
+  describe('judge', () => {
+    const CHUNK = {
+      id: 'c1',
+      text: 'Konkurrensklausulen gäller i ett år.',
+      source: 'AD 2019 nr 35',
+    };
 
-    await expect(
-      createLlmJudge(client).judge('non-compete', { id: 'c1', text: 'A non-compete clause…' }),
-    ).resolves.toEqual({ relevant: true, score: 1 });
+    it('asks the JEV question about the source and text in Swedish', async () => {
+      const client = createFakeLlmClient(() => ({ score: 0.8 }));
+
+      await createLlmJudge(client).judge(' Anställningsavtal med konkurrensklausul ', CHUNK);
+
+      const [request] = client.requests;
+      expect(request.system).toContain('svensk lagstiftning eller rättspraxis');
+      expect(request.prompt).toBe(
+        'Är texten relevant för följande uppdrag: Anställningsavtal med konkurrensklausul?\n\n' +
+          'Text:\nAD 2019 nr 35\n\nKonkurrensklausulen gäller i ett år.',
+      );
+      expect(request.schema).toMatchObject({ required: ['score'] });
+    });
+
+    it('returns the score clamped to 0–1 with the tokens used', async () => {
+      const client = createFakeLlmClient(() => ({ score: 1.4 }));
+
+      await expect(createLlmJudge(client).judge('x', CHUNK)).resolves.toEqual({
+        score: 1,
+        judgedBy: 'llm',
+        usage: NO_USAGE,
+      });
+    });
   });
 
   it('generator returns the draft with unique references to given chunks only', async () => {
@@ -237,7 +261,7 @@ describe('LLM-backed roles', () => {
   });
 
   it('rejects a response that does not match the expected shape', async () => {
-    const client = createFakeLlmClient(() => ({ relevant: 'yes', score: 0.2 }));
+    const client = createFakeLlmClient(() => ({ score: 'high' }));
 
     await expect(createLlmJudge(client).judge('x', { id: 'c1', text: 'y' })).rejects.toThrow(
       'LLM response does not match the schema',

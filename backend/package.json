@@ -17,7 +17,8 @@
     "index:vocabulary": "tsx --env-file-if-exists=../.env src/tagging/cli.ts vocabulary",
     "index:tag": "tsx --env-file-if-exists=../.env src/tagging/cli.ts tag",
     "index:report": "tsx --env-file-if-exists=../.env src/tagging/cli.ts report",
-    "bench:index": "tsx --expose-gc --env-file-if-exists=../.env src/search/bench.ts"
+    "bench:index": "tsx --expose-gc --env-file-if-exists=../.env src/search/bench.ts",
+    "jev:probe": "tsx --env-file-if-exists=../.env src/judge/probe.ts"
   },
   "dependencies": {
     "fastify": "^5.12.5",

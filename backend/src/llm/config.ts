@@ -1,3 +1,4 @@
+import { MAX_TIMER_MS } from '../http.js';
 import { ROLE_NAMES, type RoleName } from './types.js';
 
 const PROVIDERS = ['anthropic', 'fake'] as const;
@@ -23,7 +24,7 @@ interface IntegerRange {
 }
 
 // Node timers (and so AbortSignal.timeout) cannot represent delays above 2^31 - 1 ms.
-const TIMEOUT_RANGE: IntegerRange = { min: 1, max: 2 ** 31 - 1 };
+const TIMEOUT_RANGE: IntegerRange = { min: 1, max: MAX_TIMER_MS };
 const RETRIES_RANGE: IntegerRange = { min: 0, max: 10 };
 
 const ROLE_ENV_KEYS: Record<RoleName, string> = {

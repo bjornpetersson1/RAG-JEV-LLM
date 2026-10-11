@@ -4,7 +4,7 @@
 - **Labels:** `E5 JEV`
 - **Phase:** 4. Judging and generation
 - **Depends on:** E1-2 (#2); builds on the JEV client from E4-4 (#14)
-- **Status:** Approved
+- **Status:** Implemented — all acceptance criteria verified (npm ci, lint, format:check, typecheck, 471 tests (467 backend, 4 frontend) and build exit 0; startup warning and error checked on the built server). JEV itself not called live: no `JEV_API_KEY`, so criterion 5's limits are documented as not measured
 
 ## Summary
 
@@ -55,14 +55,14 @@ The `Judge` interface gets its real implementations: a JEV judge that sends a ca
 
 ## Tasks
 
-- [ ] Extend `Judgement` with `judgedBy` and `usage`; update the fake judge and callers.
-- [ ] `JevJudge` (state, Noul question, threshold) in `src/judge/`.
-- [ ] Swedish prompt for the LLM judge; threshold applied in code.
-- [ ] `FallbackJudge` with the warning log.
-- [ ] Config `loadJudgeConfig` (`JUDGE_IMPL`, `JUDGE_THRESHOLD`, `JUDGE_TIMEOUT_MS`) and factory `createJudge`; server startup validation and the missing-key warning.
-- [ ] `jev:probe` script.
-- [ ] `.env.example` and README ("JEV limits", judge settings).
-- [ ] Tests per acceptance criterion.
+- [x] Extend `Judgement` with `judgedBy` and `usage`; update the fake judge and callers.
+- [x] `JevJudge` (state, Noul question, threshold) in `src/judge/`.
+- [x] Swedish prompt for the LLM judge; threshold applied in code.
+- [x] `FallbackJudge` with the warning log.
+- [x] Config `loadJudgeConfig` (`JUDGE_IMPL`, `JUDGE_THRESHOLD`, `JUDGE_TIMEOUT_MS`) and factory `createJudge`; server startup validation and the missing-key warning.
+- [x] `jev:probe` script.
+- [x] `.env.example` and README ("JEV limits", judge settings).
+- [x] Tests per acceptance criterion.
 
 ## Decisions
 
@@ -76,6 +76,16 @@ The `Judge` interface gets its real implementations: a JEV judge that sends a ca
 - **`judgedBy` and `usage` on `Judgement`** (default): E5-2 needs to know which judge answered (cache key, measurement) and the tokens used.
 - **`JUDGE_TIMEOUT_MS`, default 10000** (default): judging is per chunk, so JEV should give up sooner than `JEV_TIMEOUT_MS` (30 s, query translation). The LLM fallback keeps `LLM_TIMEOUT_MS`. The JEV key, base URL and model are shared with E4-4.
 - **Code in `backend/src/judge/`** (default), like `src/query/` for E4-4.
+
+- **Code layout** (settled while implementing, reshaped in clean code): `src/judge/` holds `createJevJudge`, `createFallbackJudge`, `loadJudgeConfig` and `createJudge(config, { llmJudge, logger, fetch })`, the same shape as E4-4's `createQueryTranslator`. The LLM judge stays in `llm/roles.ts` beside the other LLM roles; the shared question and state live in `llm/judge-question.ts`, so `judge/` depends on `llm/` and not the other way round.
+- **The threshold is applied once, in `createJudge`** (clean code): the JEV, LLM, fake and fallback judges are `ScoringJudge`s returning `{ score, judgedBy, usage }`; `createJudge` adds `relevant = score >= JUDGE_THRESHOLD` to whichever answered, so JEV and its fallback can never use different thresholds. `LlmRoles.judge` is now a `ScoringJudge`, so E1-2's fake judge no longer decides `relevant` itself.
+- **`JUDGE_TIMEOUT_MS` replaces `JEV_TIMEOUT_MS` for judging** (clean code): `loadJevConfig` takes an optional timeout that replaces `JEV_TIMEOUT_MS`, which is still validated (code review). `hasJevKey` and `loadJevConfig` share one reading of the key, so "JEV is configured" has one definition (PR review). E1-2's spec marks its `Judge` contract and fake-judge threshold as superseded by this issue (PR review). `MAX_TIMER_MS` lives in `http.ts`, shared with the LLM config; `percentile` moved from `search/bench.ts` to `stats.ts`, shared with the probe.
+- **Skipped clean-code suggestions**: a circuit breaker that stops asking JEV after it fails (changes behaviour; E5-2's per-chunk and overall timeouts bound the cost); cancelling a judgement with an `AbortSignal` (E5-2 adds it); logging the missing-key warning from `createJudge` instead of a `warning` field (the server only validates config at startup and does not build the judge yet, and the criterion asks for a startup warning).
+- **The LLM judge's answer is `{ score }` only** (settled while implementing): the system prompt asks for the probability that the answer is yes; `relevant` is computed in code. `max_tokens` is 1000.
+- **`LlmLogger` gains `warn`** (settled while implementing): the fallback and the missing-key notice are warnings. Fastify's logger already has it; the tagging CLI's console logger and the test logger got one.
+- **The probe lives in `src/judge/probe.ts`** (`npm run jev:probe`, also from the repo root): 10 sequential calls, states doubling from 1,000 to at most 256,000 characters, and a burst of 20 concurrent calls. Code review: it uses the judge's timeout (`JUDGE_TIMEOUT_MS`), since it measures what the judge can use; only a 4xx other than 429 counts as JEV refusing a state, while a timeout, rate limit or server error is reported as "not measured"; each probe reports its own failure, so the others still run.
+- **The question ends in exactly one "?"** (code review): the instruction's trailing `.`, `?` and `!` are dropped, and an empty instruction is an error. The fake judge fills `judgedBy` and `usage` per field, so an explicit `undefined` cannot leak through.
+- **Circuit breaker not added** (code review finding, not fixed): with JEV down, every chunk still tries JEV before the LLM. Remembering the failure would change the approved behaviour ("JEV first, LLM on any JEV error"); E5-2's concurrency and overall timeout bound the cost, and the per-chunk warnings show the outage. Left for after JEV's real behaviour has been measured.
 
 ## Open Questions
 
