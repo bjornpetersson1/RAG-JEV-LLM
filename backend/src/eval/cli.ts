@@ -5,7 +5,7 @@ import { parseArgs } from 'node:util';
 import { withDatabase } from '../db/with-database.js';
 import { parsePositiveInteger } from '../env.js';
 import { describeError } from '../errors.js';
-import type { LlmLogger } from '../llm/client.js';
+import { createConsoleLogger } from '../llm/console-logger.js';
 import { writeMarkdownReport } from '../reports.js';
 import { REPO_ROOT } from '../repo-root.js';
 import { REPORTS_DIR } from '../tagging/paths.js';
@@ -20,11 +20,7 @@ const DEFAULT_TEXT_CHARS = 300;
 const USAGE = 'Usage: eval <label <query id> [--chars <n>] | run>';
 
 // Every call and search logs at info level; only problems are worth showing during a long run.
-const problemLogger: LlmLogger = {
-  info() {},
-  warn: (entry, message) => console.warn(`${message} ${JSON.stringify(entry)}`),
-  error: (entry, message) => console.error(`${message} ${JSON.stringify(entry)}`),
-};
+const problemLogger = createConsoleLogger({ quiet: true });
 
 try {
   process.exitCode = await run(process.argv.slice(2));
