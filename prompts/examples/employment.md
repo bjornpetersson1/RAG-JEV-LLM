@@ -6,7 +6,7 @@ A real run of `npm run query` (E6-2) on 2026-10-11, kept to show what the `emplo
 npm run query -- "Anställningsavtal för en säljare med provision och konkurrensklausul i tolv månader efter anställningens slut." --template employment
 ```
 
-Settings: `LLM_PROVIDER=claude-code` (the Claude Code subscription, no API key), query translator and judge `claude-haiku-5-5`, generator `claude-sonnet-5-5`, `JUDGE_IMPL=llm` (no JEV key yet, so the LLM judged, as in E5-3; its scores came from the judge cache of the E5-3 evaluation where available), default context limits. The source accuracy and flagged references below were added afterwards by running the E6-3 post-check over this draft and its submitted chunks; the run itself printed E6-2's interim line "Citations outside the submitted chunks: 0".
+Settings: `LLM_PROVIDER=claude-code` (the Claude Code subscription, no API key), query translator and judge `claude-haiku-5-5`, generator `claude-sonnet-5-5`, `JUDGE_IMPL=llm`, now `RERANKER=llm` (no JEV key yet, so the LLM judged, as in E5-3; its scores came from the judge cache of the E5-3 evaluation where available), default context limits. The source accuracy and flagged references below were added afterwards by running the E6-3 post-check over this draft and its submitted chunks; the run itself printed E6-2's interim line "Citations outside the submitted chunks: 0".
 
 ## Query
 

@@ -1,14 +1,15 @@
 // Builds the evaluation's dependencies from `.env` and the database: the configured query
-// translator and candidate search (all the label tool needs), and one judge per judge mode.
+// translator and candidate search (all the label tool needs), and one reranker per judge mode.
 
 import type { DatabaseSync } from 'node:sqlite';
-import { loadJudgeConfig, loadJudgingConfig } from '../judge/config.js';
-import { createJudging } from '../judge/factory.js';
-import { judgeAll } from '../judge/judge-all.js';
+import type { Env } from '../env.js';
+import { hasJevKey } from '../jev/config.js';
 import type { LlmLogger } from '../llm/client.js';
 import { loadLlmConfig, roleLabel } from '../llm/config.js';
 import { createQueryServices } from '../query/services.js';
 import { translateQuery } from '../query/translate-query.js';
+import { createReranker } from '../rerank/factory.js';
+import type { Reranker } from '../rerank/types.js';
 import {
   byJudgeMode,
   type EvalDependencies,
@@ -16,13 +17,13 @@ import {
   type SearchDependencies,
 } from './run.js';
 
-type Env = Record<string, string | undefined>;
-
-/** The judge implementation each judge mode forces, whatever `JUDGE_IMPL` says. */
-const JUDGE_IMPL_FOR: Record<JudgeMode, string> = {
-  'tags+jev': 'jev-with-fallback',
-  'tags+llm': 'llm',
-};
+/**
+ * The reranker each judge mode forces, whatever `RERANKER` says. Without a JEV key, `tags+jev` is
+ * judged by the LLM, as in the first evaluation, and the report says so.
+ */
+function rerankerFor(mode: JudgeMode, env: Env): 'jev' | 'llm' {
+  return mode === 'tags+jev' && hasJevKey(env) ? 'jev' : 'llm';
+}
 
 export interface SearchSetup extends SearchDependencies {
   /** What the run used, for the report, e.g. `{ 'query translator': 'claude-code claude-haiku-5-5' }`. */
@@ -61,26 +62,27 @@ export function createSearchSetup(
   };
 }
 
-/** The search setup plus one judge per judge mode, judging with the cache on. */
+/**
+ * The search setup plus one reranker per judge mode, reranking with the cache on and keeping every
+ * relevant candidate, so precision and recall stay comparable with the first evaluation.
+ */
 export function createEvalSetup(db: DatabaseSync, env: Env, logger: LlmLogger): EvalSetup {
   const llmConfig = loadLlmConfig(env);
-  const judgingConfig = loadJudgingConfig(env);
-  const judgings = byJudgeMode((mode) =>
-    createJudging(loadJudgeConfig({ ...env, JUDGE_IMPL: JUDGE_IMPL_FOR[mode] }), {
-      llmConfig,
-      logger,
-    }),
-  );
+  const byName = new Map<string, Reranker>();
+  const rerankerNamed = (name: string) => {
+    if (!byName.has(name)) {
+      // Eval keeps every relevant chunk, so RERANK_TOP_K is not read.
+      const rerankerEnv = { ...env, RERANKER: name, RERANK_TOP_K: undefined, JUDGE_CACHE: 'on' };
+      byName.set(name, createReranker(rerankerEnv, { db, llmConfig, logger }).reranker);
+    }
+    return byName.get(name)!;
+  };
+  const rerankers = byJudgeMode((mode) => rerankerNamed(rerankerFor(mode, env)));
   return {
     ...createSearchSetup(db, env, logger, llmConfig),
     judge(mode, instruction, chunks) {
-      return judgeAll(
-        instruction,
-        chunks,
-        { judging: judgings[mode], config: judgingConfig, db, logger },
-        { cache: true },
-      );
+      return rerankers[mode].rerank(instruction, chunks, chunks.length);
     },
-    judges: byJudgeMode((mode) => judgings[mode].primary),
+    judges: byJudgeMode((mode) => ({ name: rerankers[mode].name, model: rerankers[mode].model })),
   };
 }

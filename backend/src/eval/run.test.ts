@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { JudgeAllResult } from '../judge/judge-all.js';
-import { NO_USAGE } from '../llm/client.js';
-import type { Chunk } from '../llm/types.js';
+import { fakeRerankResult } from '../rerank/test-helpers.js';
 import type { ResolvedQuery } from './queries.js';
 import { formatAsMarkdown, formatForTerminal } from './report.js';
 import { runEvaluation, type EvalDependencies, type JudgeMode } from './run.js';
@@ -33,30 +31,6 @@ const CANDIDATES: Record<string, Record<'tags' | 'fts', string[]>> = {
 /** Scores per chunk id the fake judge gives; chunk 4 is unknown. */
 const SCORES: Record<string, number> = { '1': 0.9, '2': 0.4, '3': 0.6, '5': 0.8 };
 
-function judged(chunks: readonly Chunk[], judgedBy: 'jev' | 'llm'): JudgeAllResult {
-  const judgements = chunks.map((chunk) =>
-    SCORES[chunk.id] === undefined
-      ? { chunkId: chunk.id, status: 'unknown' as const, reason: 'timeout', elapsedMs: 0 }
-      : {
-          chunkId: chunk.id,
-          status: 'judged' as const,
-          score: SCORES[chunk.id],
-          relevant: SCORES[chunk.id] >= 0.5,
-          judgedBy,
-          elapsedMs: 1,
-        },
-  );
-  return {
-    judgements,
-    relevant: chunks.filter((chunk) => (SCORES[chunk.id] ?? 0) >= 0.5),
-    elapsedMs: 1,
-    cacheHits: 0,
-    judgeCalls: chunks.length,
-    unknown: judgements.filter((judgement) => judgement.status === 'unknown').length,
-    usage: NO_USAGE,
-  };
-}
-
 function fakeDeps(jevAnsweredBy: 'jev' | 'llm' = 'llm') {
   const judgeCalls: { mode: JudgeMode; ids: string[] }[] = [];
   const deps: EvalDependencies = {
@@ -65,14 +39,17 @@ function fakeDeps(jevAnsweredBy: 'jev' | 'llm' = 'llm') {
     loadChunks: (ids) => ids.map((id) => ({ id, text: `Text ${id}` })),
     judge: async (mode, _instruction, chunks) => {
       judgeCalls.push({ mode, ids: chunks.map((chunk) => chunk.id) });
-      return judged(chunks, mode === 'tags+jev' ? jevAnsweredBy : 'llm');
+      return fakeRerankResult(chunks, SCORES, {
+        answeredBy: mode === 'tags+jev' ? jevAnsweredBy : 'llm',
+        stats: { calls: chunks.length, elapsedMs: 1 },
+      });
     },
     judges: {
       'tags+jev': {
-        impl: jevAnsweredBy,
+        name: jevAnsweredBy,
         model: jevAnsweredBy === 'jev' ? 'jev-latest' : 'claude-haiku-5-5',
       },
-      'tags+llm': { impl: 'llm', model: 'claude-haiku-5-5' },
+      'tags+llm': { name: 'llm', model: 'claude-haiku-5-5' },
     },
   };
   return { deps, judgeCalls };

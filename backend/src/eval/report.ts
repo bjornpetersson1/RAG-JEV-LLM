@@ -94,10 +94,10 @@ function failureLines({ failed }: EvalResult): string[] {
 
 /** Which judge was configured and which actually answered, e.g. when the LLM stood in for JEV. */
 function judgeNote(result: EvalResult, mode: JudgeMode): string {
-  const { impl, model } = result.judges[mode];
+  const { name, model } = result.judges[mode];
   const { jev, llm } = result.answeredBy[mode];
-  const configured = `configured judge ${impl} (${model})`;
-  if (mode === 'tags+jev' && impl === 'llm') {
+  const configured = `configured judge ${name} (${model})`;
+  if (mode === 'tags+jev' && name === 'llm') {
     return `${configured}: no JEV_API_KEY, so the LLM answered all ${llm} judgements instead of JEV`;
   }
   return `${configured}; answered by JEV ${jev}, by the LLM ${llm}`;

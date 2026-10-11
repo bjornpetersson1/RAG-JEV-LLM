@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { loadLlmConfig } from '../llm/config.js';
 import { createLlmRoles } from '../llm/factory.js';
 import { createCapturingLogger, createFakeFetch, messageResponse } from '../llm/test-helpers.js';
-import { loadJudgeConfig } from './config.js';
+import { loadJudgeConfig, type JudgeImpl } from './config.js';
 import { createJudge, createJudging } from './factory.js';
 
 const CHUNK = { id: 'c7', text: 'Uppsägningstiden är en månad.', source: 'SFS 1982:80 11 §' };
@@ -15,6 +15,7 @@ const JEV_URL = 'https://api.typesafe.ai/v1/systemone';
 function judgeFrom(
   env: Record<string, string>,
   jev: (init: RequestInit | undefined) => Response | Error | Promise<Response>,
+  impl: JudgeImpl = 'jev',
 ) {
   const anthropic = createFakeFetch(() => messageResponse({ score: 0.3 }));
   const urls: string[] = [];
@@ -26,7 +27,7 @@ function judgeFrom(
     return result;
   }) as typeof globalThis.fetch;
   const logger = createCapturingLogger();
-  const config = loadJudgeConfig(env);
+  const config = loadJudgeConfig(env, impl);
   const llmJudge = createLlmRoles(
     loadLlmConfig({
       LLM_PROVIDER: 'anthropic',
@@ -50,7 +51,7 @@ function hangingJev(init: RequestInit | undefined): Promise<Response> {
 }
 
 describe('createJudge', () => {
-  it('uses JEV by default when a key is set', async () => {
+  it('uses JEV for jev', async () => {
     const { judge, urls } = judgeFrom({ JEV_API_KEY: 'k' }, jevAnswers(0.9));
 
     await expect(judge.judge('Anställningsavtal', CHUNK)).resolves.toMatchObject({
@@ -61,18 +62,15 @@ describe('createJudge', () => {
     expect(urls).toEqual([JEV_URL]);
   });
 
-  it('uses the LLM without calling JEV for llm, and for the default without a key', async () => {
-    const envs: Record<string, string>[] = [{ JUDGE_IMPL: 'llm', JEV_API_KEY: 'k' }, {}];
-    for (const env of envs) {
-      const { judge, urls } = judgeFrom(env, jevAnswers(0.9));
+  it('uses the LLM without calling JEV for llm, even with a JEV key', async () => {
+    const { judge, urls } = judgeFrom({ JEV_API_KEY: 'k' }, jevAnswers(0.9), 'llm');
 
-      await expect(judge.judge('Anställningsavtal', CHUNK)).resolves.toMatchObject({
-        relevant: false,
-        score: 0.3,
-        judgedBy: 'llm',
-      });
-      expect(urls).not.toContain(JEV_URL);
-    }
+    await expect(judge.judge('Anställningsavtal', CHUNK)).resolves.toMatchObject({
+      relevant: false,
+      score: 0.3,
+      judgedBy: 'llm',
+    });
+    expect(urls).not.toContain(JEV_URL);
   });
 
   it.each([
@@ -82,7 +80,7 @@ describe('createJudge', () => {
   ])(
     'with the LLM and JUDGE_THRESHOLD %s, score 0.3 is relevant: %s',
     async (threshold, relevant) => {
-      const { judge } = judgeFrom({ JUDGE_IMPL: 'llm', JUDGE_THRESHOLD: threshold }, jevAnswers(0));
+      const { judge } = judgeFrom({ JUDGE_THRESHOLD: threshold }, jevAnswers(0), 'llm');
 
       await expect(judge.judge('x', CHUNK)).resolves.toMatchObject({ relevant, score: 0.3 });
     },
@@ -156,18 +154,8 @@ describe('createJudge', () => {
     expect(urls).toEqual([JEV_URL]);
   });
 
-  it('throws the JEV error for jev, without asking the LLM', async () => {
-    const { judge, urls } = judgeFrom(
-      { JEV_API_KEY: 'k', JUDGE_IMPL: 'jev' },
-      () => new Response('down', { status: 500 }),
-    );
-
-    await expect(judge.judge('x', CHUNK)).rejects.toMatchObject({ kind: 'http', status: 500 });
-    expect(urls).toEqual([JEV_URL]);
-  });
-
   it('throws the LLM error when the fallback fails too', async () => {
-    const judge = createJudge(loadJudgeConfig({ JEV_API_KEY: 'k' }), {
+    const judge = createJudge(loadJudgeConfig({ JEV_API_KEY: 'k' }, 'jev'), {
       llmJudge: { judge: () => Promise.reject(new Error('LLM down')) },
       logger: createCapturingLogger(),
       fetch: (async () => new Response('down', { status: 500 })) as typeof globalThis.fetch,
@@ -186,8 +174,11 @@ describe('createJudge', () => {
     const anthropic = createFakeFetch(() => messageResponse({ score: 0.4 }));
     const deps = { llmConfig, logger: createCapturingLogger(), fetch: anthropic.fetch };
 
-    const jev = createJudging(loadJudgeConfig({ JEV_API_KEY: 'k', JUDGE_THRESHOLD: '0.6' }), deps);
-    const llm = createJudging(loadJudgeConfig({}), deps);
+    const jev = createJudging(
+      loadJudgeConfig({ JEV_API_KEY: 'k', JUDGE_THRESHOLD: '0.6' }, 'jev'),
+      deps,
+    );
+    const llm = createJudging(loadJudgeConfig({}, 'llm'), deps);
 
     expect(jev).toMatchObject({ primary: { impl: 'jev', model: 'jev-latest' }, threshold: 0.6 });
     expect(llm).toMatchObject({
