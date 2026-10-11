@@ -71,7 +71,7 @@ export async function judgeAll(
   const { judge, primary, threshold } = judging;
   const started = performance.now();
   // Bad input fails the same way whether or not the cache is on.
-  relevanceQuestion(instruction);
+  rejectEmptyInstruction(instruction);
   rejectDuplicateIds(chunks);
   const cache =
     (options.cache ?? config.cache) ? createJudgeCache(db, instruction, primary) : undefined;
@@ -195,6 +195,11 @@ export async function judgeAll(
       elapsedMs: elapsed,
     };
   }
+}
+
+/** Throws for an instruction with no words, the way the judges' question would. */
+function rejectEmptyInstruction(instruction: string): void {
+  relevanceQuestion(instruction);
 }
 
 function rejectDuplicateIds(chunks: readonly Chunk[]): void {
