@@ -1,7 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { countRows, inTransaction } from '../db/database.js';
 import { describeError } from '../errors.js';
-import { LlmError, sumUsage, type LlmLogger, type LlmUsage } from '../llm/client.js';
+import { LlmError, NO_USAGE, sumUsage, type LlmLogger, type LlmUsage } from '../llm/client.js';
 import { estimateCostUsd } from '../llm/pricing.js';
 import { TAGS_PER_CHUNK } from '../llm/roles.js';
 import type { Tagger, TaggingResult } from '../llm/types.js';
@@ -132,7 +132,8 @@ export async function tagChunks(options: TagChunksOptions): Promise<TaggingSumma
   const workers = Math.min(options.concurrency, queue.length - next);
   await Promise.all(Array.from({ length: workers }, worker));
 
-  const usage = sumUsage([...results.map((result) => result.usage), ...failedUsages]);
+  const usages = [...results.map((result) => result.usage), ...failedUsages];
+  const usage = sumUsage(usages);
   const summary: TaggingSummary = {
     startedAt,
     finishedAt: new Date().toISOString(),
@@ -146,10 +147,19 @@ export async function tagChunks(options: TagChunksOptions): Promise<TaggingSumma
     belowMin: results.filter(isBelowMin).length,
     aboveMax: results.filter((result) => result.overLimit.length > 0).length,
     usage,
-    costUsd: estimateCostUsd(model, usage),
+    costUsd: totalCostUsd(model, usages),
   };
   storeRun(db, summary);
   return summary;
+}
+
+/**
+ * The sum of each chunk's cost. Pricing the summed tokens instead would apply a model's
+ * long-prompt rate, which is per request, as soon as the whole run passes its threshold.
+ */
+function totalCostUsd(model: string, usages: LlmUsage[]): number | undefined {
+  if (estimateCostUsd(model, NO_USAGE) === undefined) return undefined;
+  return usages.reduce((total, usage) => total + (estimateCostUsd(model, usage) ?? 0), 0);
 }
 
 function isBelowMin(result: TaggingResult): boolean {

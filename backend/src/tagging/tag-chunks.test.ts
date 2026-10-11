@@ -349,6 +349,20 @@ describe('tagChunks', () => {
       expect(row.cost_usd).toBeCloseTo(costUsd, 12);
     });
 
+    it('sums per-chunk costs, so the long-prompt rate is not applied to the whole run', async () => {
+      // 60,000 cached prompt tokens per chunk: each below Haiku's 100,000 long-prompt threshold,
+      // all four together above it.
+      const usage = { ...NO_USAGE, cacheReadTokens: 60_000 };
+      const tagger: Tagger = {
+        tag: async (chunk) => ({ ...ANSWERS[TEXTS.indexOf(chunk.text)], usage }),
+      };
+
+      const summary = await run({ tagger, model: 'claude-haiku-5-5' });
+
+      expect(summary.usage.cacheReadTokens).toBe(240_000);
+      expect(summary.costUsd).toBeCloseTo((4 * 60_000 * 0.01) / 1_000_000, 12);
+    });
+
     it('stores no cost for a model without a price', async () => {
       await run({ tagger: scriptedTagger });
 
