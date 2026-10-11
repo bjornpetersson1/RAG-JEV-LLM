@@ -27,6 +27,7 @@ describe('checkDraft: [K:] citations', () => {
         start: 21,
         end: 27,
         reason: 'chunk 99 was not submitted',
+        chunkId: '99',
       },
     ]);
     expect(text.slice(21, 27)).toBe('[K:99]');
@@ -35,8 +36,8 @@ describe('checkDraft: [K:] citations', () => {
   it('checks each id of a bracket group on its own', () => {
     const check = checkDraft('Se [K:11, K:40].', SUBMITTED);
 
-    expect(check.flags.map((f) => [f.text, f.reason])).toEqual([
-      ['[K:11, K:40]', 'chunk 40 was not submitted'],
+    expect(check.flags.map((f) => [f.text, f.chunkId, f.reason])).toEqual([
+      ['[K:11, K:40]', '40', 'chunk 40 was not submitted'],
     ]);
     expect(check).toMatchObject({ references: 2, valid: 1 });
   });

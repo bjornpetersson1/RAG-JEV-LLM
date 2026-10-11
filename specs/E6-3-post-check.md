@@ -81,6 +81,7 @@ A post-check of every generated draft: it finds the `[K:<chunk-id>]` citations a
   - a `[K:` group no longer runs across lines (E6-1's `findCitations`), so an unclosed bracket cannot hide later references;
   - the source accuracy is rounded down, so a draft with a flag never shows 100 %;
   - `checkDraft` takes the citations `generateDraft` already found and masks them in one pass.
+- **Citation flags carry the chunk id** (PR review): `chunkId` is set on `citation` flags, so the UI (E7-2) can mark the flagged id inside a group such as `[K:11, K:99]` without parsing the reason text.
 - **Example trailers updated** (code review): the two examples in `prompts/examples/` now end with the post-check output computed over their drafts, with a note that the run itself printed E6-2's interim line.
 
 ## Open Questions

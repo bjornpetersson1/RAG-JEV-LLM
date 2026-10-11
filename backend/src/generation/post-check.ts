@@ -34,6 +34,8 @@ export interface ReferenceFlag {
   start: number;
   end: number;
   reason: string;
+  /** For a citation, the cited id; a group such as `[K:11, K:99]` shares one span for all ids. */
+  chunkId?: string;
 }
 
 export interface PostCheck {
@@ -103,9 +105,10 @@ export function checkDraft(
   const flags = [
     ...citations
       .filter(({ id }) => !submittedIds.has(id))
-      .map(({ id, start, end }) =>
-        flag('citation', text, start, end, `chunk ${id} was not submitted`),
-      ),
+      .map(({ id, start, end }) => ({
+        ...flag('citation', text, start, end, `chunk ${id} was not submitted`),
+        chunkId: id,
+      })),
     ...freeText
       .filter((reference) => !sources.some((source) => matches(reference, source)))
       .map((reference) =>
