@@ -63,8 +63,34 @@ export interface Tagger {
   tag(chunk: TaggingInput, vocabulary: readonly Tag[]): Promise<TaggingResult>;
 }
 
+export interface TranslatedTag {
+  slug: string;
+  /** How well the tag fits the instruction, 0–1, when the translator scores tags (JEV). */
+  score?: number;
+}
+
+export interface Translation {
+  /** Known, unique slugs, best first, at most the maximum per query. */
+  tags: TranslatedTag[];
+  /** The area scores a translator that picks areas first used (JEV's Choice question). */
+  areaScores?: Record<string, number>;
+  /** Every tag a scoring translator asked about, with its score, kept or not (for the UI). */
+  askedTags?: TranslatedTag[];
+  /** Tokens used, for a translator that reports them. */
+  usage?: LlmUsage;
+}
+
+export interface TranslateOptions {
+  /** Slugs not to return, e.g. a template's presets, so the cap counts only new tags. */
+  exclude?: ReadonlySet<string>;
+}
+
 export interface QueryTranslator {
-  translate(instruction: string, vocabulary: readonly Tag[]): Promise<string[]>;
+  translate(
+    instruction: string,
+    vocabulary: readonly Tag[],
+    options?: TranslateOptions,
+  ): Promise<Translation>;
 }
 
 export interface Judge {

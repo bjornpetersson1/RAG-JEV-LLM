@@ -6,6 +6,7 @@ import {
   type LlmResponse,
   type LlmUsage,
 } from './client.js';
+import { isFetchTimeout } from '../http.js';
 import { withRetryAndLogging } from './retrying-client.js';
 import type { RoleName } from './types.js';
 
@@ -84,7 +85,7 @@ export function createAnthropicClient(options: AnthropicClientOptions): LlmClien
 }
 
 function classifyTransportError(error: unknown, timeoutMs: number): unknown {
-  if (error instanceof DOMException && error.name === 'TimeoutError') {
+  if (isFetchTimeout(error)) {
     return new LlmError(`Anthropic request failed: timed out after ${timeoutMs} ms`, {
       retryable: true,
     });

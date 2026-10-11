@@ -21,6 +21,21 @@ export const TEMPLATES = ['employment', 'nda'] as const;
 
 export type Template = (typeof TEMPLATES)[number];
 
+export function isTemplate(value: string): value is Template {
+  return (TEMPLATES as readonly string[]).includes(value);
+}
+
+/** The tags per area, areas in order of first appearance. */
+export function groupByArea<T extends { area: string }>(tags: readonly T[]): Map<string, T[]> {
+  const areas = new Map<string, T[]>();
+  for (const tag of tags) {
+    const inArea = areas.get(tag.area) ?? [];
+    inArea.push(tag);
+    areas.set(tag.area, inArea);
+  }
+  return areas;
+}
+
 export interface VocabularyTag {
   slug: string;
   label: string;

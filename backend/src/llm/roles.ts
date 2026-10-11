@@ -1,6 +1,6 @@
-// LLM-backed role implementations. The tagger prompt is real (E3-2); the other prompts are
-// placeholders that only make the wiring work, replaced in E4-4 (query translator), E5-1 (judge)
-// and E6 (generator).
+// LLM-backed role implementations. The tagger (E3-2) and query translator (E4-4) prompts are real;
+// the others are placeholders that only make the wiring work, replaced in E5-1 (judge) and E6
+// (generator).
 
 import { LlmError, sumUsage, type JsonSchema, type LlmClient, type LlmUsage } from './client.js';
 import type {
@@ -13,12 +13,16 @@ import type {
   TaggingInput,
   TaggingResult,
 } from './types.js';
+import { groupByArea } from '../tagging/vocabulary.js';
 
 /** How many tags the tagger asks for per chunk. */
 export const TAGS_PER_CHUNK = { min: 3, max: 8 } as const;
 
+/** At most this many tags are translated from one instruction, as many as a chunk gets at most. */
+export const MAX_QUERY_TAGS = TAGS_PER_CHUNK.max;
+
 // A list of slugs is short; the margin covers a model that explains itself despite the schema.
-const TAGGER_MAX_TOKENS = 2000;
+const TAGS_MAX_TOKENS = 2000;
 
 const TAGS_SCHEMA: JsonSchema = {
   type: 'object',
@@ -69,7 +73,7 @@ export function createLlmTagger(client: LlmClient): Tagger {
           system,
           prompt,
           schema: TAGS_SCHEMA,
-          maxTokens: TAGGER_MAX_TOKENS,
+          maxTokens: TAGS_MAX_TOKENS,
           cacheSystem: true,
         });
         usages.push(usage);
@@ -106,18 +110,18 @@ export function createLlmTagger(client: LlmClient): Tagger {
   };
 }
 
+/** The vocabulary grouped by area, one `slug: label – description` line per tag. */
+function vocabularySections(vocabulary: readonly Tag[]): string {
+  return [...groupByArea(vocabulary)]
+    .map(([area, tags]) =>
+      [`## ${area}`, ...tags.map((tag) => `- ${tag.slug}: ${tag.label} – ${tag.description}`)].join(
+        '\n',
+      ),
+    )
+    .join('\n\n');
+}
+
 function taggerSystemPrompt(vocabulary: readonly Tag[]): string {
-  const areas = new Map<string, Tag[]>();
-  for (const tag of vocabulary) {
-    const tags = areas.get(tag.area) ?? [];
-    tags.push(tag);
-    areas.set(tag.area, tags);
-  }
-  const sections = [...areas].map(([area, tags]) =>
-    [`## ${area}`, ...tags.map((tag) => `- ${tag.slug}: ${tag.label} – ${tag.description}`)].join(
-      '\n',
-    ),
-  );
   return [
     'Du taggar avsnitt ur svenska lagar och domar om anställning, avtal och sekretess, så att de ' +
       'kan hittas när en jurist skriver ett anställningsavtal eller ett sekretessavtal.',
@@ -130,7 +134,7 @@ function taggerSystemPrompt(vocabulary: readonly Tag[]): string {
     '',
     'Vokabulär, grupperad per område (slug: etikett – beskrivning):',
     '',
-    sections.join('\n\n'),
+    vocabularySections(vocabulary),
   ].join('\n');
 }
 
@@ -173,17 +177,56 @@ function sortTags(
   };
 }
 
+/**
+ * Asks for the tags a search for the instruction should use, with the whole vocabulary in a cached
+ * system prompt; unknown and repeated slugs are dropped and at most {@link MAX_QUERY_TAGS} kept.
+ */
 export function createLlmQueryTranslator(client: LlmClient): QueryTranslator {
+  // A server passes the same vocabulary on every query; build its prompt and slug set once.
+  const prepared = new WeakMap<readonly Tag[], { system: string; known: ReadonlySet<string> }>();
+  const prepare = (vocabulary: readonly Tag[]) => {
+    let entry = prepared.get(vocabulary);
+    if (!entry) {
+      entry = { system: queryTranslatorSystemPrompt(vocabulary), known: slugSet(vocabulary) };
+      prepared.set(vocabulary, entry);
+    }
+    return entry;
+  };
+
   return {
-    async translate(instruction, vocabulary) {
-      const { data } = await client.complete({
-        system: 'Pick the tags from the vocabulary that a search for the instruction should use.',
-        prompt: `Vocabulary:\n${formatVocabulary(vocabulary)}\n\nInstruction:\n${instruction}`,
+    async translate(instruction, vocabulary, { exclude } = {}) {
+      const { system, known } = prepare(vocabulary);
+      const { data, usage } = await client.complete({
+        system,
+        prompt: `Uppdrag:\n${instruction}`,
         schema: TAGS_SCHEMA,
+        maxTokens: TAGS_MAX_TOKENS,
+        cacheSystem: true,
       });
-      return keepVocabularyTags(readStringArray(data, 'tags'), vocabulary);
+      const tags = splitSlugs(readStringArray(data, 'tags'), known).valid.filter(
+        (slug) => !exclude?.has(slug),
+      );
+      return { tags: tags.slice(0, MAX_QUERY_TAGS).map((slug) => ({ slug })), usage };
     },
   };
+}
+
+function queryTranslatorSystemPrompt(vocabulary: readonly Tag[]): string {
+  return [
+    'En jurist beskriver ett uppdrag, till exempel ett anställningsavtal eller ett sekretessavtal ' +
+      'som ska skrivas. Avsnitt ur svenska lagar och domar har taggats med vokabulären nedan, och ' +
+      'taggarna du väljer används för att hitta de avsnitt som juristen behöver.',
+    `Välj högst ${MAX_QUERY_TAGS} taggar ur vokabulären. Regler:`,
+    '- Använd bara slugs exakt som de står i vokabulären.',
+    '- Välj taggar för det uppdraget faktiskt gäller, inklusive frågor som avtalet behöver reglera.',
+    '- Föredra specifika taggar framför allmänna när båda passar.',
+    '- Lista de viktigaste taggarna först.',
+    '- Välj inga taggar alls om uppdraget inte har med vokabulären att göra.',
+    '',
+    'Vokabulär, grupperad per område (slug: etikett – beskrivning):',
+    '',
+    vocabularySections(vocabulary),
+  ].join('\n');
 }
 
 export function createLlmJudge(client: LlmClient): Judge {
@@ -225,10 +268,6 @@ export function createLlmGenerator(client: LlmClient): Generator {
   };
 }
 
-function formatVocabulary(vocabulary: readonly Tag[]): string {
-  return vocabulary.map((tag) => `- ${tag.slug}: ${tag.description}`).join('\n');
-}
-
 function formatChunks(chunks: readonly Chunk[]): string {
   return chunks
     .map((chunk) => {
@@ -236,10 +275,6 @@ function formatChunks(chunks: readonly Chunk[]): string {
       return `[${chunk.id}]${source} ${chunk.text}`;
     })
     .join('\n\n');
-}
-
-function keepVocabularyTags(tags: string[], vocabulary: readonly Tag[]): string[] {
-  return splitSlugs(tags, slugSet(vocabulary)).valid;
 }
 
 function slugSet(vocabulary: readonly Tag[]): ReadonlySet<string> {

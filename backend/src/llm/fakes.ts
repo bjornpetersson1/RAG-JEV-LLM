@@ -54,11 +54,20 @@ export function createFakeTagger(
   };
 }
 
-/** Default: the vocabulary tags whose label appears in the instruction (case-insensitive). */
+/**
+ * Default: the vocabulary tags whose label appears in the instruction (case-insensitive), with no
+ * scores and no tokens.
+ */
 export function createFakeQueryTranslator(
   answer: (instruction: string, vocabulary: readonly Tag[]) => string[] = tagsMentionedIn,
 ): QueryTranslator {
-  return { translate: async (instruction, vocabulary) => answer(instruction, vocabulary) };
+  return {
+    translate: async (instruction, vocabulary, { exclude } = {}) => ({
+      tags: answer(instruction, vocabulary)
+        .filter((slug) => !exclude?.has(slug))
+        .map((slug) => ({ slug })),
+    }),
+  };
 }
 
 /** Default: score is the share of the instruction's keywords found in the chunk. */
