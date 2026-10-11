@@ -174,6 +174,22 @@ A lawyer's instruction becomes vocabulary tags for the search (`translateQuery`;
 
 Choosing a template (`employment` or `nda`) adds its preset tags from `sources/tags.json`. A template without free text uses only its presets and calls no translator. With free text, the presets come first, followed by up to 8 translated tags that are not presets. Without free text and without a template, the result is no tags. Every translation reports the time it took and, when the translator gives it, the tokens it used.
 
+## Judging
+
+A judge decides whether a candidate chunk is relevant to the lawyer's instruction (`createJudge`; the query flow in E5/E6 will call it, the server so far only validates the settings). Both judges answer the same question about the same text: the chunk's source reference and text, asked "Är texten relevant för följande uppdrag: <instruktion>?". Each returns a score from 0 to 1, whether it reaches `JUDGE_THRESHOLD` (default 0.5), which judge answered, and the tokens used. `JUDGE_IMPL` chooses how:
+
+- `jev-with-fallback` (default): JEV, with the chunk as the state and the question as one Noul question. When JEV fails (timeout, network or HTTP error, malformed answer), the judge's LLM answers instead, and a warning names the chunk and the cause. Without `JEV_API_KEY` the server logs a warning at startup and judges with the LLM.
+- `jev`: JEV only; an error is thrown. Needs `JEV_API_KEY`.
+- `llm`: the judge's LLM (`LLM_JUDGE_PROVIDER`/`LLM_JUDGE_MODEL`), asked for the probability that the answer is yes.
+
+JEV gets `JUDGE_TIMEOUT_MS` (default 10000) per judgement and is not retried. Chunks are sent whole; one that JEV refuses as too large falls back like any other JEV error.
+
+### JEV limits
+
+TypeSafe does not document JEV's maximum state size, pricing or rate limits. `npm run jev:probe` measures them against the real API with the judge's timeout `JUDGE_TIMEOUT_MS` (needs `JEV_API_KEY`; the calls are billed): latency over 10 sequential calls, the largest state accepted (doubling from 1,000 characters) and how a burst of 20 concurrent calls is answered.
+
+**Observed so far: nothing.** The project has no JEV key yet, so the limits are not measured, and JEV's request shape is only checked against the documentation with faked responses. Run the probe once a key exists and record the results here.
+
 ## LLM configuration
 
 Each LLM role (tagger, query translator, judge, generator) gets its provider and model from `.env`, so switching needs no code change:

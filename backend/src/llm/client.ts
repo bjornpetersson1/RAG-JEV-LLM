@@ -54,6 +54,7 @@ export interface LlmClient {
 /** Structural subset of Fastify's (pino) logger, so `app.log` can be passed directly. */
 export interface LlmLogger {
   info(entry: object, message: string): void;
+  warn(entry: object, message: string): void;
   error(entry: object, message: string): void;
 }
 

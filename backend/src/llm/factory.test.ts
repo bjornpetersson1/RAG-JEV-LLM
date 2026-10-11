@@ -17,7 +17,7 @@ function answerForSchema(body: Record<string, unknown>): Response {
   const format = (body.output_config as { format: { schema: { properties: object } } }).format;
   const fields = Object.keys(format.schema.properties);
   if (fields.includes('tags')) return messageResponse({ tags: ['employment', 'salary', 'notice'] });
-  if (fields.includes('relevant')) return messageResponse({ relevant: true, score: 0.9 });
+  if (fields.includes('score')) return messageResponse({ score: 0.9 });
   return messageResponse({ text: 'Draft', references: ['c1'] });
 }
 

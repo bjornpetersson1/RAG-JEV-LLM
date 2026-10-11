@@ -16,6 +16,7 @@ const [command, ...flags] = process.argv.slice(2);
 
 const consoleLogger: LlmLogger = {
   info: (entry, message) => console.log(`${message} ${JSON.stringify(entry)}`),
+  warn: (entry, message) => console.warn(`${message} ${JSON.stringify(entry)}`),
   error: (entry, message) => console.error(`${message} ${JSON.stringify(entry)}`),
 };
 

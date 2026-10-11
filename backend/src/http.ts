@@ -15,3 +15,6 @@ export function isFetchAbort(error: unknown): boolean {
 export function elapsedMs(started: number): number {
   return Math.round(performance.now() - started);
 }
+
+/** Node timers (and so `AbortSignal.timeout`) cannot represent delays above 2^31 - 1 ms. */
+export const MAX_TIMER_MS = 2 ** 31 - 1;
