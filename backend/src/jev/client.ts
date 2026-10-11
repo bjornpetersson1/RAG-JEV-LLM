@@ -2,6 +2,7 @@
 // REST shape from https://docs.typesafe.ai/introduction/quickstart: POST <base>/systemone with a
 // bearer key, a state, a model and named questions; the answers come back under the same names.
 
+import { describeError } from '../errors.js';
 import { elapsedMs, isFetchAbort, isFetchTimeout } from '../http.js';
 import { NO_USAGE, type LlmLogger, type LlmUsage } from '../llm/client.js';
 import type { RoleName } from '../llm/types.js';
@@ -94,9 +95,8 @@ export function createJevClient(options: JevClientOptions): JevClient {
         logger.info({ ...entry, latencyMs: elapsedMs(started), ...response.usage }, 'JEV call');
         return response;
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
         logger.error(
-          { ...entry, latencyMs: elapsedMs(started), error: message },
+          { ...entry, latencyMs: elapsedMs(started), error: describeError(error) },
           'JEV call failed',
         );
         throw error;
@@ -132,8 +132,7 @@ export function createJevClient(options: JevClientOptions): JevClient {
       if (error instanceof SyntaxError) {
         throw new JevError('response', 'JEV answered with a body that is not JSON');
       }
-      const message = error instanceof Error ? error.message : String(error);
-      throw new JevError('network', `JEV could not be reached: ${message}`);
+      throw new JevError('network', `JEV could not be reached: ${describeError(error)}`);
     }
   }
 }

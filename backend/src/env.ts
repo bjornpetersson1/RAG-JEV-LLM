@@ -5,17 +5,20 @@ export function parsePositiveInteger(value: string): number | undefined {
   return Number.isSafeInteger(parsed) && parsed >= 1 ? parsed : undefined;
 }
 
-/** The positive integer at `key`, or `fallback` when it is unset or empty. */
+/** The positive integer at `key`, at most `max`, or `fallback` when it is unset or empty. */
 export function readPositiveInteger(
   env: Record<string, string | undefined>,
   key: string,
   fallback: number,
+  max = Number.MAX_SAFE_INTEGER,
 ): number {
   const value = env[key]?.trim();
   if (!value) return fallback;
   const parsed = parsePositiveInteger(value);
-  if (parsed === undefined) {
-    throw new Error(`Invalid ${key} "${value}": expected a positive integer`);
+  if (parsed === undefined || parsed > max) {
+    const range =
+      max === Number.MAX_SAFE_INTEGER ? 'a positive integer' : `an integer from 1 to ${max}`;
+    throw new Error(`Invalid ${key} "${value}": expected ${range}`);
   }
   return parsed;
 }
@@ -54,8 +57,13 @@ export function readOneOf<T extends string>(
 ): T {
   const value = env[key]?.trim();
   if (!value) return fallback;
-  if (!(values as readonly string[]).includes(value)) {
+  if (!isOneOf(values, value)) {
     throw new Error(`Invalid ${key} "${value}": expected ${values.join(' or ')}`);
   }
-  return value as T;
+  return value;
+}
+
+/** Whether `value` is one of `values`, narrowing it to their type. */
+export function isOneOf<T extends string>(values: readonly T[], value: string): value is T {
+  return (values as readonly string[]).includes(value);
 }
