@@ -7,10 +7,12 @@ import { migrate } from './migrations.js';
 /** A migrated database in a new temporary directory; `remove` closes it and deletes the directory. */
 export function createTestDatabase(prefix: string) {
   const dir = mkdtempSync(join(tmpdir(), prefix));
-  const db = openDatabase(join(dir, 'test.db'));
+  const path = join(dir, 'test.db');
+  const db = openDatabase(path);
   migrate(db);
   return {
     dir,
+    path,
     db,
     remove() {
       db.close();

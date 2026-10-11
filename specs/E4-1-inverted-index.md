@@ -4,7 +4,7 @@
 - **Labels:** `E4 Index and search`
 - **Phase:** 3. Tags and index
 - **Depends on:** E1-3 (#3), E3-2 (#9)
-- **Status:** Approved
+- **Status:** Implemented — all acceptance criteria verified (npm ci, lint, format:check, typecheck, 342 tests (338 backend, 4 frontend) and build exit 0; `bench:index` exits 0 with medians 0.02 / 0.96 / 0.98 ms; the built server builds the index from the real database at startup)
 
 ## Summary
 
@@ -47,16 +47,16 @@ An in-memory inverted index tag → chunk ids built on roaring bitmaps, with AND
 
 ## Tasks
 
-- [ ] Add `roaring-wasm` to the backend; verify it loads under Node 24 on the owner's machine (x86_64 macOS).
-- [ ] `TagIndex` interface and result types in a new `backend/src/search/` module.
-- [ ] Roaring implementation (`build(chunkTags)` from tag–chunk pairs, the three search modes).
-- [ ] Shared `TagIndex` contract test suite, run against the roaring index.
-- [ ] Loader from `chunk_tags` joined with `tags`, with the empty-index fallback and warning.
-- [ ] Server startup: build the index before listening, pass it to `buildApp`, log the stats.
-- [ ] Seeded synthetic generator (chunk count, tag count, tags per chunk range, Zipf-like skew).
-- [ ] `bench:index` script (backend and root), with the 5 ms check.
-- [ ] README: the index, its startup log and `bench:index`.
-- [ ] Tests per acceptance criterion.
+- [x] Add `roaring-wasm` to the backend; verify it loads under Node 24 on the owner's machine (x86_64 macOS).
+- [x] `TagIndex` interface and result types in a new `backend/src/search/` module.
+- [x] Roaring implementation (`build(chunkTags)` from tag–chunk pairs, the three search modes).
+- [x] Shared `TagIndex` contract test suite, run against the roaring index.
+- [x] Loader from `chunk_tags` joined with `tags`, with the empty-index fallback and warning.
+- [x] Server startup: build the index before listening, set it on the app, log the stats.
+- [x] Seeded synthetic generator (chunk count, tag count, tags per chunk range, Zipf-like skew).
+- [x] `bench:index` script (backend and root), with the 5 ms check.
+- [x] README: the index, its startup log and `bench:index`.
+- [x] Tests per acceptance criterion.
 
 ## Decisions
 
@@ -70,6 +70,25 @@ An in-memory inverted index tag → chunk ids built on roaring bitmaps, with AND
 - **The 5 ms check is in `bench:index`, not in `npm test`** (default): timing in the test suite would be flaky on a loaded machine; the tests check correctness, the bench checks speed.
 - **The frontend page title change rides along** (owner): the owner's uncommitted change of `<title>` in `frontend/index.html` to "LEGAL RAG LLM JEV POC" is committed with this issue; it is unrelated to the index.
 - **Memory is measured as the heap and external/array-buffer delta** around the build (default), which covers the WASM memory.
+
+- **`build` is a function type, not a method** (settled while implementing): `BuildTagIndex = (chunkTags) => TagIndex` builds a finished index, so an index is never half-built. It is synchronous: `roaring-wasm` is initialised once with a top-level `await` when its module loads (code review), so a measured build never includes compiling the WASM module. `TagIndex` also exposes `chunkCount`, `tagCount` and `dispose()`, since roaring bitmaps live in WASM memory, which the garbage collector does not free.
+- **`BaseTagIndex` holds the shared query rules** (clean code): it drops repeated tags, applies the unknown-tag and empty-query rules and validates ranked options, so an implementation (roaring here, bloom in E4-2) only searches with distinct known tags. `EMPTY_TAG_INDEX` is a shared empty index built on it, for a server with no tagged data.
+- **The app holds the index as `app.tagIndex`** (settled while implementing): `buildApp` decorates it with the empty index and disposes it on close. `server.ts` replaces it with the loaded index before listening, so the build can log through Fastify's logger. A `tagIndex` option on `buildApp` (suggested in clean code) would need the index, and therefore a logger, before the app exists.
+- **The loader checks migrations with the ledger** (clean code): `pendingMigrations(db)` in `db/migrations.ts` compares `schema_migrations` with the migration files without changing the database; it and `migrate` share `appliedVersions` (code review). The warning names the pending migrations and only `npm run db:migrate` (PR review): a populated database behind by a migration needs no new data or tagging. A database with no chunks gets its own warning naming the data commands, not just `index:tag` (code review). `openDatabase(path, { readOnly: true })` opens an existing file without creating it, its directory or the WAL setting.
+- **Ranked search counts in a per-chunk array** (settled while implementing, changed in clean code and code review): chunks are numbered densely (ordinals in ascending id order), so the count array is as large as the corpus however high re-chunking pushes the ids. Each tag's ordinals are also kept as a `Uint32Array` in JavaScript memory, and ranked search adds them up in a `Uint16Array`, with no union bitmap. `rankByMatches` then scans that array twice: first it counts the chunks per match count, then it collects only the hits that make the limit and resets the counts. Results are copied out of a bitmap with an indexed loop, which is several times faster than `Array.from` on a `Uint32Array`.
+- **`measure`** (timing and memory growth) lives in `search/measure.ts`, shared by the loader and the bench. With `--expose-gc` (the bench runs with it) it collects garbage before both samples, so the figure is what the index keeps (code review); the server's startup log runs without it and is an upper bound.
+- **Bench** (settled while implementing): 20 queries of 3 tags and 20 of 5, drawn with the same Zipf popularity as the chunks' tags, one warm-up pass, then 25 rounds. The bench has an implementation list that E4-2 extends; the 5 ms limit applies to every listed implementation until E4-2 changes that.
+- **Measured on the owner's machine** (x86_64 macOS, Node 24.21): 549,510 tags on 100,000 chunks; build 126 ms, 5.0 MB kept; median / p95 `searchAll` 0.021 / 0.092 ms, `searchAny` 0.98 / 1.86 ms, `searchRanked` 1.00 / 1.33 ms.
+- **`syntheticQueries` rejects a query size above the tag count** (code review), which would otherwise loop forever.
+- **Not changed after code review**:
+  - Keeping each tag's ordinals next to its bitmap stores the ids twice (about 2.2 MB at 100,000 chunks, 40 kB on the real corpus). Copying them out of WASM per query instead doubles ranked search time. The memory figure therefore includes the copy, which the comparison with E4-2 should note.
+  - A database path that exists but cannot be opened (a directory, a file that is not SQLite) still stops the server with "Cannot open database at <path>", as E1-3 decided for an invalid `DATABASE_PATH`. That is a misconfiguration, unlike the missing or unmigrated database the empty-index rule covers.
+  - Any pending migration gives an empty index, even one unrelated to tags. The loader cannot know whether a pending migration changes `chunk_tags`. The warning names the migrations.
+- **Skipped clean-code suggestions**:
+  - Reading `chunk_tags` as sorted ids per tag instead of one row object per pair would save temporary memory at 100,000 chunks. The real corpus has about 9,700 pairs and builds in 8 ms.
+  - Listening before the index is built would change the approved criterion "built at startup".
+  - A logger type shared with `LlmLogger`: the loader needs `warn`, the LLM client `error`; both are structural subsets of Fastify's logger.
+- **Real data** (settled while implementing): the server built the index from the local database in 8 ms: 2,116 chunks, 179 tags, 9,654 chunk–tag pairs. With `DATABASE_PATH` pointing to a missing file it started with the warning, `/health` answered, and no file was created.
 
 ## Open Questions
 

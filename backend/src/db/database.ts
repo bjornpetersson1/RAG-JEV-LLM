@@ -8,15 +8,22 @@ export const DATABASE_FILE_SUFFIXES = ['', '-wal', '-shm'];
 // Every SQLite database file starts with this 16-byte header.
 const SQLITE_HEADER = 'SQLite format 3\0';
 
-/** Opens (creating if needed) the database with foreign keys enforced and WAL journaling. */
-export function openDatabase(path: string): DatabaseSync {
+/**
+ * Opens (creating if needed) the database with foreign keys enforced and WAL journaling. With
+ * `readOnly`, the file must exist and nothing is created or changed.
+ */
+export function openDatabase(path: string, { readOnly = false } = {}): DatabaseSync {
   let db: DatabaseSync | undefined;
   try {
-    mkdirSync(dirname(path), { recursive: true });
-    db = new DatabaseSync(path);
+    if (!readOnly) mkdirSync(dirname(path), { recursive: true });
+    db = new DatabaseSync(path, { readOnly });
     // SQLite opens lazily, so a file that is not a database only fails here.
     // Foreign keys are off unless each connection turns them on.
-    db.exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;');
+    db.exec(
+      readOnly
+        ? 'PRAGMA foreign_keys = ON;'
+        : 'PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;',
+    );
     return db;
   } catch (error) {
     db?.close();

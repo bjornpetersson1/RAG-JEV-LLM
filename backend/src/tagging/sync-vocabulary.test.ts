@@ -23,14 +23,6 @@ describe('syncVocabulary', () => {
   const storedTags = () =>
     workspace.db.prepare('SELECT slug, label, description, area FROM tags ORDER BY slug').all();
 
-  const linkTag = (chunkId: number, slug: string) =>
-    workspace.db
-      .prepare(
-        `INSERT INTO chunk_tags (chunk_id, tag_id, model, vocabulary_version, created_at)
-         SELECT ?, id, 'fake', 'v1', '2026-10-10T08:00:00.000Z' FROM tags WHERE slug = ?`,
-      )
-      .run(chunkId, slug);
-
   it('inserts every tag into an empty table', () => {
     expect(syncVocabulary(workspace.db, tags)).toEqual({
       inserted: 3,
@@ -57,7 +49,7 @@ describe('syncVocabulary', () => {
   it('updates a changed label, description or area by slug and keeps its id and links', () => {
     syncVocabulary(workspace.db, tags);
     const [chunkId] = workspace.addChunks('SFS 1982:80', ['Lön betalas månadsvis.']);
-    linkTag(chunkId, 'lon');
+    workspace.linkTag(chunkId, 'lon');
     const idBefore = workspace.db.prepare("SELECT id FROM tags WHERE slug = 'lon'").get();
     const changed = tags.map((tag) =>
       tag.slug === 'lon'
@@ -84,8 +76,8 @@ describe('syncVocabulary', () => {
   it('deletes a removed tag together with its chunk links', () => {
     syncVocabulary(workspace.db, tags);
     const [chunkId] = workspace.addChunks('SFS 1982:80', ['Vite om 100 000 kronor.']);
-    linkTag(chunkId, 'vite');
-    linkTag(chunkId, 'lon');
+    workspace.linkTag(chunkId, 'vite');
+    workspace.linkTag(chunkId, 'lon');
 
     expect(
       syncVocabulary(

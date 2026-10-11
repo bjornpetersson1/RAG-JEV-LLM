@@ -42,6 +42,22 @@ export function readMigrations(dir: string): Migration[] {
   return migrations;
 }
 
+/** The migrations not yet recorded in the database, without changing it. */
+export function pendingMigrations(db: DatabaseSync, dir: string = MIGRATIONS_DIR): Migration[] {
+  const applied = appliedVersions(db);
+  return readMigrations(dir).filter((migration) => !applied.has(migration.version));
+}
+
+/** The versions recorded in `schema_migrations`; none if the table does not exist yet. */
+function appliedVersions(db: DatabaseSync): Set<number> {
+  const hasLedger = db
+    .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'schema_migrations'")
+    .get();
+  if (!hasLedger) return new Set();
+  const rows = db.prepare('SELECT version FROM schema_migrations').all() as { version: number }[];
+  return new Set(rows.map((row) => row.version));
+}
+
 /** Applies every migration not yet recorded, each in its own transaction; returns those applied. */
 export function migrate(db: DatabaseSync, dir: string = MIGRATIONS_DIR): Migration[] {
   db.exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -49,7 +65,6 @@ export function migrate(db: DatabaseSync, dir: string = MIGRATIONS_DIR): Migrati
     name TEXT NOT NULL,
     applied_at TEXT NOT NULL
   )`);
-  const isApplied = db.prepare('SELECT 1 FROM schema_migrations WHERE version = ?');
   const record = db.prepare(
     'INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)',
   );
@@ -64,7 +79,7 @@ export function migrate(db: DatabaseSync, dir: string = MIGRATIONS_DIR): Migrati
       try {
         // The write lock is taken before the check, so a concurrent run waits and then skips.
         inTransaction(db, () => {
-          if (isApplied.get(migration.version)) return;
+          if (appliedVersions(db).has(migration.version)) return;
           db.exec(migration.sql);
           assertForeignKeysHold(db);
           record.run(migration.version, migration.name, new Date().toISOString());
