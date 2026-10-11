@@ -4,3 +4,4 @@ package-lock.json
 .claude/
 Constitution/
 backend/src/ingest/fixtures/
+prompts/examples/

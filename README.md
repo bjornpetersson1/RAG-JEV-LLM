@@ -230,6 +230,40 @@ LLM_PROVIDER=claude-code LLM_MODEL=claude-haiku-5-5 LLM_TIMEOUT_MS=120000 \
 
 The first run's report is kept in `eval/report-2026-10-11.md`. A query that fails, e.g. because the CLI keeps failing, is listed in the report and left out of the averages, and the command exits non-zero.
 
+## Prompt templates
+
+The generator drafts contracts from the Swedish prompt templates in [`prompts/`](prompts/): `employment.md` (employment agreement) and `nda.md` (NDA), one per template id. Each template fixes the required contract sections, the inline citation format `[K:<chunk-id>]`, the `[lön]`-style placeholders for details the instruction does not give, the fictional default parties and the not-legal-advice disclaimer. [`prompts/README.md`](prompts/README.md) documents the file structure, the slots and the citation format.
+
+## Query and draft
+
+`npm run query` runs the whole query flow in the terminal: query translation, candidate search (`tags+fts`), judging and the draft.
+
+```bash
+npm run query -- "Anställningsavtal för en säljare med sex månaders provanställning" --template employment
+npm run query -- "<instruction>" --template nda --max-chunks 30 --max-context-chars 90000
+```
+
+`--template` (`employment` or `nda`) selects both the template's preset tags and the prompt template. The command prints:
+
+- the query tags;
+- the number of candidates, approved chunks and chunks sent to the generator;
+- the draft;
+- the sources it cites and the sources it does not cite;
+- the post-check (E6-3): the source accuracy (the share of `[K:]` citations and free-text legal references such as "7 § LAS" or "AD 2019 nr 35" that match a chunk sent to the generator) and every flagged reference with its position in the draft;
+- the time in ms and the tokens for each step.
+
+The approved chunks go to the generator best first, up to `GENERATOR_MAX_CHUNKS` (default 20) and `GENERATOR_MAX_CONTEXT_CHARS` (default 60 000). When the limits leave chunks out, the output says how many and prints the same command with `--max-chunks` and `--max-context-chars` large enough to include them all. Running it again repeats the whole flow. Judge scores that are cached (from JEV, or from the LLM with `JUDGE_IMPL=llm`) are reused, but LLM fallback answers under `jev-with-fallback` are not cached, and an LLM query translator may pick other tags, so the rerun can find somewhat different chunks. When the judge approves nothing, or no approved chunk fits the limits, no draft is written.
+
+Example drafts for both templates, made with the Claude Code provider, are in [`prompts/examples/`](prompts/examples/). To run on the subscription instead of the paid API, use the settings they were made with (`JUDGE_IMPL=llm` reuses the evaluation's cached LLM scores while there is no JEV key):
+
+```bash
+LLM_PROVIDER=claude-code LLM_MODEL=claude-haiku-5-5 LLM_GENERATOR_MODEL=claude-sonnet-5-5 \
+  JUDGE_IMPL=llm JUDGE_CHUNK_TIMEOUT_MS=150000 JUDGE_TOTAL_TIMEOUT_MS=900000 \
+  npm run query -- "Sekretessavtal för en konsult som får tillgång till kunddata och affärsplaner." --template nda
+```
+
+The token line shows the normally billed input plus cache writes and reads (e.g. `in 2 + cache 41230`), since with the Claude Code provider most of the input can be cache traffic.
+
 ## LLM configuration
 
 Each LLM role (tagger, query translator, judge, generator) gets its provider and model from `.env`, so switching needs no code change:

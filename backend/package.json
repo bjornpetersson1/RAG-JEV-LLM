@@ -20,7 +20,8 @@
     "bench:index": "tsx --expose-gc --env-file-if-exists=../.env src/search/bench.ts",
     "jev:probe": "tsx --env-file-if-exists=../.env src/judge/probe.ts",
     "eval:label": "tsx --env-file-if-exists=../.env src/eval/cli.ts label",
-    "eval:run": "tsx --env-file-if-exists=../.env src/eval/cli.ts run"
+    "eval:run": "tsx --env-file-if-exists=../.env src/eval/cli.ts run",
+    "query": "tsx --env-file-if-exists=../.env src/generation/cli.ts"
   },
   "dependencies": {
     "fastify": "^5.12.5",

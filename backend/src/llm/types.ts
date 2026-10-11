@@ -56,15 +56,19 @@ export interface Judgement extends JudgeScore {
 }
 
 export interface GenerateInput {
+  /** The template id, e.g. `employment` (`TEMPLATES`). */
   template: string;
   instruction: string;
+  /** The sources, best first; the draft cites them as `[K:<id>]`. */
   chunks: readonly Chunk[];
+  /** The contract parties; the template's fictional default parties when absent. */
+  parties?: string;
 }
 
 export interface Draft {
+  /** The Markdown draft, with inline `[K:<chunk-id>]` citations. */
   text: string;
-  /** Ids of the chunks the draft cites. */
-  references: string[];
+  usage: LlmUsage;
 }
 
 export interface Tagger {

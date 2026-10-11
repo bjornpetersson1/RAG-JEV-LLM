@@ -53,7 +53,7 @@ describe('fake roles', () => {
 
   it('generator echoes its input and cites every chunk', async () => {
     const draft = await createFakeGenerator().generate({
-      template: 'T',
+      template: 'nda',
       instruction: 'I',
       chunks: [
         { id: 'a', text: 'first' },
@@ -61,12 +61,14 @@ describe('fake roles', () => {
       ],
     });
 
-    expect(draft).toEqual({ text: 'T\n\nI\n\n[a] first\n[b] second', references: ['a', 'b'] });
+    expect(draft).toEqual({
+      text: '# nda\n\nI\n\n- first [K:a]\n\n- second [K:b]',
+      usage: NO_USAGE,
+    });
   });
 
   it('every fake accepts a configured answer', async () => {
     const chunk = { id: 'c', text: 't' };
-    const draft = { text: 'fixed', references: [] };
 
     await expect(
       createFakeTagger(() => ['x']).tag({ text: 't' }, VOCABULARY),
@@ -81,7 +83,7 @@ describe('fake roles', () => {
       createFakeJudge(() => ({ score: 0.1, usage: undefined })).judge('t', chunk),
     ).resolves.toEqual({ score: 0.1, judgedBy: 'llm', usage: NO_USAGE });
     await expect(
-      createFakeGenerator(() => draft).generate({ template: '', instruction: '', chunks: [] }),
-    ).resolves.toEqual(draft);
+      createFakeGenerator(() => 'fixed').generate({ template: '', instruction: '', chunks: [] }),
+    ).resolves.toEqual({ text: 'fixed', usage: NO_USAGE });
   });
 });
