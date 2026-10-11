@@ -254,7 +254,15 @@ npm run query -- "<instruction>" --template nda --max-chunks 30 --max-context-ch
 
 The approved chunks go to the generator best first, up to `GENERATOR_MAX_CHUNKS` (default 20) and `GENERATOR_MAX_CONTEXT_CHARS` (default 60 000). When the limits leave chunks out, the output says how many and prints the same command with `--max-chunks` and `--max-context-chars` large enough to include them all. Running it again repeats the whole flow. Judge scores that are cached (from JEV, or from the LLM with `JUDGE_IMPL=llm`) are reused, but LLM fallback answers under `jev-with-fallback` are not cached, and an LLM query translator may pick other tags, so the rerun can find somewhat different chunks. When the judge approves nothing, or no approved chunk fits the limits, no draft is written.
 
-Example drafts for both templates, made with the Claude Code provider, are in [`prompts/examples/`](prompts/examples/). As with the evaluation, use `LLM_PROVIDER=claude-code` and longer timeouts to run on the subscription instead of the paid API.
+Example drafts for both templates, made with the Claude Code provider, are in [`prompts/examples/`](prompts/examples/). To run on the subscription instead of the paid API, use the settings they were made with (`JUDGE_IMPL=llm` reuses the evaluation's cached LLM scores while there is no JEV key):
+
+```bash
+LLM_PROVIDER=claude-code LLM_MODEL=claude-haiku-5-5 LLM_GENERATOR_MODEL=claude-sonnet-5-5 \
+  JUDGE_IMPL=llm JUDGE_CHUNK_TIMEOUT_MS=150000 JUDGE_TOTAL_TIMEOUT_MS=900000 \
+  npm run query -- "Sekretessavtal för en konsult som får tillgång till kunddata och affärsplaner." --template nda
+```
+
+The token line shows the normally billed input plus cache writes and reads (e.g. `in 2 + cache 41230`), since with the Claude Code provider most of the input can be cache traffic.
 
 ## LLM configuration
 

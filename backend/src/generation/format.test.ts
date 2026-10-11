@@ -35,7 +35,13 @@ function result(draft?: GenerationResult): QueryResult {
       totalMs: 4715,
     },
     usage: {
-      translation: { ...NO_USAGE, inputTokens: 900, outputTokens: 40 },
+      translation: {
+        ...NO_USAGE,
+        inputTokens: 2,
+        cacheReadTokens: 880,
+        cacheWriteTokens: 18,
+        outputTokens: 40,
+      },
       judging: NO_USAGE,
       generation: draft?.usage,
     },
@@ -59,7 +65,7 @@ describe('formatQueryResult', () => {
         'Citations outside the submitted chunks: 0',
         '',
         'Time (ms): translation 800 · search 15 · judging 3000 · generation 900 · total 4715',
-        'Tokens: translation in 900 / out 40 · judging in 0 / out 0 · generation in 5000 / out 1200',
+        'Tokens: translation in 2 + cache 898 / out 40 · judging in 0 / out 0 · generation in 5000 / out 1200',
       ].join('\n'),
     );
   });

@@ -91,8 +91,13 @@ function formatTimings({ timings, usage }: QueryResult): string[] {
   ];
 }
 
+// Cache writes and reads are input too, and with a cached prompt (e.g. the Claude Code provider)
+// they are most of it, so they are shown next to the normally billed input.
 function formatUsage(usage: LlmUsage | undefined): string {
-  return usage ? `in ${usage.inputTokens} / out ${usage.outputTokens}` : '–';
+  if (!usage) return '–';
+  const cached = usage.cacheWriteTokens + usage.cacheReadTokens;
+  const input = cached > 0 ? `${usage.inputTokens} + cache ${cached}` : `${usage.inputTokens}`;
+  return `in ${input} / out ${usage.outputTokens}`;
 }
 
 function leftOutCount(count: number): string {
