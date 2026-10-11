@@ -26,7 +26,7 @@ function readStartupConfig(): {
 } {
   try {
     const port = resolvePort(process.env.PORT);
-    // Fail fast on invalid LLM settings; later issues build the roles from this config for their routes.
+    // Fail fast on invalid LLM and query translator settings; later issues build the roles from them.
     loadLlmConfig(process.env);
     loadQueryTranslatorConfig(process.env);
     return {
