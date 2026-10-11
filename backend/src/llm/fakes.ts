@@ -14,6 +14,7 @@ import type {
   Tagger,
   TaggingInput,
 } from './types.js';
+import { citation } from '../generation/templates.js';
 import { words } from '../text.js';
 
 const MIN_KEYWORD_LENGTH = 4;
@@ -86,11 +87,11 @@ export function createFakeJudge(
 
 type FakeScore = Pick<JudgeScore, 'score'> & Partial<JudgeScore>;
 
-/** Default: a draft listing the template, the instruction and every chunk, citing all chunks. */
+/** Default: a Markdown draft naming the template and instruction and citing every chunk. */
 export function createFakeGenerator(
-  answer: (input: GenerateInput) => Draft = echoDraft,
+  answer: (input: GenerateInput) => string = echoDraft,
 ): Generator {
-  return { generate: async (input) => answer(input) };
+  return { generate: async (input): Promise<Draft> => ({ text: answer(input), usage: NO_USAGE }) };
 }
 
 function tagsMentionedIn(text: string, vocabulary: readonly Tag[]): string[] {
@@ -108,10 +109,7 @@ function keywordOverlap(instruction: string, chunk: Chunk): FakeScore {
   return { score };
 }
 
-function echoDraft({ template, instruction, chunks }: GenerateInput): Draft {
-  const sources = chunks.map((chunk) => `[${chunk.id}] ${chunk.text}`).join('\n');
-  return {
-    text: `${template}\n\n${instruction}\n\n${sources}`,
-    references: chunks.map((chunk) => chunk.id),
-  };
+function echoDraft({ template, instruction, chunks }: GenerateInput): string {
+  const sources = chunks.map((chunk) => `- ${chunk.text} ${citation(chunk.id)}`);
+  return [`# ${template}`, instruction, ...sources].join('\n\n');
 }

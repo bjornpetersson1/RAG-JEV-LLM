@@ -1,0 +1,132 @@
+import { describe, expect, it } from 'vitest';
+import { NO_USAGE } from '../llm/client.js';
+import type { GenerationResult } from './generate.js';
+import { formatQueryResult } from './format.js';
+import type { QueryRequest, QueryResult } from './query-flow.js';
+
+const REQUEST: QueryRequest = { instruction: "Säljare's avtal", template: 'employment' };
+
+const DRAFT: GenerationResult = {
+  text: '# Anställningsavtal\n\nText [K:11].',
+  used: [{ id: '11', text: 'a', source: 'SFS 1982:80 7 §' }],
+  unused: [{ id: '12', text: 'b', source: 'SFS 1982:80 11 §' }],
+  leftOut: [],
+  outsideCitations: [],
+  context: {
+    limits: { maxChunks: 20, maxContextChars: 60_000 },
+    limitedBy: [],
+    needed: { maxChunks: 2, maxContextChars: 2 },
+  },
+  elapsedMs: 900,
+  usage: { ...NO_USAGE, inputTokens: 5000, outputTokens: 1200 },
+};
+
+function result(draft?: GenerationResult): QueryResult {
+  return {
+    tags: ['anstallningsavtal', 'provanstallning'],
+    candidates: 30,
+    judging: { approved: draft ? 2 : 0, cacheHits: 4, judgeCalls: 26, unknown: 0 },
+    draft,
+    timings: {
+      translationMs: 800,
+      searchMs: 15,
+      judgingMs: 3000,
+      generationMs: draft?.elapsedMs,
+      totalMs: 4715,
+    },
+    usage: {
+      translation: {
+        ...NO_USAGE,
+        inputTokens: 2,
+        cacheReadTokens: 880,
+        cacheWriteTokens: 18,
+        outputTokens: 40,
+      },
+      judging: NO_USAGE,
+      generation: draft?.usage,
+    },
+  };
+}
+
+describe('formatQueryResult', () => {
+  it('prints tags, counts, the draft, its sources and the time and tokens per step', () => {
+    expect(formatQueryResult(REQUEST, result(DRAFT))).toBe(
+      [
+        'Tags: anstallningsavtal, provanstallning',
+        'Candidates: 30 · approved: 2 · unknown: 0 · judge calls: 26 · cache hits: 4',
+        'Submitted to the generator: 2',
+        '',
+        '# Anställningsavtal\n\nText [K:11].',
+        '',
+        'Sources used (1):',
+        '  [K:11] SFS 1982:80 7 §',
+        'Unused sources (1):',
+        '  [K:12] SFS 1982:80 11 §',
+        'Citations outside the submitted chunks: 0',
+        '',
+        'Time (ms): translation 800 · search 15 · judging 3000 · generation 900 · total 4715',
+        'Tokens: translation in 2 + cache 898 / out 40 · judging in 0 / out 0 · generation in 5000 / out 1200',
+      ].join('\n'),
+    );
+  });
+
+  it('lists citations outside the submitted chunks', () => {
+    const output = formatQueryResult(REQUEST, result({ ...DRAFT, outsideCitations: ['99'] }));
+
+    expect(output).toContain('Citations outside the submitted chunks: 1 ([K:99])');
+  });
+
+  it('says when the context limit left chunks out, with a command that includes them all', () => {
+    const limited: GenerationResult = {
+      ...DRAFT,
+      leftOut: [{ id: '13', text: 'c' }],
+      context: {
+        limits: { maxChunks: 2, maxContextChars: 60_000 },
+        limitedBy: ['maxChunks'],
+        needed: { maxChunks: 3, maxContextChars: 61_234 },
+      },
+    };
+
+    expect(formatQueryResult(REQUEST, result(limited))).toContain(
+      [
+        'Context limit reached: 1 approved chunk was left out (--max-chunks 2).',
+        'To include every approved chunk, run again with a larger context:',
+        "  npm run query -- 'Säljare'\\''s avtal' --template employment --max-chunks 3 --max-context-chars 61234",
+      ].join('\n'),
+    );
+  });
+
+  it('says when no approved chunk fit the limits, with the rerun command', () => {
+    const nothingFit: GenerationResult = {
+      ...DRAFT,
+      text: undefined,
+      used: [],
+      unused: [],
+      leftOut: [{ id: '13', text: 'c' }],
+      context: {
+        limits: { maxChunks: 20, maxContextChars: 10 },
+        limitedBy: ['maxContextChars'],
+        needed: { maxChunks: 1, maxContextChars: 400 },
+      },
+    };
+
+    const output = formatQueryResult(REQUEST, result(nothingFit));
+
+    expect(output).toContain(
+      [
+        'No approved chunk fit the context limits, so no draft was generated.',
+        '',
+        'Context limit reached: 1 approved chunk was left out (--max-context-chars 10).',
+      ].join('\n'),
+    );
+    expect(output).not.toContain('Sources used');
+  });
+
+  it('says that no draft was written when nothing was approved', () => {
+    const output = formatQueryResult(REQUEST, result());
+
+    expect(output).toContain('No relevant sources were found, so no draft was generated.');
+    expect(output).toContain('Time (ms): translation 800 · search 15 · judging 3000 · total 4715');
+    expect(output).not.toContain('generation');
+  });
+});

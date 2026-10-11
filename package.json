@@ -29,7 +29,8 @@
     "bench:index": "npm run bench:index -w backend",
     "jev:probe": "npm run jev:probe -w backend",
     "eval:label": "npm run eval:label -w backend --",
-    "eval:run": "npm run eval:run -w backend"
+    "eval:run": "npm run eval:run -w backend",
+    "query": "npm run query -w backend --"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

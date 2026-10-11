@@ -2,22 +2,13 @@
 // translator and candidate search (all the label tool needs), and one judge per judge mode.
 
 import type { DatabaseSync } from 'node:sqlite';
-import { resolveDatabasePath } from '../db/config.js';
 import { loadJudgeConfig, loadJudgingConfig } from '../judge/config.js';
 import { createJudging } from '../judge/factory.js';
 import { judgeAll } from '../judge/judge-all.js';
 import type { LlmLogger } from '../llm/client.js';
-import { loadLlmConfig, roleModel, type LlmConfig } from '../llm/config.js';
-import { createLlmRoles } from '../llm/factory.js';
-import type { Chunk } from '../llm/types.js';
-import { loadQueryTranslatorConfig } from '../query/config.js';
-import { createQueryTranslator } from '../query/factory.js';
+import { loadLlmConfig, roleLabel } from '../llm/config.js';
+import { createQueryServices } from '../query/services.js';
 import { translateQuery } from '../query/translate-query.js';
-import { createCandidateSearch } from '../search/candidate-search.js';
-import { loadSearchConfig, tagIndexBuilder } from '../search/config.js';
-import { loadTagIndex } from '../search/load-index.js';
-import { VOCABULARY_PATH } from '../tagging/paths.js';
-import { loadVocabulary } from '../tagging/vocabulary.js';
 import {
   byJudgeMode,
   type EvalDependencies,
@@ -47,49 +38,26 @@ export function createSearchSetup(
   logger: LlmLogger,
   llmConfig = loadLlmConfig(env),
 ): SearchSetup {
-  const vocabulary = loadVocabulary(VOCABULARY_PATH);
-  const translatorConfig = loadQueryTranslatorConfig(env);
-  const translator = createQueryTranslator(translatorConfig, {
-    llmTranslator: createLlmRoles(llmConfig, { logger }).queryTranslator,
+  const { translation, candidateSearch, loadChunks, translatorLabel } = createQueryServices(
+    db,
+    env,
     logger,
-  });
-  const searchConfig = loadSearchConfig(env);
-  const tagIndex = loadTagIndex(
-    resolveDatabasePath(env.DATABASE_PATH),
-    tagIndexBuilder(searchConfig),
-    logger,
+    llmConfig,
   );
-  const candidateSearch = createCandidateSearch({ db, tagIndex, config: searchConfig, logger });
-  const selectChunks = db.prepare(
-    'SELECT id, text, source_ref FROM chunks WHERE id IN (SELECT value FROM json_each(?))',
-  );
-
   return {
     settings: {
-      'query translator':
-        translatorConfig.impl === 'jev' ? 'jev' : roleLabel(llmConfig, 'queryTranslator'),
+      'query translator': translatorLabel,
       'LLM judge': roleLabel(llmConfig, 'judge'),
     },
     async translate(query) {
-      const { tags } = await translateQuery(query, {
-        translator,
-        vocabulary: vocabulary.tags,
-        presets: vocabulary.presets,
-      });
+      const { tags } = await translateQuery(query, translation);
       return tags.map((tag) => tag.slug);
     },
     search(query, tags, mode) {
       const { candidates } = candidateSearch.search({ instruction: query.instruction, tags, mode });
       return candidates.map((candidate) => String(candidate.chunkId));
     },
-    loadChunks(ids) {
-      const rows = selectChunks.all(JSON.stringify(ids.map(Number))) as unknown as ChunkRow[];
-      const byId = new Map(rows.map((row) => [String(row.id), row]));
-      return ids.flatMap((id): Chunk[] => {
-        const row = byId.get(id);
-        return row ? [{ id, text: row.text, source: row.source_ref }] : [];
-      });
-    },
+    loadChunks,
   };
 }
 
@@ -115,15 +83,4 @@ export function createEvalSetup(db: DatabaseSync, env: Env, logger: LlmLogger): 
     },
     judges: byJudgeMode((mode) => judgings[mode].primary),
   };
-}
-
-/** E.g. `claude-code claude-haiku-5-5`. */
-function roleLabel(llmConfig: LlmConfig, role: 'queryTranslator' | 'judge'): string {
-  return `${llmConfig.roles[role].provider} ${roleModel(llmConfig, role)}`;
-}
-
-interface ChunkRow {
-  id: number;
-  text: string;
-  source_ref: string;
 }
