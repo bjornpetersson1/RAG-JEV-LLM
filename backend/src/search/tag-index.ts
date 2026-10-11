@@ -28,6 +28,8 @@ export interface TagIndex {
   readonly chunkCount: number;
   /** Number of distinct tags on at least one chunk. */
   readonly tagCount: number;
+  /** The implementation and its settings, for logs and the bench. */
+  readonly description: IndexDescription;
   /** Chunks with every tag (AND), in ascending id order. */
   searchAll(tags: readonly string[]): number[];
   /** Chunks with at least one tag (OR), in ascending id order. */
@@ -36,6 +38,11 @@ export interface TagIndex {
   searchRanked(tags: readonly string[], options?: RankedOptions): RankedHit[];
   /** Frees memory the index holds outside the JavaScript heap. */
   dispose(): void;
+}
+
+export interface IndexDescription {
+  implementation: string;
+  [setting: string]: string | number | boolean;
 }
 
 /** Builds a {@link TagIndex} from every chunk–tag pair. */
@@ -49,6 +56,7 @@ export type BuildTagIndex = (chunkTags: readonly ChunkTag[]) => TagIndex;
 export abstract class BaseTagIndex implements TagIndex {
   abstract readonly chunkCount: number;
   abstract readonly tagCount: number;
+  abstract readonly description: IndexDescription;
 
   protected abstract hasTag(slug: string): boolean;
   protected abstract all(tags: readonly string[]): number[];
@@ -81,6 +89,7 @@ export abstract class BaseTagIndex implements TagIndex {
 class EmptyTagIndex extends BaseTagIndex {
   readonly chunkCount = 0;
   readonly tagCount = 0;
+  readonly description = { implementation: 'empty' };
   protected hasTag = () => false;
   protected all = () => [];
   protected any = () => [];
@@ -106,6 +115,17 @@ function isPositiveInteger(value: number): boolean {
 
 function invalidOption(name: string, value: number): RangeError {
   return new RangeError(`Invalid ${name} ${value}: expected a positive integer`);
+}
+
+/**
+ * Each chunk id's ordinal, its position in `chunkIds` (ascending). Implementations number chunks
+ * densely so per-chunk arrays stay as large as the corpus, however high re-chunking pushes the ids.
+ */
+export function ordinalsOf(chunkIds: Uint32Array): Map<number, number> {
+  const ordinals = new Map<number, number>();
+  for (let ordinal = 0; ordinal < chunkIds.length; ordinal++)
+    ordinals.set(chunkIds[ordinal], ordinal);
+  return ordinals;
 }
 
 /**

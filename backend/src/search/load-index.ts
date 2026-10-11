@@ -32,6 +32,7 @@ export function loadTagIndex(
   const { result: index, elapsedMs, memoryBytes } = measure(() => build(chunkTags));
   logger.info(
     {
+      index: index.description,
       chunks: index.chunkCount,
       tags: index.tagCount,
       chunkTags: chunkTags.length,

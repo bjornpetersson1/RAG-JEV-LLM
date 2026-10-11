@@ -45,6 +45,7 @@ describe('loadTagIndex', () => {
     });
     expect(logger.info).toHaveBeenCalledExactlyOnceWith(
       {
+        index: { implementation: 'roaring' },
         chunks: 3,
         tags: 2,
         chunkTags: 4,

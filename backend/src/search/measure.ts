@@ -12,8 +12,23 @@ export function measure<T>(work: () => T): { result: T; elapsedMs: number; memor
 }
 
 function usedMemory(): number {
-  globalThis.gc?.();
+  settleHeap();
   // `external` includes array buffers, among them the WASM memory of roaring bitmaps.
   const { heapUsed, external } = process.memoryUsage();
   return heapUsed + external;
+}
+
+/**
+ * Collects garbage until memory stops shrinking (at most a few rounds): array buffers freed by one
+ * collection are only released by a later one. Does nothing without `--expose-gc`.
+ */
+function settleHeap(): void {
+  if (!globalThis.gc) return;
+  let previous = Infinity;
+  for (let round = 0; round < 4; round++) {
+    globalThis.gc();
+    const { heapUsed, external } = process.memoryUsage();
+    if (heapUsed + external >= previous) return;
+    previous = heapUsed + external;
+  }
 }
