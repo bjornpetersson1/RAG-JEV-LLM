@@ -1,3 +1,5 @@
+import { readPositiveInteger } from '../env.js';
+
 export interface ChunkConfig {
   /** No chunk's text is longer than this many characters. */
   maxChars: number;
@@ -17,19 +19,4 @@ export function loadChunkConfig(env: Record<string, string | undefined>): ChunkC
     );
   }
   return { maxChars, minChars };
-}
-
-function readPositiveInteger(
-  env: Record<string, string | undefined>,
-  key: string,
-  fallback: number,
-): number {
-  const value = env[key]?.trim();
-  if (!value) return fallback;
-  // Only plain digits: Number() would also accept "2e3", "0x7D0" or "2000.0".
-  const parsed = /^\d+$/.test(value) ? Number(value) : NaN;
-  if (!Number.isInteger(parsed) || parsed < 1) {
-    throw new Error(`Invalid ${key} "${value}": expected a positive integer`);
-  }
-  return parsed;
 }

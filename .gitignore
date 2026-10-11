@@ -12,3 +12,6 @@ coverage/
 *.db
 *.db-wal
 *.db-shm
+
+# Tagging reports (npm run index:report)
+/reports/

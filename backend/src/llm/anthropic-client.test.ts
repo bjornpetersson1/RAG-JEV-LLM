@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createAnthropicClient, type AnthropicClientOptions } from './anthropic-client.js';
-import { LlmError } from './client.js';
+import { LlmError, NO_USAGE } from './client.js';
 import { createCapturingLogger, createFakeFetch, messageResponse } from './test-helpers.js';
 
 const REQUEST = {
@@ -63,7 +63,34 @@ describe('createAnthropicClient', () => {
 
     await expect(client.complete(REQUEST)).resolves.toEqual({
       data: { answer: 42 },
-      usage: { inputTokens: 1200, outputTokens: 300 },
+      usage: { ...NO_USAGE, inputTokens: 1200, outputTokens: 300 },
+    });
+  });
+
+  it('marks the system prompt for caching when asked and reports cache tokens', async () => {
+    const { client, requests } = setup(() =>
+      Response.json({
+        content: [{ type: 'text', text: '{}' }],
+        stop_reason: 'end_turn',
+        usage: {
+          input_tokens: 50,
+          output_tokens: 10,
+          cache_creation_input_tokens: 4000,
+          cache_read_input_tokens: 8000,
+        },
+      }),
+    );
+
+    const { usage } = await client.complete({ ...REQUEST, cacheSystem: true });
+
+    expect(requests[0].body.system).toEqual([
+      { type: 'text', text: 'system prompt', cache_control: { type: 'ephemeral' } },
+    ]);
+    expect(usage).toEqual({
+      inputTokens: 50,
+      outputTokens: 10,
+      cacheWriteTokens: 4000,
+      cacheReadTokens: 8000,
     });
   });
 
@@ -83,6 +110,8 @@ describe('createAnthropicClient', () => {
       attempts: 1,
       inputTokens: 1_000_000,
       outputTokens: 100_000,
+      cacheWriteTokens: 0,
+      cacheReadTokens: 0,
       costUsd: 6,
     });
   });

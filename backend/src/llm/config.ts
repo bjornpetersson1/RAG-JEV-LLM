@@ -107,6 +107,12 @@ export function loadLlmConfig(env: Env): LlmConfig {
   return { roles, timeoutMs, maxRetries };
 }
 
+/** The model a role calls, as recorded with its results: `fake` for the fake provider. */
+export function roleModel(config: LlmConfig, role: RoleName): string {
+  const roleConfig = config.roles[role];
+  return roleConfig.provider === 'fake' ? 'fake' : roleConfig.model;
+}
+
 function isProvider(value: string): value is Provider {
   return (PROVIDERS as readonly string[]).includes(value);
 }

@@ -1,6 +1,7 @@
 import { closeSync, mkdirSync, openSync, readSync, rmSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
+import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
+import { memoizeByIdentity } from '../memo.js';
 
 /** Suffixes of the database file and the side files SQLite keeps next to it in WAL mode. */
 export const DATABASE_FILE_SUFFIXES = ['', '-wal', '-shm'];
@@ -8,15 +9,22 @@ export const DATABASE_FILE_SUFFIXES = ['', '-wal', '-shm'];
 // Every SQLite database file starts with this 16-byte header.
 const SQLITE_HEADER = 'SQLite format 3\0';
 
-/** Opens (creating if needed) the database with foreign keys enforced and WAL journaling. */
-export function openDatabase(path: string): DatabaseSync {
+/**
+ * Opens (creating if needed) the database with foreign keys enforced and WAL journaling. With
+ * `readOnly`, the file must exist and nothing is created or changed.
+ */
+export function openDatabase(path: string, { readOnly = false } = {}): DatabaseSync {
   let db: DatabaseSync | undefined;
   try {
-    mkdirSync(dirname(path), { recursive: true });
-    db = new DatabaseSync(path);
+    if (!readOnly) mkdirSync(dirname(path), { recursive: true });
+    db = new DatabaseSync(path, { readOnly });
     // SQLite opens lazily, so a file that is not a database only fails here.
     // Foreign keys are off unless each connection turns them on.
-    db.exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;');
+    db.exec(
+      readOnly
+        ? 'PRAGMA foreign_keys = ON;'
+        : 'PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;',
+    );
     return db;
   } catch (error) {
     db?.close();
@@ -47,15 +55,7 @@ export function inTransaction<T>(db: DatabaseSync, work: () => T): T {
  * runs the same statements for every document.
  */
 export function preparedOnce<T>(prepare: (db: DatabaseSync) => T): (db: DatabaseSync) => T {
-  const cache = new WeakMap<DatabaseSync, T>();
-  return (db) => {
-    let statements = cache.get(db);
-    if (!statements) {
-      statements = prepare(db);
-      cache.set(db, statements);
-    }
-    return statements;
-  };
+  return memoizeByIdentity(prepare);
 }
 
 /**
@@ -85,4 +85,13 @@ function isMissingOrSqlite(path: string): boolean {
   } finally {
     closeSync(fd);
   }
+}
+
+/** The `n` column of a `SELECT COUNT(*) AS n …` query. */
+export function countRows(
+  db: DatabaseSync,
+  sql: string,
+  params: Record<string, SQLInputValue> = {},
+): number {
+  return (db.prepare(sql).get(params) as { n: number }).n;
 }

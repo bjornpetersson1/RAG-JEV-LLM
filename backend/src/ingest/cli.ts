@@ -1,7 +1,4 @@
-import type { DatabaseSync } from 'node:sqlite';
-import { resolveDatabasePath } from '../db/config.js';
-import { openDatabase } from '../db/database.js';
-import { migrate } from '../db/migrations.js';
+import { withDatabase } from '../db/with-database.js';
 import { describeError } from '../errors.js';
 import { loadChunkConfig } from './chunk-config.js';
 import { chunkDocuments, describeLengths } from './chunk-documents.js';
@@ -56,7 +53,7 @@ async function runFetch(force: boolean): Promise<number> {
 }
 
 /** Runs `importer` over the raw files. */
-function runImport(importer: (options: ImportOptions) => ImportResult): number {
+function runImport(importer: (options: ImportOptions) => ImportResult): Promise<number> {
   return withDatabase((db) => {
     const result = importer({ db, rawDir: RAW_DATA_DIR });
     console.log(summarize(result));
@@ -64,18 +61,7 @@ function runImport(importer: (options: ImportOptions) => ImportResult): number {
   });
 }
 
-/** Opens the database, applies pending migrations, runs `work` and closes the database. */
-function withDatabase(work: (db: DatabaseSync) => number): number {
-  const db = openDatabase(resolveDatabasePath(process.env.DATABASE_PATH));
-  try {
-    migrate(db);
-    return work(db);
-  } finally {
-    db.close();
-  }
-}
-
-function runChunk(identifier: string | undefined): number {
+function runChunk(identifier: string | undefined): Promise<number> {
   const config = loadChunkConfig(process.env);
   return withDatabase((db) => {
     const result = chunkDocuments({ db, config, identifier });

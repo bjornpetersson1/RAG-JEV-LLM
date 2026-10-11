@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { NO_USAGE } from './client.js';
 import {
   createFakeGenerator,
   createFakeJudge,
@@ -6,20 +7,26 @@ import {
   createFakeTagger,
 } from './fakes.js';
 
-const VOCABULARY = [{ name: 'employment' }, { name: 'non-compete' }, { name: 'termination' }];
+const VOCABULARY = [
+  { slug: 'anstallning', label: 'Employment' },
+  { slug: 'konkurrensklausul', label: 'Non-compete' },
+  { slug: 'uppsagning', label: 'Termination' },
+].map((tag) => ({ ...tag, description: tag.label, area: 'anstallning' }));
 
 describe('fake roles', () => {
-  it('tagger and query translator pick the vocabulary tags mentioned in the text', async () => {
+  it('tagger and query translator pick the vocabulary tags whose label is in the text', async () => {
     const text = 'Employment contract with a NON-COMPETE clause';
 
-    await expect(createFakeTagger().tag(text, VOCABULARY)).resolves.toEqual([
-      'employment',
-      'non-compete',
-    ]);
-    await expect(createFakeQueryTranslator().translate(text, VOCABULARY)).resolves.toEqual([
-      'employment',
-      'non-compete',
-    ]);
+    await expect(createFakeTagger().tag({ text }, VOCABULARY)).resolves.toEqual({
+      tags: ['anstallning', 'konkurrensklausul'],
+      discarded: [],
+      overLimit: [],
+      retried: false,
+      usage: NO_USAGE,
+    });
+    await expect(createFakeQueryTranslator().translate(text, VOCABULARY)).resolves.toEqual({
+      tags: [{ slug: 'anstallning' }, { slug: 'konkurrensklausul' }],
+    });
   });
 
   it('judge scores the share of instruction keywords found in the chunk', async () => {
@@ -60,10 +67,12 @@ describe('fake roles', () => {
     const chunk = { id: 'c', text: 't' };
     const draft = { text: 'fixed', references: [] };
 
-    await expect(createFakeTagger(() => ['x']).tag('t', VOCABULARY)).resolves.toEqual(['x']);
+    await expect(
+      createFakeTagger(() => ['x']).tag({ text: 't' }, VOCABULARY),
+    ).resolves.toMatchObject({ tags: ['x'] });
     await expect(
       createFakeQueryTranslator(() => ['y']).translate('t', VOCABULARY),
-    ).resolves.toEqual(['y']);
+    ).resolves.toEqual({ tags: [{ slug: 'y' }] });
     await expect(
       createFakeJudge(() => ({ relevant: false, score: 0.1 })).judge('t', chunk),
     ).resolves.toEqual({

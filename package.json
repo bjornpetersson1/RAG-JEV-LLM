@@ -22,7 +22,11 @@
     "data:fetch": "npm run data:fetch -w backend --",
     "data:import:laws": "npm run data:import:laws -w backend",
     "data:import:rulings": "npm run data:import:rulings -w backend",
-    "data:chunk": "npm run data:chunk -w backend --"
+    "data:chunk": "npm run data:chunk -w backend --",
+    "index:vocabulary": "npm run index:vocabulary -w backend",
+    "index:tag": "npm run index:tag -w backend --",
+    "index:report": "npm run index:report -w backend",
+    "bench:index": "npm run bench:index -w backend"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

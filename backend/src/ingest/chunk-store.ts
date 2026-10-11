@@ -32,6 +32,10 @@ const statementsFor = preparedOnce((db) => ({
   // A reference that changes hands is parked under a temporary one first, for the unique key.
   parkReference: db.prepare("UPDATE chunks SET source_ref = '#' || id WHERE id = ?"),
   deleteTags: db.prepare('DELETE FROM chunk_tags WHERE chunk_id = ?'),
+  // Without its tagging state cleared, the tagger would skip the chunk as already tagged.
+  clearTagging: db.prepare(
+    'UPDATE chunks SET tagged_model = NULL, tagged_vocabulary_version = NULL, tagged_at = NULL WHERE id = ?',
+  ),
   delete: db.prepare('DELETE FROM chunks WHERE id = ?'),
 }));
 
@@ -66,8 +70,8 @@ function matchStoredChunks(stored: StoredChunk[], chunks: Chunk[]): Map<Chunk, S
 
 /**
  * Replaces the document's chunks with `chunks`, matching existing ones by source reference (or,
- * failing that, identical content) so their ids survive. A chunk whose text or context changed keeps its id but loses its tags, which were
- * made from the old content; chunks no longer produced are deleted with their tags. Unchanged
+ * failing that, identical content) so their ids survive. A chunk whose text or context changed
+ * keeps its id but loses its tags and tagging state, which were made from the old content; chunks no longer produced are deleted with their tags. Unchanged
  * chunks in the same place are not written. Runs in one transaction.
  */
 export function storeChunks(db: DatabaseSync, documentId: number, chunks: Chunk[]): StoreCounts {
@@ -116,7 +120,10 @@ export function storeChunks(db: DatabaseSync, documentId: number, chunks: Chunk[
           match.id,
         );
       }
-      if (changed) statements.deleteTags.run(match.id);
+      if (changed) {
+        statements.deleteTags.run(match.id);
+        statements.clearTagging.run(match.id);
+      }
       counts[changed ? 'updated' : 'unchanged'] += 1;
     });
     return counts;

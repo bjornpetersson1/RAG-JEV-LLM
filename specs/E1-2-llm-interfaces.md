@@ -53,7 +53,7 @@ One TypeScript interface per LLM role (Tagger, QueryTranslator, Judge, Generator
 
 - [x] `backend/src/llm/types.ts`: role names, `Tag`, `Chunk`, and the four role interfaces:
   - `Tagger.tag(chunkText, vocabulary) → Promise<string[]>`
-  - `QueryTranslator.translate(instruction, vocabulary) → Promise<string[]>`
+  - `QueryTranslator.translate(instruction, vocabulary) → Promise<string[]>` (**superseded by E4-4**: it returns a `Translation` with scored tags, areas and usage, and takes `{ exclude }`)
   - `Judge.judge(instruction, chunk) → Promise<{ relevant: boolean; score: number }>` (score 0–1)
   - `Generator.generate({ template, instruction, chunks }) → Promise<{ text: string; references: string[] }>` (references are chunk ids)
 - [x] Low-level `LlmClient` interface: one call taking system prompt, user content and a JSON schema, returning the parsed JSON plus usage.

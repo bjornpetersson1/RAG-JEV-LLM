@@ -4,9 +4,22 @@ import { join } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
 import { openDatabase } from './database.js';
-import { migrate, migrationLabel, readMigrations } from './migrations.js';
+import { migrate, migrationLabel, pendingMigrations, readMigrations } from './migrations.js';
 
-const SCHEMA_TABLES = ['chunk_tags', 'chunks', 'documents', 'schema_migrations', 'tags'];
+const SCHEMA_TABLES = [
+  'chunk_tags',
+  'chunks',
+  // The full-text index (E4-3) and the shadow tables FTS5 keeps for it.
+  'chunks_fts',
+  'chunks_fts_config',
+  'chunks_fts_data',
+  'chunks_fts_docsize',
+  'chunks_fts_idx',
+  'documents',
+  'schema_migrations',
+  'tagging_runs',
+  'tags',
+];
 
 function tableNames(db: DatabaseSync): string[] {
   return db
@@ -50,6 +63,8 @@ describe('migrate', () => {
       '1_initial',
       '2_document_structure',
       '3_chunk_context',
+      '4_tagging',
+      '5_chunks_fts',
     ]);
     expect(tableNames(db)).toEqual(SCHEMA_TABLES);
     expect(recordedVersions(db)).toEqual([
@@ -64,7 +79,30 @@ describe('migrate', () => {
         name: 'chunk_context',
         applied_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
       },
+      { version: 4, name: 'tagging', applied_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/) },
+      {
+        version: 5,
+        name: 'chunks_fts',
+        applied_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+      },
     ]);
+  });
+
+  it('lists pending migrations without changing the database', () => {
+    const db = freshDatabase();
+    const dir = makeMigrationsDir({
+      '0001_a.sql': 'CREATE TABLE a (id INTEGER);',
+      '0002_b.sql': 'CREATE TABLE b (id INTEGER);',
+    });
+
+    expect(pendingMigrations(db, dir).map(migrationLabel)).toEqual(['1_a', '2_b']);
+    expect(tableNames(db)).toEqual([]);
+
+    migrate(db, dir);
+    expect(pendingMigrations(db, dir)).toEqual([]);
+
+    writeFileSync(join(dir, '0003_c.sql'), 'CREATE TABLE c (id INTEGER);');
+    expect(pendingMigrations(db, dir).map(migrationLabel)).toEqual(['3_c']);
   });
 
   it('is idempotent: a second run applies nothing and changes nothing', () => {

@@ -81,7 +81,98 @@ Each chunk stores:
 - `context`, the title and heading path, which later roles put in front of the text;
 - `token_count`, an estimate (characters / 3.5).
 
-Re-chunking matches chunks by `source_ref`. A chunk whose text and context are unchanged keeps its id and tags, even if its reference changed (for example `del 2/3` becoming `del 2/4`). A chunk whose text or context changed keeps its id but loses its tags, since tags are made from both. Renaming a title or heading therefore drops the tags of every chunk under it. Chunks that are no longer produced are deleted. The command prints chunks and min/median/max length per document, plus the totals.
+Re-chunking matches chunks by `source_ref`. A chunk whose text and context are unchanged keeps its id and tags, even if its reference changed (for example `del 2/3` becoming `del 2/4`). A chunk whose text or context changed keeps its id but loses its tags, since tags are made from both, and the next `index:tag` tags it again. A chunk whose only change is its reference (for example `del 2/3` becoming `del 2/4`) keeps its tags. Renaming a title or heading therefore drops the tags of every chunk under it. Chunks that are no longer produced are deleted. The command prints chunks and min/median/max length per document, plus the totals.
+
+## Tag vocabulary
+
+Search is tag-based, so every chunk is tagged from a fixed vocabulary of Swedish tags, committed in `sources/tags.json`. Each tag has:
+
+- a `slug` (lowercase `a–z`, digits and hyphens, e.g. `jamkning-36-avtl`);
+- a Swedish `label`;
+- a `description` that completes the question "Handlar texten om …?";
+- an `area`: one of `anstallning`, `uppsagning`, `konkurrens`, `sekretess`, `lon`, `arbetstid`, `semester`, `diskriminering`, `avtalsratt`, `skadestand`.
+
+`presets.employment` and `presets.nda` list the tags each document template starts from.
+
+```bash
+npm run index:vocabulary   # validate sources/tags.json and sync it into the tags table (safe to re-run)
+```
+
+The file must hold 100–300 tags, 5–30 per area, with unique slugs and labels, and 10–25 known slugs per preset. An invalid file is rejected with every problem listed, and the database is left unchanged. The sync matches tags by slug: new tags are inserted, changed ones updated, and tags removed from the file are deleted together with their chunk links. The command prints the vocabulary version, a hash of the tags' content. The tagger stores it with every chunk it tags and re-tags chunks with another version, so any edit to a tag means the whole corpus is tagged again on the next tagging run.
+
+### Tagging
+
+```bash
+npm run index:tag                  # tag every chunk not yet tagged with the current model and vocabulary
+npm run index:tag -- --limit 20    # tag at most 20 chunks, e.g. to check the cost on a sample first
+npm run index:tag -- --force       # re-tag every chunk
+```
+
+The tagger role (`LLM_TAGGER_PROVIDER`/`LLM_TAGGER_MODEL`, `claude-haiku-5-5` in `.env.example`) picks 3–8 tags per chunk from the whole vocabulary. It reads the chunk's source reference, context and text. The vocabulary is sent as a cached system prompt, so after the first call it costs about a tenth of normal input. Slugs outside the vocabulary are discarded and logged. Case and surrounding whitespace in returned slugs are ignored. When fewer than 3 valid tags come back, the tagger asks once more and uses the second answer, topped up with the first answer's tags if it still has fewer than 3. More than 8 are cut to the first 8.
+
+`index:tag` syncs the vocabulary first, then tags `TAGGER_CONCURRENCY` chunks at a time (default 4). Each chunk's tags are committed as soon as they arrive, so an interrupted run resumes where it stopped, and a re-run never creates duplicates. A chunk is skipped when it is already tagged with the current model and vocabulary version, even when it got no tags. A chunk whose tagging fails is logged and left for the next run, and the command then exits non-zero. `--force` takes untagged chunks first and then the oldest tagged ones, so repeated `--force --limit <n>` runs work through the corpus. Continue an interrupted `--force` run with `--force --limit <chunks left>`.
+
+Every chunk is logged with its tags, discarded slugs, tokens and estimated cost. The run ends with a summary (its tokens and cost include calls made for chunks that then failed): chunks tagged, skipped and failed; discarded slugs; chunks outside 3–8; tokens by kind; estimated cost in USD in total and per chunk; and the time. The summary is also stored in the `tagging_runs` table. With Haiku, a full run over the roughly 2,100 chunks is estimated at well under 1 USD. `--limit` shows the real figure on a sample.
+
+### Control report
+
+```bash
+npm run index:report   # print the control report without tagging (also printed after every index:tag)
+```
+
+The report checks the vocabulary and the tagging. `index:report` syncs the vocabulary first, as `index:tag` does. The report counts only chunks tagged with the latest run's model and the current vocabulary. It has three parts:
+
+- **Summary:**
+  - total chunks, how many are tagged and how many are not yet tagged or out of date;
+  - tagged chunks with and without tags, and those with fewer than 3;
+  - average tags per chunk with tags;
+  - tags with no chunks, and broad tags;
+  - from the latest run that tagged chunks: its time, model, vocabulary version, how many chunks it tagged, and their discarded out-of-vocabulary slugs and estimated cost.
+- **Chunks per tag:** every tag, including those with 0 chunks, by number of chunks. A tag on more than `TAG_REPORT_BROAD_SHARE` (default 0.2) of the chunks with tags is marked broad.
+- **Chunks without tags:** tagged chunks that got zero tags, with chunk id and source reference. The terminal shows the first 50.
+
+Every report is also written in full to `reports/tagging-<UTC timestamp>.md`, which is git-ignored.
+
+## Search index
+
+When the backend starts it reads `chunk_tags` and builds the in-memory tag index that `TAG_INDEX` selects: by default the inverted index, one roaring bitmap of chunk ids per tag slug. It logs `Tag index built` with the implementation, the number of chunks and tags, the build time and the memory the index keeps. The `dev` and `start` scripts run Node with `--expose-gc`, so that figure is measured after garbage collection. The server does not create or migrate the database. If the database is missing, not migrated or has no tags, the server starts with an empty index and logs a warning naming the command to run. After `index:tag`, restart the server to pick up the new tags.
+
+The index searches in three modes:
+
+- AND: chunks with every tag.
+- OR: chunks with any tag.
+- Ranked OR: chunks with at least `minMatches` of the tags (default 1), with the most matching tags first, cut to `limit` (default 200). Candidate search uses it.
+
+```bash
+npm run bench:index   # time each mode over 100,000 synthetic chunks; fails if a roaring median is 5 ms or more
+```
+
+`TAG_INDEX` chooses the implementation the server builds:
+
+- `roaring` (default): the inverted index.
+- `bloom`: a bit-sliced bloom filter. Every chunk gets a signature of `BLOOM_BITS` bits (default 128), with `BLOOM_HASHES` bits set per tag (default 6). A tag's candidates are the chunks whose signature has all its bits. With `BLOOM_VERIFY=true` (the default), candidates are checked against the chunk's exact tags, so the results equal the inverted index's. With `false`, false positives remain. The startup log shows the settings and the theoretical false positive rate per tag test.
+
+The benchmark generates the same seeded data every run (3–8 tags per chunk out of 183, with a few broad tags and many narrow ones). It runs 20 queries of 3 tags and 20 of 5 tags through 25 rounds against three indexes: the inverted index, the bloom filter with verification and the bloom filter without it. `BLOOM_BITS` and `BLOOM_HASHES` come from `.env`; `BLOOM_VERIFY` does not apply, since the bench runs both variants. For each index the benchmark prints the build time, the memory kept and the median and p95 time per mode. It then compares the unverified bloom filter's false positive rate per tag test with the theoretical one, and shows the share of wrong hits per mode. Only the inverted index must stay under 5 ms.
+
+### Full-text fallback
+
+Migration `0005_chunks_fts` adds an SQLite FTS5 index over each chunk's text, context and source reference, kept in step with `chunks` by triggers. Its tokenizer folds case but keeps å, ä and ö apart from a and o. The full-text query takes the words of the instruction and the chosen tags' labels, and drops common Swedish stop words and words shorter than 3 characters. Numbers must match exactly. Every other word becomes a prefix term, so inflected forms match: a word of 6 letters or more is first cut by up to 3 letters, keeping at least 5 (`uppsägningen` → `uppsägnin*`). The terms are joined with OR and ranked by bm25.
+
+Candidate search (`createCandidateSearch`; the query flow in E5/E6 will call it, no HTTP route uses it yet) takes the tag index's ranked hits. With fewer than `MIN_TAG_CANDIDATES` (default 10), full-text hits not already found are appended, up to `MAX_CANDIDATES` (default 30). Each candidate records whether it came from `tag` or `fts`, and every search logs whether the fallback ran and how many candidates it added. The modes `fts` (full text only) and `tags` (tags only) are baselines for the evaluation.
+
+## Query translation
+
+A lawyer's instruction becomes vocabulary tags for the search (`translateQuery`; the query flow in E5/E6 will call it, the server so far only validates the settings). `QUERY_TRANSLATOR_IMPL` chooses how:
+
+- `llm` (default): the query translator's LLM, with the whole vocabulary in a cached Swedish system prompt. It returns at most 8 slugs, and unknown or repeated ones are dropped.
+- `jev`: TypeSafe's JEV model, with the instruction as the state.
+  - A Choice question ("Vilket rättsområde handlar texten om?") scores the 10 areas.
+  - The tags of the up to 3 most probable areas then get one Noul question each ("Handlar texten om <beskrivning>?"), one call per area, in parallel.
+  - Tags scoring at least `QUERY_TRANSLATOR_THRESHOLD` (default 0.5) are kept, highest first, at most 8.
+  - The result also carries every tag's score and the area scores, for the UI.
+  - JEV needs `JEV_API_KEY`. `JEV_BASE_URL`, `JEV_MODEL` and `JEV_TIMEOUT_MS` are optional, and calls are not retried.
+
+Choosing a template (`employment` or `nda`) adds its preset tags from `sources/tags.json`. A template without free text uses only its presets and calls no translator. With free text, the presets come first, followed by up to 8 translated tags that are not presets. Without free text and without a template, the result is no tags. Every translation reports the time it took and, when the translator gives it, the tokens it used.
 
 ## LLM configuration
 

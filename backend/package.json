@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch --env-file-if-exists=../.env src/server.ts",
-    "start": "node --env-file-if-exists=../.env dist/server.js",
+    "dev": "tsx watch --expose-gc --env-file-if-exists=../.env src/server.ts",
+    "start": "node --expose-gc --env-file-if-exists=../.env dist/server.js",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -13,10 +13,15 @@
     "data:fetch": "tsx --env-file-if-exists=../.env src/ingest/cli.ts fetch",
     "data:import:laws": "tsx --env-file-if-exists=../.env src/ingest/cli.ts import:laws",
     "data:import:rulings": "tsx --env-file-if-exists=../.env src/ingest/cli.ts import:rulings",
-    "data:chunk": "tsx --env-file-if-exists=../.env src/ingest/cli.ts chunk"
+    "data:chunk": "tsx --env-file-if-exists=../.env src/ingest/cli.ts chunk",
+    "index:vocabulary": "tsx --env-file-if-exists=../.env src/tagging/cli.ts vocabulary",
+    "index:tag": "tsx --env-file-if-exists=../.env src/tagging/cli.ts tag",
+    "index:report": "tsx --env-file-if-exists=../.env src/tagging/cli.ts report",
+    "bench:index": "tsx --expose-gc --env-file-if-exists=../.env src/search/bench.ts"
   },
   "dependencies": {
-    "fastify": "^5.12.5"
+    "fastify": "^5.12.5",
+    "roaring-wasm": "^1.1.0"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",

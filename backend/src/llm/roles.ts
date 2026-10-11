@@ -1,8 +1,29 @@
-// LLM-backed role implementations. The prompts are placeholders that only make the wiring work;
-// the real prompts come in E3-2 (tagger), E4-4 (query translator), E5-1 (judge) and E6 (generator).
+// LLM-backed role implementations. The tagger (E3-2) and query translator (E4-4) prompts are real;
+// the others are placeholders that only make the wiring work, replaced in E5-1 (judge) and E6
+// (generator).
 
-import { LlmError, type JsonSchema, type LlmClient } from './client.js';
-import type { Chunk, Generator, Judge, QueryTranslator, Tag, Tagger } from './types.js';
+import { LlmError, sumUsage, type JsonSchema, type LlmClient, type LlmUsage } from './client.js';
+import type {
+  Chunk,
+  Generator,
+  Judge,
+  QueryTranslator,
+  Tag,
+  Tagger,
+  TaggingInput,
+  TaggingResult,
+} from './types.js';
+import { memoizeByIdentity } from '../memo.js';
+import { groupByArea } from '../tagging/vocabulary.js';
+
+/** How many tags the tagger asks for per chunk. */
+export const TAGS_PER_CHUNK = { min: 3, max: 8 } as const;
+
+/** At most this many tags are translated from one instruction, as many as a chunk gets at most. */
+export const MAX_QUERY_TAGS = TAGS_PER_CHUNK.max;
+
+// A list of slugs is short; the margin covers a model that explains itself despite the schema.
+const TAGS_MAX_TOKENS = 2000;
 
 const TAGS_SCHEMA: JsonSchema = {
   type: 'object',
@@ -28,22 +49,175 @@ const DRAFT_SCHEMA: JsonSchema = {
   additionalProperties: false,
 };
 
+/**
+ * Asks for 3–8 tags per chunk with the whole vocabulary in a cached system prompt. Unknown slugs
+ * are discarded; when fewer than the minimum remain, one more call says which slugs were invalid.
+ */
 export function createLlmTagger(client: LlmClient): Tagger {
-  const pickTags = createTagPicker(
-    client,
-    'Pick the tags from the vocabulary that describe the text.',
-  );
-  return { tag: (chunkText, vocabulary) => pickTags(`Text:\n${chunkText}`, vocabulary) };
+  // A run passes the same vocabulary for every chunk; build its prompt and slug set once.
+  const prepare = memoizeByIdentity((vocabulary: readonly Tag[]) => ({
+    system: taggerSystemPrompt(vocabulary),
+    known: slugSet(vocabulary),
+  }));
+
+  return {
+    async tag(chunk, vocabulary) {
+      const { system, known } = prepare(vocabulary);
+      const usages: LlmUsage[] = [];
+      const ask = async (prompt: string) => {
+        const { data, usage } = await client.complete({
+          system,
+          prompt,
+          schema: TAGS_SCHEMA,
+          maxTokens: TAGS_MAX_TOKENS,
+          cacheSystem: true,
+        });
+        usages.push(usage);
+        return sortTags(readStringArray(data, 'tags'), known);
+      };
+
+      try {
+        const first = await ask(taggerPrompt(chunk));
+        if (first.tags.length >= TAGS_PER_CHUNK.min) {
+          return { ...first, retried: false, usage: sumUsage(usages) };
+        }
+        const second = await ask(taggerRetryPrompt(chunk, first));
+        // The retry's answer leads; the first answer's tags fill up when it still has too few.
+        const tags =
+          second.tags.length >= TAGS_PER_CHUNK.min
+            ? second.tags
+            : [...new Set([...second.tags, ...first.tags])];
+        return {
+          tags,
+          discarded: [...new Set([...first.discarded, ...second.discarded])],
+          overLimit: second.overLimit,
+          retried: true,
+          usage: sumUsage(usages),
+        };
+      } catch (error) {
+        // Calls that succeeded before the failure were billed too; carry their tokens with it.
+        if (error instanceof LlmError && error.usage) usages.push(error.usage);
+        throw new LlmError(error instanceof Error ? error.message : String(error), {
+          retryable: false,
+          usage: sumUsage(usages),
+        });
+      }
+    },
+  };
 }
 
-export function createLlmQueryTranslator(client: LlmClient): QueryTranslator {
-  const pickTags = createTagPicker(
-    client,
-    'Pick the tags from the vocabulary that a search for the instruction should use.',
-  );
+/** The vocabulary grouped by area, one `slug: label – description` line per tag. */
+function vocabularySections(vocabulary: readonly Tag[]): string {
+  return [...groupByArea(vocabulary)]
+    .map(([area, tags]) =>
+      [`## ${area}`, ...tags.map((tag) => `- ${tag.slug}: ${tag.label} – ${tag.description}`)].join(
+        '\n',
+      ),
+    )
+    .join('\n\n');
+}
+
+function taggerSystemPrompt(vocabulary: readonly Tag[]): string {
+  return [
+    'Du taggar avsnitt ur svenska lagar och domar om anställning, avtal och sekretess, så att de ' +
+      'kan hittas när en jurist skriver ett anställningsavtal eller ett sekretessavtal.',
+    `Välj ${TAGS_PER_CHUNK.min}–${TAGS_PER_CHUNK.max} taggar ur vokabulären nedan som beskriver ` +
+      'vad avsnittet handlar om. Regler:',
+    '- Använd bara slugs exakt som de står i vokabulären.',
+    '- Välj det som avsnittet faktiskt reglerar eller prövar, inte ämnen som bara nämns i förbigående.',
+    '- Föredra specifika taggar framför allmänna när båda passar.',
+    '- Lista de viktigaste taggarna först.',
+    '',
+    'Vokabulär, grupperad per område (slug: etikett – beskrivning):',
+    '',
+    vocabularySections(vocabulary),
+  ].join('\n');
+}
+
+function taggerPrompt(chunk: TaggingInput): string {
+  return [
+    chunk.source && `Källa: ${chunk.source}`,
+    chunk.context && `Sammanhang: ${chunk.context}`,
+    `Text:\n${chunk.text}`,
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+function taggerRetryPrompt(
+  chunk: TaggingInput,
+  previous: Pick<TaggingResult, 'tags' | 'discarded'>,
+): string {
+  const problem =
+    previous.discarded.length > 0
+      ? `Dessa slugs finns inte i vokabulären: ${previous.discarded.join(', ')}.`
+      : 'Det var för få taggar.';
+  return [
+    taggerPrompt(chunk),
+    '',
+    `Ditt förra svar gav ${previous.tags.length} giltiga taggar. ${problem}`,
+    `Välj ${TAGS_PER_CHUNK.min}–${TAGS_PER_CHUNK.max} slugs som finns i vokabulären.`,
+  ].join('\n');
+}
+
+/** Splits the answers into kept tags (unique, in order, at most the maximum) and the rest. */
+function sortTags(
+  slugs: string[],
+  known: ReadonlySet<string>,
+): Pick<TaggingResult, 'tags' | 'discarded' | 'overLimit'> {
+  const { valid, invalid } = splitSlugs(slugs, known);
   return {
-    translate: (instruction, vocabulary) => pickTags(`Instruction:\n${instruction}`, vocabulary),
+    tags: valid.slice(0, TAGS_PER_CHUNK.max),
+    discarded: invalid,
+    overLimit: valid.slice(TAGS_PER_CHUNK.max),
   };
+}
+
+/**
+ * Asks for the tags a search for the instruction should use, with the whole vocabulary in a cached
+ * system prompt; unknown and repeated slugs are dropped and at most {@link MAX_QUERY_TAGS} kept.
+ */
+export function createLlmQueryTranslator(client: LlmClient): QueryTranslator {
+  // A server passes the same vocabulary on every query; build its prompt and slug set once.
+  const prepare = memoizeByIdentity((vocabulary: readonly Tag[]) => ({
+    system: queryTranslatorSystemPrompt(vocabulary),
+    known: slugSet(vocabulary),
+  }));
+
+  return {
+    async translate(instruction, vocabulary, { exclude } = {}) {
+      const { system, known } = prepare(vocabulary);
+      const { data, usage } = await client.complete({
+        system,
+        prompt: `Uppdrag:\n${instruction}`,
+        schema: TAGS_SCHEMA,
+        maxTokens: TAGS_MAX_TOKENS,
+        cacheSystem: true,
+      });
+      const tags = splitSlugs(readStringArray(data, 'tags'), known).valid.filter(
+        (slug) => !exclude?.has(slug),
+      );
+      return { tags: tags.slice(0, MAX_QUERY_TAGS).map((slug) => ({ slug })), usage };
+    },
+  };
+}
+
+function queryTranslatorSystemPrompt(vocabulary: readonly Tag[]): string {
+  return [
+    'En jurist beskriver ett uppdrag, till exempel ett anställningsavtal eller ett sekretessavtal ' +
+      'som ska skrivas. Avsnitt ur svenska lagar och domar har taggats med vokabulären nedan, och ' +
+      'taggarna du väljer används för att hitta de avsnitt som juristen behöver.',
+    `Välj högst ${MAX_QUERY_TAGS} taggar ur vokabulären. Regler:`,
+    '- Använd bara slugs exakt som de står i vokabulären.',
+    '- Välj taggar för det uppdraget faktiskt gäller, inklusive frågor som avtalet behöver reglera.',
+    '- Föredra specifika taggar framför allmänna när båda passar.',
+    '- Lista de viktigaste taggarna först.',
+    '- Välj inga taggar alls om uppdraget inte har med vokabulären att göra.',
+    '',
+    'Vokabulär, grupperad per område (slug: etikett – beskrivning):',
+    '',
+    vocabularySections(vocabulary),
+  ].join('\n');
 }
 
 export function createLlmJudge(client: LlmClient): Judge {
@@ -85,23 +259,6 @@ export function createLlmGenerator(client: LlmClient): Generator {
   };
 }
 
-function createTagPicker(client: LlmClient, system: string) {
-  return async (input: string, vocabulary: readonly Tag[]): Promise<string[]> => {
-    const { data } = await client.complete({
-      system,
-      prompt: `Vocabulary:\n${formatVocabulary(vocabulary)}\n\n${input}`,
-      schema: TAGS_SCHEMA,
-    });
-    return keepVocabularyTags(readStringArray(data, 'tags'), vocabulary);
-  };
-}
-
-function formatVocabulary(vocabulary: readonly Tag[]): string {
-  return vocabulary
-    .map((tag) => (tag.description ? `- ${tag.name}: ${tag.description}` : `- ${tag.name}`))
-    .join('\n');
-}
-
 function formatChunks(chunks: readonly Chunk[]): string {
   return chunks
     .map((chunk) => {
@@ -111,9 +268,20 @@ function formatChunks(chunks: readonly Chunk[]): string {
     .join('\n\n');
 }
 
-function keepVocabularyTags(tags: string[], vocabulary: readonly Tag[]): string[] {
-  const known = new Set(vocabulary.map((tag) => tag.name));
-  return [...new Set(tags.filter((tag) => known.has(tag)))];
+function slugSet(vocabulary: readonly Tag[]): ReadonlySet<string> {
+  return new Set(vocabulary.map((tag) => tag.slug));
+}
+
+/**
+ * The slugs that are and are not in `known`, each once, in their first order. Case and surrounding
+ * whitespace are ignored, since vocabulary slugs are lower case and never padded.
+ */
+function splitSlugs(slugs: string[], known: ReadonlySet<string>) {
+  const unique = [...new Set(slugs.map((slug) => slug.trim().toLowerCase()))];
+  return {
+    valid: unique.filter((slug) => known.has(slug)),
+    invalid: unique.filter((slug) => !known.has(slug)),
+  };
 }
 
 function readField(data: unknown, field: string): unknown {

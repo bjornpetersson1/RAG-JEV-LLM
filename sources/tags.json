@@ -1,0 +1,1156 @@
+{
+  "tags": [
+    {
+      "slug": "anstallningsavtal",
+      "label": "Anställningsavtal",
+      "description": "ingående och innehåll i ett anställningsavtal mellan arbetsgivare och arbetstagare",
+      "area": "anstallning"
+    },
+    {
+      "slug": "tillsvidareanstallning",
+      "label": "Tillsvidareanställning",
+      "description": "anställning som gäller tills vidare utan bestämd sluttid",
+      "area": "anstallning"
+    },
+    {
+      "slug": "provanstallning",
+      "label": "Provanställning",
+      "description": "provanställning och vad som gäller när den avbryts eller övergår i tillsvidareanställning",
+      "area": "anstallning"
+    },
+    {
+      "slug": "visstidsanstallning",
+      "label": "Visstidsanställning",
+      "description": "anställning för en bestämd tid och när sådan anställning är tillåten",
+      "area": "anstallning"
+    },
+    {
+      "slug": "sarskild-visstidsanstallning",
+      "label": "Särskild visstidsanställning",
+      "description": "särskild visstidsanställning och när den övergår i tillsvidareanställning",
+      "area": "anstallning"
+    },
+    {
+      "slug": "vikariat",
+      "label": "Vikariat",
+      "description": "anställning som vikarie för en frånvarande arbetstagare",
+      "area": "anstallning"
+    },
+    {
+      "slug": "sasongsanstallning",
+      "label": "Säsongsanställning",
+      "description": "anställning för arbete som bara pågår under en viss säsong",
+      "area": "anstallning"
+    },
+    {
+      "slug": "deltidsanstallning",
+      "label": "Deltidsanställning",
+      "description": "anställning på deltid och villkoren för deltidsanställda",
+      "area": "anstallning"
+    },
+    {
+      "slug": "foretradesratt-ateranstallning",
+      "label": "Företrädesrätt till återanställning",
+      "description": "arbetstagares företrädesrätt till ny anställning efter uppsägning på grund av arbetsbrist",
+      "area": "anstallning"
+    },
+    {
+      "slug": "foretradesratt-hogre-sysselsattning",
+      "label": "Företrädesrätt till högre sysselsättningsgrad",
+      "description": "deltidsanställdas företrädesrätt till anställning med högre sysselsättningsgrad",
+      "area": "anstallning"
+    },
+    {
+      "slug": "skriftlig-information-villkor",
+      "label": "Information om anställningsvillkor",
+      "description": "arbetsgivarens skyldighet att skriftligen informera arbetstagaren om villkoren för anställningen",
+      "area": "anstallning"
+    },
+    {
+      "slug": "arbetstagarbegreppet",
+      "label": "Arbetstagarbegreppet",
+      "description": "frågan om någon är arbetstagare eller självständig uppdragstagare",
+      "area": "anstallning"
+    },
+    {
+      "slug": "konsultuppdrag",
+      "label": "Konsultuppdrag",
+      "description": "uppdragsavtal med konsult eller egenföretagare i stället för anställning",
+      "area": "anstallning"
+    },
+    {
+      "slug": "inhyrning-personal",
+      "label": "Inhyrning av personal",
+      "description": "uthyrning av arbetstagare genom bemanningsföretag och kundföretagets skyldigheter",
+      "area": "anstallning"
+    },
+    {
+      "slug": "arbetsskyldighet",
+      "label": "Arbetsskyldighet",
+      "description": "vilka arbetsuppgifter arbetstagaren är skyldig att utföra inom ramen för anställningen",
+      "area": "anstallning"
+    },
+    {
+      "slug": "omplacering",
+      "label": "Omplacering",
+      "description": "arbetsgivarens rätt att flytta arbetstagaren till andra arbetsuppgifter eller en annan arbetsplats",
+      "area": "anstallning"
+    },
+    {
+      "slug": "verksamhetsovergang",
+      "label": "Verksamhetsövergång",
+      "description": "övergång av en verksamhet till en ny arbetsgivare och att anställningsavtalen följer med",
+      "area": "anstallning"
+    },
+    {
+      "slug": "tilltrade",
+      "label": "Tillträde",
+      "description": "när anställningen börjar och vad som gäller mellan avtalets ingående och tillträdet",
+      "area": "anstallning"
+    },
+    {
+      "slug": "anstallningstid",
+      "label": "Anställningstid",
+      "description": "hur anställningstid beräknas, till exempel för uppsägningstid och turordning",
+      "area": "anstallning"
+    },
+    {
+      "slug": "kollektivavtal",
+      "label": "Kollektivavtal",
+      "description": "kollektivavtal och hur de påverkar villkoren i ett enskilt anställningsavtal",
+      "area": "anstallning"
+    },
+    {
+      "slug": "forhandlingsskyldighet",
+      "label": "Förhandlingsskyldighet",
+      "description": "arbetsgivarens skyldighet att förhandla med arbetstagarorganisation före viktiga beslut",
+      "area": "anstallning"
+    },
+    {
+      "slug": "uppsagning-arbetsgivare",
+      "label": "Uppsägning från arbetsgivaren",
+      "description": "arbetsgivarens uppsägning av en anställning",
+      "area": "uppsagning"
+    },
+    {
+      "slug": "uppsagning-arbetstagare",
+      "label": "Uppsägning från arbetstagaren",
+      "description": "arbetstagarens egen uppsägning av anställningen",
+      "area": "uppsagning"
+    },
+    {
+      "slug": "saklig-grund",
+      "label": "Saklig grund",
+      "description": "kravet på saklig grund för att arbetsgivaren ska få säga upp en arbetstagare",
+      "area": "uppsagning"
+    },
+    {
+      "slug": "arbetsbrist",
+      "label": "Arbetsbrist",
+      "description": "uppsägning på grund av arbetsbrist, till exempel vid omorganisation eller nedskärning",
+      "area": "uppsagning"
+    },
+    {
+      "slug": "personliga-skal",
+      "label": "Personliga skäl",
+      "description": "uppsägning på grund av förhållanden som hänför sig till arbetstagaren personligen",
+      "area": "uppsagning"
+    },
+    {
+      "slug": "avskedande",
+      "label": "Avskedande",
+      "description": "avskedande när arbetstagaren grovt har åsidosatt sina åligganden mot arbetsgivaren",
+      "area": "uppsagning"
+    },
+    {
+      "slug": "uppsagningstid",
+      "label": "Uppsägningstid",
+      "description": "uppsägningstidens längd och vad som gäller under den",
+      "area": "uppsagning"
+    },
+    {
+      "slug": "arbetsbefrielse",
+      "label": "Arbetsbefrielse",
+      "description": "arbetsbefrielse under uppsägningstiden och avräkning av annan inkomst",
+      "area": "uppsagning"
+    },
+    {
+      "slug": "turordning",
+      "label": "Turordning",
+      "description": "turordningsregler vid uppsägning på grund av arbetsbrist",
+      "area": "uppsagning"
+    },
+    {
+      "slug": "omplaceringsskyldighet",
+      "label": "Omplaceringsskyldighet",
+      "description": "arbetsgivarens skyldighet att pröva omplacering innan en uppsägning",
+      "area": "uppsagning"
+    },
+    {
+      "slug": "varsel-och-besked",
+      "label": "Varsel och besked",
+      "description": "underrättelse, varsel och skriftligt besked som ska lämnas före eller vid uppsägning eller avskedande",
+      "area": "uppsagning"
+    },
+    {
+      "slug": "ogiltigforklaring",
+      "label": "Ogiltigförklaring",
+      "description": "talan om att en uppsägning ska förklaras ogiltig eller att ett avskedande ska ses som en uppsägning",
+      "area": "uppsagning"
+    },
+    {
+      "slug": "avstangning",
+      "label": "Avstängning",
+      "description": "avstängning från arbetet under en utredning eller pågående tvist",
+      "area": "uppsagning"
+    },
+    {
+      "slug": "talefrister",
+      "label": "Talefrister",
+      "description": "frister för att underrätta motparten och väcka talan i tvister om uppsägning och avskedande",
+      "area": "uppsagning"
+    },
+    {
+      "slug": "illojalitet-som-grund",
+      "label": "Illojalitet som grund för avsked",
+      "description": "illojalt beteende mot arbetsgivaren som grund för uppsägning eller avskedande",
+      "area": "uppsagning"
+    },
+    {
+      "slug": "samarbetssvarigheter",
+      "label": "Samarbetssvårigheter",
+      "description": "samarbetssvårigheter som skäl för uppsägning",
+      "area": "uppsagning"
+    },
+    {
+      "slug": "misskotsamhet",
+      "label": "Misskötsamhet",
+      "description": "misskötsamhet, varningar och upprepade regelbrott som grund för uppsägning",
+      "area": "uppsagning"
+    },
+    {
+      "slug": "brott-mot-arbetsgivaren",
+      "label": "Brott mot arbetsgivaren",
+      "description": "brottslig gärning mot arbetsgivaren, till exempel stöld eller trolöshet, som grund för avsked",
+      "area": "uppsagning"
+    },
+    {
+      "slug": "anstallningens-upphorande",
+      "label": "Anställningens upphörande",
+      "description": "hur en anställning upphör, till exempel genom avtal, uppsägning eller att den bestämda tiden löper ut",
+      "area": "uppsagning"
+    },
+    {
+      "slug": "avgangsvederlag",
+      "label": "Avgångsvederlag",
+      "description": "avgångsvederlag och överenskommelser om att avsluta anställningen",
+      "area": "uppsagning"
+    },
+    {
+      "slug": "konkurrensklausul",
+      "label": "Konkurrensklausul",
+      "description": "avtalsvillkor som begränsar arbetstagarens rätt att konkurrera med arbetsgivaren efter anställningen",
+      "area": "konkurrens"
+    },
+    {
+      "slug": "konkurrensklausul-skalighet",
+      "label": "Skälighet av konkurrensklausul",
+      "description": "prövningen av om en konkurrensklausul är oskälig och därför inte bindande",
+      "area": "konkurrens"
+    },
+    {
+      "slug": "overenskommelse-1969",
+      "label": "1969 års överenskommelse",
+      "description": "1969 års överenskommelse om begränsning av användningen av konkurrensklausuler i tjänstemäns anställningsavtal",
+      "area": "konkurrens"
+    },
+    {
+      "slug": "bundenhetstid",
+      "label": "Bundenhetstid",
+      "description": "hur länge en konkurrensbegränsning gäller efter att anställningen har upphört",
+      "area": "konkurrens"
+    },
+    {
+      "slug": "ersattning-bundenhetstid",
+      "label": "Ersättning under bundenhetstid",
+      "description": "ersättning till arbetstagaren för den tid en konkurrensklausul hindrar ny anställning",
+      "area": "konkurrens"
+    },
+    {
+      "slug": "geografisk-begransning",
+      "label": "Geografisk begränsning",
+      "description": "konkurrensbegränsningens geografiska omfattning",
+      "area": "konkurrens"
+    },
+    {
+      "slug": "varvningsforbud",
+      "label": "Värvningsförbud",
+      "description": "förbud mot att värva arbetsgivarens anställda till en ny arbetsgivare",
+      "area": "konkurrens"
+    },
+    {
+      "slug": "kundklausul",
+      "label": "Kundklausul",
+      "description": "förbud mot att bearbeta, ta kontakt med eller ta över arbetsgivarens kunder",
+      "area": "konkurrens"
+    },
+    {
+      "slug": "konkurrerande-verksamhet",
+      "label": "Konkurrerande verksamhet",
+      "description": "att arbetstagaren startar eller arbetar i en verksamhet som konkurrerar med arbetsgivaren",
+      "area": "konkurrens"
+    },
+    {
+      "slug": "konkurrens-under-anstallning",
+      "label": "Konkurrens under anställningen",
+      "description": "konkurrerande verksamhet medan anställningen fortfarande består, även under uppsägningstiden",
+      "area": "konkurrens"
+    },
+    {
+      "slug": "forberedelse-konkurrens",
+      "label": "Förberedelse av konkurrerande verksamhet",
+      "description": "förberedelser under anställningen för att starta eller gå över till en konkurrerande verksamhet",
+      "area": "konkurrens"
+    },
+    {
+      "slug": "skyddsvart-intresse",
+      "label": "Arbetsgivarens skyddsvärda intresse",
+      "description": "arbetsgivarens berättigade intresse av att skydda kunskap, kunder eller företagshemligheter genom konkurrensbegränsning",
+      "area": "konkurrens"
+    },
+    {
+      "slug": "konkurrensklausul-vid-uppsagning",
+      "label": "Konkurrensklausul vid arbetsgivarens uppsägning",
+      "description": "om en konkurrensklausul gäller när det är arbetsgivaren som har avslutat anställningen",
+      "area": "konkurrens"
+    },
+    {
+      "slug": "ratt-till-arbetsresultat",
+      "label": "Rätt till arbetsresultat",
+      "description": "arbetsgivarens rätt till arbetstagarens arbetsresultat, uppfinningar och upphovsrätt",
+      "area": "konkurrens"
+    },
+    {
+      "slug": "bisyssla",
+      "label": "Bisyssla",
+      "description": "arbetstagarens bisysslor och arbetsgivarens rätt att begränsa dem",
+      "area": "konkurrens"
+    },
+    {
+      "slug": "sekretessklausul",
+      "label": "Sekretessklausul",
+      "description": "avtalsvillkor om tystnadsplikt för information som en part har fått del av",
+      "area": "sekretess"
+    },
+    {
+      "slug": "sekretessavtal",
+      "label": "Sekretessavtal",
+      "description": "ett fristående sekretessavtal mellan företag, eller mellan företag och person, om skydd för konfidentiell information",
+      "area": "sekretess"
+    },
+    {
+      "slug": "omsesidig-sekretess",
+      "label": "Ömsesidig eller ensidig sekretess",
+      "description": "om tystnadsplikten i ett avtal gäller bara den ena parten eller båda parterna",
+      "area": "sekretess"
+    },
+    {
+      "slug": "tystnadsplikt",
+      "label": "Tystnadsplikt",
+      "description": "arbetstagarens tystnadsplikt om arbetsgivarens förhållanden under och efter anställningen",
+      "area": "sekretess"
+    },
+    {
+      "slug": "foretagshemlighet",
+      "label": "Företagshemlighet",
+      "description": "vad som är en företagshemlighet enligt lagen om företagshemligheter",
+      "area": "sekretess"
+    },
+    {
+      "slug": "obehorigt-angrepp",
+      "label": "Obehörigt angrepp på företagshemlighet",
+      "description": "obehörigt anskaffande, utnyttjande eller röjande av en företagshemlighet",
+      "area": "sekretess"
+    },
+    {
+      "slug": "lojalitetsplikt",
+      "label": "Lojalitetsplikt",
+      "description": "arbetstagarens allmänna lojalitetsplikt mot arbetsgivaren",
+      "area": "sekretess"
+    },
+    {
+      "slug": "konfidentiell-information",
+      "label": "Konfidentiell information",
+      "description": "vilken information som räknas som konfidentiell enligt ett avtal",
+      "area": "sekretess"
+    },
+    {
+      "slug": "sekretessens-varaktighet",
+      "label": "Sekretessens varaktighet",
+      "description": "hur länge tystnadsplikten gäller, även efter att avtalet eller anställningen har upphört",
+      "area": "sekretess"
+    },
+    {
+      "slug": "undantag-fran-sekretess",
+      "label": "Undantag från sekretess",
+      "description": "undantag från tystnadsplikten, till exempel för allmänt känd information eller uppgiftsskyldighet mot myndighet",
+      "area": "sekretess"
+    },
+    {
+      "slug": "aterlamnande-av-information",
+      "label": "Återlämnande av information",
+      "description": "skyldigheten att lämna tillbaka eller förstöra handlingar och information när avtalet eller anställningen upphör",
+      "area": "sekretess"
+    },
+    {
+      "slug": "andamalsbegransning",
+      "label": "Ändamålsbegränsning",
+      "description": "att konfidentiell information bara får användas för ett visst bestämt ändamål",
+      "area": "sekretess"
+    },
+    {
+      "slug": "vidareinformation",
+      "label": "Vidarelämnande av information",
+      "description": "vilka personer, till exempel anställda och rådgivare, som mottagaren får lämna konfidentiell information vidare till",
+      "area": "sekretess"
+    },
+    {
+      "slug": "visselblasning",
+      "label": "Visselblåsning",
+      "description": "rätten att avslöja missförhållanden eller brott trots tystnadsplikt",
+      "area": "sekretess"
+    },
+    {
+      "slug": "kundregister",
+      "label": "Kundregister",
+      "description": "kundregister och kunduppgifter som skyddad information",
+      "area": "sekretess"
+    },
+    {
+      "slug": "tekniskt-kunnande",
+      "label": "Tekniskt kunnande",
+      "description": "teknisk information, know-how och tillverkningsmetoder som skyddas mot spridning",
+      "area": "sekretess"
+    },
+    {
+      "slug": "erfarenhet-och-skicklighet",
+      "label": "Allmän erfarenhet och skicklighet",
+      "description": "arbetstagarens rätt att efter anställningen använda sin allmänna erfarenhet och yrkesskicklighet",
+      "area": "sekretess"
+    },
+    {
+      "slug": "hemlighallande-atgarder",
+      "label": "Åtgärder för att hålla information hemlig",
+      "description": "de åtgärder innehavaren har vidtagit för att hålla informationen hemlig",
+      "area": "sekretess"
+    },
+    {
+      "slug": "uppdragstagares-sekretess",
+      "label": "Sekretess för uppdragstagare",
+      "description": "tystnadsplikt för konsulter, uppdragstagare och affärspartner",
+      "area": "sekretess"
+    },
+    {
+      "slug": "foretagsspioneri",
+      "label": "Företagsspioneri",
+      "description": "straffansvar för företagsspioneri och olovlig befattning med företagshemlighet",
+      "area": "sekretess"
+    },
+    {
+      "slug": "personuppgifter",
+      "label": "Personuppgifter",
+      "description": "behandling av personuppgifter, till exempel om anställda, enligt dataskyddsförordningen och dataskyddslagen",
+      "area": "sekretess"
+    },
+    {
+      "slug": "lon",
+      "label": "Lön",
+      "description": "lön och lönevillkor i anställningen",
+      "area": "lon"
+    },
+    {
+      "slug": "lonesattning",
+      "label": "Lönesättning",
+      "description": "hur lönen bestäms och ändras",
+      "area": "lon"
+    },
+    {
+      "slug": "lonerevision",
+      "label": "Lönerevision",
+      "description": "återkommande översyn och höjning av lön",
+      "area": "lon"
+    },
+    {
+      "slug": "provision",
+      "label": "Provision",
+      "description": "provision och rörlig lön kopplad till försäljning eller resultat",
+      "area": "lon"
+    },
+    {
+      "slug": "bonus",
+      "label": "Bonus",
+      "description": "bonus och annan resultatbaserad ersättning",
+      "area": "lon"
+    },
+    {
+      "slug": "formaner",
+      "label": "Förmåner",
+      "description": "förmåner utöver lön, till exempel bil, telefon eller friskvård",
+      "area": "lon"
+    },
+    {
+      "slug": "pension",
+      "label": "Pension",
+      "description": "tjänstepension och pensionsvillkor",
+      "area": "lon"
+    },
+    {
+      "slug": "forsakringar",
+      "label": "Försäkringar",
+      "description": "försäkringar för anställda, till exempel sjuk-, liv- och olycksfallsförsäkring",
+      "area": "lon"
+    },
+    {
+      "slug": "overtidsersattning",
+      "label": "Övertidsersättning",
+      "description": "ersättning för övertidsarbete eller avtal om att övertid ingår i lönen",
+      "area": "lon"
+    },
+    {
+      "slug": "reseersattning",
+      "label": "Utlägg och reseersättning",
+      "description": "ersättning för utlägg, resor och traktamente",
+      "area": "lon"
+    },
+    {
+      "slug": "lonefordran",
+      "label": "Lönefordran",
+      "description": "arbetstagarens krav på lön som inte har betalats ut",
+      "area": "lon"
+    },
+    {
+      "slug": "aterbetalning-av-lon",
+      "label": "Återbetalning av lön",
+      "description": "krav på återbetalning av lön eller förmåner som betalats ut felaktigt",
+      "area": "lon"
+    },
+    {
+      "slug": "kvittning-mot-lon",
+      "label": "Kvittning mot lön",
+      "description": "arbetsgivarens rätt att kvitta egna fordringar mot arbetstagarens lön",
+      "area": "lon"
+    },
+    {
+      "slug": "loneutbetalning",
+      "label": "Löneutbetalning",
+      "description": "när och hur lönen ska betalas ut",
+      "area": "lon"
+    },
+    {
+      "slug": "sjuklon",
+      "label": "Sjuklön",
+      "description": "lön och ersättning när arbetstagaren är sjuk",
+      "area": "lon"
+    },
+    {
+      "slug": "utbildningskostnader",
+      "label": "Återbetalning av utbildningskostnader",
+      "description": "villkor om att arbetstagaren ska betala tillbaka kostnader för utbildning om anställningen upphör",
+      "area": "lon"
+    },
+    {
+      "slug": "aktier-och-optioner",
+      "label": "Aktier och optioner",
+      "description": "personaloptioner, aktieprogram och liknande incitament",
+      "area": "lon"
+    },
+    {
+      "slug": "arbetstid",
+      "label": "Arbetstid",
+      "description": "arbetstidens längd och förläggning",
+      "area": "arbetstid"
+    },
+    {
+      "slug": "ordinarie-arbetstid",
+      "label": "Ordinarie arbetstid",
+      "description": "den ordinarie arbetstiden per vecka och hur den räknas",
+      "area": "arbetstid"
+    },
+    {
+      "slug": "overtid",
+      "label": "Övertid",
+      "description": "arbete utöver ordinarie arbetstid och gränserna för övertid",
+      "area": "arbetstid"
+    },
+    {
+      "slug": "mertid",
+      "label": "Mertid",
+      "description": "arbete utöver den avtalade arbetstiden för deltidsanställda",
+      "area": "arbetstid"
+    },
+    {
+      "slug": "jour-och-beredskap",
+      "label": "Jour och beredskap",
+      "description": "jourtid och beredskapstid och om den räknas som arbetstid",
+      "area": "arbetstid"
+    },
+    {
+      "slug": "dygnsvila",
+      "label": "Dygnsvila",
+      "description": "rätten till sammanhängande ledighet under varje period om 24 timmar",
+      "area": "arbetstid"
+    },
+    {
+      "slug": "veckovila",
+      "label": "Veckovila",
+      "description": "rätten till sammanhängande ledighet under varje period om sju dagar",
+      "area": "arbetstid"
+    },
+    {
+      "slug": "raster-och-pauser",
+      "label": "Raster och pauser",
+      "description": "raster, pauser och måltidsuppehåll",
+      "area": "arbetstid"
+    },
+    {
+      "slug": "nattarbete",
+      "label": "Nattarbete",
+      "description": "arbete nattetid och begränsningar av sådant arbete",
+      "area": "arbetstid"
+    },
+    {
+      "slug": "flexibel-arbetstid",
+      "label": "Flexibel arbetstid",
+      "description": "flextid och arbetstagarens möjlighet att själv förlägga arbetstiden",
+      "area": "arbetstid"
+    },
+    {
+      "slug": "fortroendearbetstid",
+      "label": "Förtroendearbetstid",
+      "description": "att arbetstagaren själv styr sin arbetstid och inte omfattas av arbetstidsreglerna",
+      "area": "arbetstid"
+    },
+    {
+      "slug": "distansarbete",
+      "label": "Distansarbete",
+      "description": "arbete hemifrån eller på annan plats än arbetsgivarens lokaler",
+      "area": "arbetstid"
+    },
+    {
+      "slug": "avvikelse-arbetstidslagen",
+      "label": "Avvikelse från arbetstidslagen",
+      "description": "avvikelser från arbetstidslagen genom kollektivavtal eller dispens",
+      "area": "arbetstid"
+    },
+    {
+      "slug": "foraldraledighet",
+      "label": "Föräldraledighet",
+      "description": "rätten att vara ledig för vård av barn och hur ledigheten förläggs",
+      "area": "arbetstid"
+    },
+    {
+      "slug": "missgynnande-foraldraledighet",
+      "label": "Missgynnande vid föräldraledighet",
+      "description": "förbud mot att missgynna arbetstagare på grund av föräldraledighet",
+      "area": "arbetstid"
+    },
+    {
+      "slug": "tjanstledighet",
+      "label": "Tjänstledighet",
+      "description": "annan ledighet från anställningen, till exempel för studier eller för att pröva annat arbete",
+      "area": "arbetstid"
+    },
+    {
+      "slug": "sjukfranvaro",
+      "label": "Sjukfrånvaro",
+      "description": "frånvaro på grund av sjukdom och arbetsgivarens rehabiliteringsansvar",
+      "area": "arbetstid"
+    },
+    {
+      "slug": "arbetsmiljo",
+      "label": "Arbetsmiljö",
+      "description": "arbetsgivarens ansvar för arbetsmiljö, hälsa och säkerhet",
+      "area": "arbetstid"
+    },
+    {
+      "slug": "semesterratt",
+      "label": "Semesterrätt",
+      "description": "rätten till semesterledighet",
+      "area": "semester"
+    },
+    {
+      "slug": "semesterdagar",
+      "label": "Antal semesterdagar",
+      "description": "antalet semesterdagar per år och avtal om fler dagar än lagen ger",
+      "area": "semester"
+    },
+    {
+      "slug": "semesterlon",
+      "label": "Semesterlön",
+      "description": "semesterlön och hur den beräknas",
+      "area": "semester"
+    },
+    {
+      "slug": "semestertillagg",
+      "label": "Semestertillägg",
+      "description": "semestertillägg och procentregeln vid beräkning av semesterlön",
+      "area": "semester"
+    },
+    {
+      "slug": "semesterersattning",
+      "label": "Semesterersättning",
+      "description": "ersättning för intjänad semester som inte har tagits ut när anställningen upphör",
+      "area": "semester"
+    },
+    {
+      "slug": "intjanandear",
+      "label": "Intjänandeår och semesterår",
+      "description": "intjänandeår, semesterår och hur semester tjänas in",
+      "area": "semester"
+    },
+    {
+      "slug": "sparad-semester",
+      "label": "Sparad semester",
+      "description": "sparande av semesterdagar till ett senare år",
+      "area": "semester"
+    },
+    {
+      "slug": "forlaggning-av-semester",
+      "label": "Förläggning av semester",
+      "description": "när semestern ska tas ut och arbetsgivarens skyldighet att förhandla eller samråda om det",
+      "area": "semester"
+    },
+    {
+      "slug": "huvudsemester",
+      "label": "Huvudsemester",
+      "description": "rätten till fyra veckors sammanhängande semester under sommaren",
+      "area": "semester"
+    },
+    {
+      "slug": "semesterlonegrundande-franvaro",
+      "label": "Semesterlönegrundande frånvaro",
+      "description": "frånvaro som ändå ger rätt till semesterlön, till exempel sjukdom eller föräldraledighet",
+      "area": "semester"
+    },
+    {
+      "slug": "obetald-semester",
+      "label": "Obetald semester",
+      "description": "semesterdagar utan semesterlön",
+      "area": "semester"
+    },
+    {
+      "slug": "forskottssemester",
+      "label": "Förskottssemester",
+      "description": "semester som tas ut innan den har tjänats in",
+      "area": "semester"
+    },
+    {
+      "slug": "avbruten-semester",
+      "label": "Avbruten semester",
+      "description": "sjukdom under semestern och att arbetsgivaren återkallar arbetstagaren från semester",
+      "area": "semester"
+    },
+    {
+      "slug": "avvikelse-semesterlagen",
+      "label": "Avvikelse från semesterlagen",
+      "description": "avtal som avviker från semesterlagen och när det är tillåtet",
+      "area": "semester"
+    },
+    {
+      "slug": "diskriminering",
+      "label": "Diskriminering",
+      "description": "diskriminering i arbetslivet enligt diskrimineringslagen",
+      "area": "diskriminering"
+    },
+    {
+      "slug": "direkt-diskriminering",
+      "label": "Direkt diskriminering",
+      "description": "att någon missgynnas genom att behandlas sämre än någon annan i en jämförbar situation",
+      "area": "diskriminering"
+    },
+    {
+      "slug": "indirekt-diskriminering",
+      "label": "Indirekt diskriminering",
+      "description": "att någon missgynnas genom en bestämmelse eller ett förfaringssätt som verkar neutralt",
+      "area": "diskriminering"
+    },
+    {
+      "slug": "trakasserier",
+      "label": "Trakasserier",
+      "description": "trakasserier och sexuella trakasserier i arbetslivet",
+      "area": "diskriminering"
+    },
+    {
+      "slug": "diskriminering-kon",
+      "label": "Diskriminering på grund av kön",
+      "description": "diskriminering som har samband med kön",
+      "area": "diskriminering"
+    },
+    {
+      "slug": "diskriminering-etnicitet",
+      "label": "Diskriminering på grund av etnicitet eller religion",
+      "description": "diskriminering som har samband med etnisk tillhörighet, religion eller annan trosuppfattning",
+      "area": "diskriminering"
+    },
+    {
+      "slug": "diskriminering-funktionsnedsattning",
+      "label": "Diskriminering på grund av funktionsnedsättning",
+      "description": "diskriminering som har samband med funktionsnedsättning, även bristande tillgänglighet",
+      "area": "diskriminering"
+    },
+    {
+      "slug": "diskriminering-alder",
+      "label": "Diskriminering på grund av ålder",
+      "description": "diskriminering som har samband med ålder",
+      "area": "diskriminering"
+    },
+    {
+      "slug": "diskriminering-sexuell-laggning",
+      "label": "Diskriminering på grund av sexuell läggning eller könsidentitet",
+      "description": "diskriminering som har samband med sexuell läggning eller könsöverskridande identitet eller uttryck",
+      "area": "diskriminering"
+    },
+    {
+      "slug": "lonediskriminering",
+      "label": "Lönediskriminering",
+      "description": "osakliga skillnader i lön och lönekartläggning",
+      "area": "diskriminering"
+    },
+    {
+      "slug": "aktiva-atgarder",
+      "label": "Aktiva åtgärder",
+      "description": "arbetsgivarens skyldighet att förebygga diskriminering och främja lika rättigheter",
+      "area": "diskriminering"
+    },
+    {
+      "slug": "repressalier",
+      "label": "Repressalier",
+      "description": "förbud mot repressalier mot den som har anmält eller påtalat diskriminering",
+      "area": "diskriminering"
+    },
+    {
+      "slug": "diskrimineringsersattning",
+      "label": "Diskrimineringsersättning",
+      "description": "ersättning för kränkning och förlust vid diskriminering",
+      "area": "diskriminering"
+    },
+    {
+      "slug": "bevisborda-diskriminering",
+      "label": "Bevisbörda vid diskriminering",
+      "description": "den delade bevisbördan i mål om diskriminering",
+      "area": "diskriminering"
+    },
+    {
+      "slug": "rekrytering",
+      "label": "Rekrytering",
+      "description": "anställningsintervjuer, urval och beslut om vem som anställs",
+      "area": "diskriminering"
+    },
+    {
+      "slug": "graviditet",
+      "label": "Graviditet",
+      "description": "missgynnande på grund av graviditet",
+      "area": "diskriminering"
+    },
+    {
+      "slug": "missgynnande-deltid-visstid",
+      "label": "Missgynnande av deltids- och visstidsanställda",
+      "description": "förbud mot att missgynna arbetstagare för att de är deltidsanställda eller visstidsanställda",
+      "area": "diskriminering"
+    },
+    {
+      "slug": "avtals-ingaende",
+      "label": "Avtals ingående",
+      "description": "hur ett avtal kommer till och när parterna är bundna",
+      "area": "avtalsratt"
+    },
+    {
+      "slug": "anbud-och-accept",
+      "label": "Anbud och accept",
+      "description": "anbud, accept, oren accept och svarsfrister",
+      "area": "avtalsratt"
+    },
+    {
+      "slug": "fullmakt",
+      "label": "Fullmakt",
+      "description": "fullmakt och behörighet att ingå avtal för någon annans räkning",
+      "area": "avtalsratt"
+    },
+    {
+      "slug": "avtalstolkning",
+      "label": "Avtalstolkning",
+      "description": "tolkning av avtalsvillkor och parternas gemensamma avsikt",
+      "area": "avtalsratt"
+    },
+    {
+      "slug": "oklarhetsregeln",
+      "label": "Oklarhetsregeln",
+      "description": "att ett oklart villkor tolkas till nackdel för den som har formulerat det",
+      "area": "avtalsratt"
+    },
+    {
+      "slug": "jamkning-36-avtl",
+      "label": "Jämkning enligt 36 § AvtL",
+      "description": "jämkning eller åsidosättande av oskäliga avtalsvillkor enligt 36 § avtalslagen",
+      "area": "avtalsratt"
+    },
+    {
+      "slug": "ogiltighet",
+      "label": "Ogiltighet",
+      "description": "ogiltighet av avtal på grund av till exempel tvång, svek eller ocker",
+      "area": "avtalsratt"
+    },
+    {
+      "slug": "tro-och-heder",
+      "label": "Tro och heder",
+      "description": "att ett avtal inte får göras gällande när det strider mot tro och heder enligt 33 § avtalslagen",
+      "area": "avtalsratt"
+    },
+    {
+      "slug": "svek",
+      "label": "Svek",
+      "description": "svikligt förfarande när avtalet ingicks",
+      "area": "avtalsratt"
+    },
+    {
+      "slug": "standardavtal",
+      "label": "Standardavtal",
+      "description": "standardavtal och allmänna villkor och hur de blir en del av avtalet",
+      "area": "avtalsratt"
+    },
+    {
+      "slug": "avtalsbrott",
+      "label": "Avtalsbrott",
+      "description": "att en part inte fullgör sina förpliktelser enligt avtalet",
+      "area": "avtalsratt"
+    },
+    {
+      "slug": "havning",
+      "label": "Hävning",
+      "description": "rätten att häva ett avtal på grund av väsentligt avtalsbrott",
+      "area": "avtalsratt"
+    },
+    {
+      "slug": "uppsagning-av-avtal",
+      "label": "Uppsägning av avtal",
+      "description": "uppsägning av ett löpande avtal och uppsägningstid i kommersiella avtal",
+      "area": "avtalsratt"
+    },
+    {
+      "slug": "avtalets-giltighetstid",
+      "label": "Avtalets giltighetstid",
+      "description": "när ett avtal börjar gälla och hur länge det gäller",
+      "area": "avtalsratt"
+    },
+    {
+      "slug": "avtalsandring",
+      "label": "Ändring av avtal",
+      "description": "ändring av avtalsvillkor och krav på skriftlig form för ändringar",
+      "area": "avtalsratt"
+    },
+    {
+      "slug": "fullstandigt-avtal",
+      "label": "Fullständigt avtal",
+      "description": "klausul om att det skriftliga avtalet ersätter alla tidigare överenskommelser",
+      "area": "avtalsratt"
+    },
+    {
+      "slug": "overlatelse-av-avtal",
+      "label": "Överlåtelse av avtal",
+      "description": "överlåtelse av rättigheter och skyldigheter enligt avtalet till någon annan",
+      "area": "avtalsratt"
+    },
+    {
+      "slug": "forutsattningslaran",
+      "label": "Förutsättningsläran",
+      "description": "bristande förutsättningar som grund för att jämka eller häva ett avtal",
+      "area": "avtalsratt"
+    },
+    {
+      "slug": "tvingande-lag",
+      "label": "Tvingande lag",
+      "description": "om en lagregel är tvingande till förmån för en part eller kan avtalas bort",
+      "area": "avtalsratt"
+    },
+    {
+      "slug": "lagval-och-forum",
+      "label": "Lagval och forum",
+      "description": "vilken lag som gäller för avtalet och vilken domstol som prövar tvister",
+      "area": "avtalsratt"
+    },
+    {
+      "slug": "skiljeforfarande",
+      "label": "Skiljeförfarande",
+      "description": "att tvister ska avgöras genom skiljeförfarande i stället för i domstol",
+      "area": "avtalsratt"
+    },
+    {
+      "slug": "avtalsforhandlingar",
+      "label": "Ansvar under avtalsförhandlingar",
+      "description": "ansvar för vårdslöshet eller illojalitet under förhandlingar innan avtal ingåtts",
+      "area": "avtalsratt"
+    },
+    {
+      "slug": "skadestand",
+      "label": "Skadestånd",
+      "description": "skyldighet att ersätta skada",
+      "area": "skadestand"
+    },
+    {
+      "slug": "allmant-skadestand",
+      "label": "Allmänt skadestånd",
+      "description": "allmänt skadestånd för kränkning vid brott mot arbetsrättslig lag",
+      "area": "skadestand"
+    },
+    {
+      "slug": "ekonomiskt-skadestand",
+      "label": "Ekonomiskt skadestånd",
+      "description": "ersättning för ekonomisk förlust, till exempel förlorad lön",
+      "area": "skadestand"
+    },
+    {
+      "slug": "skadestand-avtalsbrott",
+      "label": "Skadestånd vid avtalsbrott",
+      "description": "ersättning för skada som har orsakats av ett avtalsbrott",
+      "area": "skadestand"
+    },
+    {
+      "slug": "skadestand-foretagshemlighet",
+      "label": "Skadestånd för angrepp på företagshemlighet",
+      "description": "skadestånd när någon obehörigt har utnyttjat eller röjt en företagshemlighet",
+      "area": "skadestand"
+    },
+    {
+      "slug": "arbetstagares-skadestandsansvar",
+      "label": "Arbetstagares skadeståndsansvar",
+      "description": "arbetstagarens ansvar för skada som har orsakats arbetsgivaren",
+      "area": "skadestand"
+    },
+    {
+      "slug": "vite",
+      "label": "Vite",
+      "description": "avtalat vite som påföljd vid brott mot avtalet",
+      "area": "skadestand"
+    },
+    {
+      "slug": "jamkning-av-vite",
+      "label": "Jämkning av vite",
+      "description": "jämkning av ett vite som är oskäligt högt",
+      "area": "skadestand"
+    },
+    {
+      "slug": "jamkning-av-skadestand",
+      "label": "Jämkning av skadestånd",
+      "description": "jämkning eller nedsättning av skadestånd",
+      "area": "skadestand"
+    },
+    {
+      "slug": "skadeberakning",
+      "label": "Beräkning av skada",
+      "description": "hur skadans storlek uppskattas och bevisas",
+      "area": "skadestand"
+    },
+    {
+      "slug": "vitesforbud",
+      "label": "Vitesförbud",
+      "description": "domstolens förbud vid vite mot fortsatt intrång eller avtalsbrott",
+      "area": "skadestand"
+    },
+    {
+      "slug": "interimistiskt-beslut",
+      "label": "Interimistiskt beslut",
+      "description": "tillfälligt förbud eller annan säkerhetsåtgärd under en pågående rättegång",
+      "area": "skadestand"
+    },
+    {
+      "slug": "ansvarsbegransning",
+      "label": "Ansvarsbegränsning",
+      "description": "avtalsvillkor som begränsar en parts skadeståndsansvar",
+      "area": "skadestand"
+    },
+    {
+      "slug": "ranta",
+      "label": "Ränta",
+      "description": "dröjsmålsränta och ränta på skadestånd",
+      "area": "skadestand"
+    },
+    {
+      "slug": "rattegangskostnader",
+      "label": "Rättegångskostnader",
+      "description": "fördelning av rättegångskostnader mellan parterna",
+      "area": "skadestand"
+    },
+    {
+      "slug": "bevisborda",
+      "label": "Bevisbörda",
+      "description": "vilken part som har bevisbördan och hur starka bevis som krävs",
+      "area": "skadestand"
+    },
+    {
+      "slug": "preskription",
+      "label": "Preskription",
+      "description": "att en fordran eller ett anspråk har gått förlorat för att det framställts för sent",
+      "area": "skadestand"
+    },
+    {
+      "slug": "forlikning",
+      "label": "Förlikning",
+      "description": "förlikning eller annan uppgörelse som avslutar en tvist",
+      "area": "skadestand"
+    }
+  ],
+  "presets": {
+    "employment": [
+      "anstallningsavtal",
+      "tillsvidareanstallning",
+      "provanstallning",
+      "visstidsanstallning",
+      "skriftlig-information-villkor",
+      "arbetsskyldighet",
+      "kollektivavtal",
+      "lon",
+      "formaner",
+      "pension",
+      "overtidsersattning",
+      "arbetstid",
+      "overtid",
+      "semesterratt",
+      "semesterlon",
+      "uppsagningstid",
+      "uppsagning-arbetstagare",
+      "saklig-grund",
+      "avskedande",
+      "konkurrensklausul",
+      "tystnadsplikt",
+      "lojalitetsplikt",
+      "bisyssla",
+      "ratt-till-arbetsresultat",
+      "personuppgifter"
+    ],
+    "nda": [
+      "sekretessavtal",
+      "sekretessklausul",
+      "omsesidig-sekretess",
+      "konfidentiell-information",
+      "foretagshemlighet",
+      "obehorigt-angrepp",
+      "sekretessens-varaktighet",
+      "undantag-fran-sekretess",
+      "aterlamnande-av-information",
+      "andamalsbegransning",
+      "vidareinformation",
+      "tekniskt-kunnande",
+      "kundregister",
+      "visselblasning",
+      "vite",
+      "jamkning-av-vite",
+      "skadestand-avtalsbrott",
+      "skadestand-foretagshemlighet",
+      "interimistiskt-beslut",
+      "jamkning-36-avtl",
+      "avtalstolkning",
+      "avtalets-giltighetstid",
+      "lagval-och-forum"
+    ]
+  }
+}
