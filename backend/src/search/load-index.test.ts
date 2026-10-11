@@ -1,13 +1,14 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { openDatabase } from '../db/database.js';
 import { syncVocabulary } from '../tagging/sync-vocabulary.js';
 import { createTaggingWorkspace } from '../tagging/test-helpers.js';
-import { loadTagIndex, type IndexLogger } from './load-index.js';
+import { loadTagIndex } from './load-index.js';
 import { buildRoaringIndex } from './roaring-index.js';
 import { EMPTY_TAG_INDEX } from './tag-index.js';
+import { createIndexLogger } from './test-helpers.js';
 
 describe('loadTagIndex', () => {
   const cleanups: (() => void)[] = [];
@@ -32,7 +33,7 @@ describe('loadTagIndex', () => {
     workspace.linkTag(second, 'uppsagning');
     workspace.linkTag(second, 'sekretess');
     workspace.linkTag(third, 'sekretess');
-    const logger = createLogger();
+    const logger = createIndexLogger();
 
     const index = loadTagIndex(workspace.path, buildRoaringIndex, logger);
     cleanups.push(() => index.dispose());
@@ -59,7 +60,7 @@ describe('loadTagIndex', () => {
 
   it('gives an empty index and a warning when the database file is missing', () => {
     const path = join(tempDir(), 'missing.db');
-    const logger = createLogger();
+    const logger = createIndexLogger();
 
     const index = loadTagIndex(path, buildRoaringIndex, logger);
 
@@ -70,7 +71,7 @@ describe('loadTagIndex', () => {
   it('gives an empty index and a warning when the database is not migrated', () => {
     const path = join(tempDir(), 'empty.db');
     openDatabase(path).close();
-    const logger = createLogger();
+    const logger = createIndexLogger();
 
     const index = loadTagIndex(path, buildRoaringIndex, logger);
 
@@ -81,7 +82,7 @@ describe('loadTagIndex', () => {
 
   it('gives an empty index and a warning when the database has no chunks', () => {
     const workspace = taggingWorkspace();
-    const logger = createLogger();
+    const logger = createIndexLogger();
 
     const index = loadTagIndex(workspace.path, buildRoaringIndex, logger);
 
@@ -92,7 +93,7 @@ describe('loadTagIndex', () => {
   it('gives an empty index and a warning when no chunk has tags', () => {
     const workspace = taggingWorkspace();
     workspace.addChunks('1982:80', ['a']);
-    const logger = createLogger();
+    const logger = createIndexLogger();
 
     const index = loadTagIndex(workspace.path, buildRoaringIndex, logger);
 
@@ -113,11 +114,7 @@ describe('loadTagIndex', () => {
   }
 });
 
-function createLogger() {
-  return { info: vi.fn(), warn: vi.fn() } satisfies IndexLogger;
-}
-
-function expectWarning(logger: ReturnType<typeof createLogger>, ...parts: string[]): void {
+function expectWarning(logger: ReturnType<typeof createIndexLogger>, ...parts: string[]): void {
   expect(logger.info).not.toHaveBeenCalled();
   expect(logger.warn).toHaveBeenCalledExactlyOnceWith(
     expect.anything(),

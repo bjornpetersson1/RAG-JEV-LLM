@@ -5,7 +5,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { inTransaction } from './database.js';
 
 // backend/migrations, reached from both src/db and dist/db.
-const MIGRATIONS_DIR = fileURLToPath(new URL('../../migrations/', import.meta.url));
+export const MIGRATIONS_DIR = fileURLToPath(new URL('../../migrations/', import.meta.url));
 
 const MIGRATION_FILE = /^(\d{4})_([a-z0-9_]+)\.sql$/;
 

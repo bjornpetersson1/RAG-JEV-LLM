@@ -9,6 +9,12 @@ import { migrate, migrationLabel, pendingMigrations, readMigrations } from './mi
 const SCHEMA_TABLES = [
   'chunk_tags',
   'chunks',
+  // The full-text index (E4-3) and the shadow tables FTS5 keeps for it.
+  'chunks_fts',
+  'chunks_fts_config',
+  'chunks_fts_data',
+  'chunks_fts_docsize',
+  'chunks_fts_idx',
   'documents',
   'schema_migrations',
   'tagging_runs',
@@ -58,6 +64,7 @@ describe('migrate', () => {
       '2_document_structure',
       '3_chunk_context',
       '4_tagging',
+      '5_chunks_fts',
     ]);
     expect(tableNames(db)).toEqual(SCHEMA_TABLES);
     expect(recordedVersions(db)).toEqual([
@@ -73,6 +80,11 @@ describe('migrate', () => {
         applied_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
       },
       { version: 4, name: 'tagging', applied_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/) },
+      {
+        version: 5,
+        name: 'chunks_fts',
+        applied_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+      },
     ]);
   });
 
