@@ -70,6 +70,8 @@
 - **`judge(instruction, chunk, signal?)`** (default): the signal cancels JEV calls on timeout; an LLM call cannot be cancelled by the E1-2 client, so its late result is ignored.
 - **No new dependency** (default): the pool follows the worker pattern already used by `tagging/tag-chunks.ts`.
 
+- **Builds on E5-1 as merged** (spec update before implementing): E5-1's judges are `ScoringJudge`s, and `createJudge` adds `relevant` from `JUDGE_THRESHOLD`. `judgeAll` takes the judge `createJudge` builds and also applies the threshold to cached scores. The optional signal goes through `Judge`, `ScoringJudge`, the fallback judge and the JEV judge. A cancelled JEV call is rethrown by the fallback judge, so a chunk timeout never starts an LLM call. With `jev-with-fallback` and no JEV key, E5-1 turns the config into `llm`, so the LLM is then the primary judge and its scores are cached. The LLM model in the key is `roleModel(llmConfig, 'judge')` (`fake` for the fake provider).
+
 ## Open Questions
 
 - None.
