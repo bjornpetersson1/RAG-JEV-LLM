@@ -14,6 +14,7 @@ import type {
   Tagger,
   TaggingInput,
 } from './types.js';
+import { words } from '../text.js';
 
 const MIN_KEYWORD_LENGTH = 4;
 const RELEVANCE_THRESHOLD = 0.5;
@@ -80,10 +81,7 @@ function tagsMentionedIn(text: string, vocabulary: readonly Tag[]): string[] {
 }
 
 function keywordOverlap(instruction: string, chunk: Chunk): Judgement {
-  const keywords = instruction
-    .toLowerCase()
-    .split(/[^\p{L}\p{N}]+/u)
-    .filter((word) => word.length >= MIN_KEYWORD_LENGTH);
+  const keywords = words(instruction).filter((word) => word.length >= MIN_KEYWORD_LENGTH);
   const text = chunk.text.toLowerCase();
   const score =
     keywords.length === 0

@@ -7,6 +7,8 @@ describe('loadSearchConfig', () => {
     expect(DEFAULT_SEARCH_CONFIG).toEqual({
       tagIndex: 'roaring',
       bloom: { bits: 128, hashes: 6, verify: true },
+      minTagCandidates: 10,
+      maxCandidates: 30,
     });
   });
 
@@ -18,7 +20,14 @@ describe('loadSearchConfig', () => {
         BLOOM_HASHES: '4',
         BLOOM_VERIFY: 'false',
       }),
-    ).toEqual({ tagIndex: 'bloom', bloom: { bits: 256, hashes: 4, verify: false } });
+    ).toMatchObject({ tagIndex: 'bloom', bloom: { bits: 256, hashes: 4, verify: false } });
+  });
+
+  it('reads MIN_TAG_CANDIDATES and MAX_CANDIDATES', () => {
+    expect(loadSearchConfig({ MIN_TAG_CANDIDATES: '5', MAX_CANDIDATES: '50' })).toMatchObject({
+      minTagCandidates: 5,
+      maxCandidates: 50,
+    });
   });
 
   it.each([
@@ -30,6 +39,12 @@ describe('loadSearchConfig', () => {
       'Invalid BLOOM_HASHES 5: expected at most BLOOM_BITS (4)',
     ],
     [{ BLOOM_VERIFY: 'yes' }, 'Invalid BLOOM_VERIFY "yes": expected true or false'],
+    [{ MIN_TAG_CANDIDATES: '0' }, 'Invalid MIN_TAG_CANDIDATES "0": expected a positive integer'],
+    [{ MAX_CANDIDATES: '3.5' }, 'Invalid MAX_CANDIDATES "3.5": expected a positive integer'],
+    [
+      { MIN_TAG_CANDIDATES: '40' },
+      'Invalid MIN_TAG_CANDIDATES 40: expected at most MAX_CANDIDATES (30)',
+    ],
   ])('rejects %o', (env, message) => {
     expect(() => loadSearchConfig(env)).toThrow(message);
   });

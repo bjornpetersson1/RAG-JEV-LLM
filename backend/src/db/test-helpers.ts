@@ -4,12 +4,15 @@ import { join } from 'node:path';
 import { openDatabase } from './database.js';
 import { migrate } from './migrations.js';
 
-/** A migrated database in a new temporary directory; `remove` closes it and deletes the directory. */
-export function createTestDatabase(prefix: string) {
+/**
+ * A database in a new temporary directory, migrated with the migrations in `migrationsDir` (all of
+ * them by default); `remove` closes it and deletes the directory.
+ */
+export function createTestDatabase(prefix: string, migrationsDir?: string) {
   const dir = mkdtempSync(join(tmpdir(), prefix));
   const path = join(dir, 'test.db');
   const db = openDatabase(path);
-  migrate(db);
+  migrate(db, migrationsDir);
   return {
     dir,
     path,

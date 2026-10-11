@@ -1,4 +1,5 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import type { IndexLogger } from './load-index.js';
 import type { BuildTagIndex, ChunkTag, TagIndex } from './tag-index.js';
 
 /** Chunk ids per tag in the contract data set. */
@@ -116,4 +117,9 @@ export function describeTagIndexContract(name: string, build: BuildTagIndex): vo
       }
     });
   });
+}
+
+/** A logger whose calls tests can inspect. */
+export function createIndexLogger() {
+  return { info: vi.fn(), warn: vi.fn() } satisfies IndexLogger;
 }

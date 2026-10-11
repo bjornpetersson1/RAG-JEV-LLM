@@ -4,7 +4,7 @@
 - **Labels:** `E4 Index and search`
 - **Phase:** 3. Tags and index
 - **Depends on:** E2-4 (#7), E4-1 (#11)
-- **Status:** Approved
+- **Status:** Implemented — all acceptance criteria verified (npm ci, lint, format:check, typecheck, 391 tests (387 backend, 4 frontend) and build exit 0; migration 0005 and candidate search tried on a copy of the real database)
 
 ## Summary
 
@@ -48,12 +48,12 @@ An SQLite FTS5 index over the chunks, kept in sync by triggers, and a `Candidate
 
 ## Tasks
 
-- [ ] `backend/migrations/0005_chunks_fts.sql`: FTS5 external-content table over `chunks` (`text`, `context`, `source_ref`) with `unicode61 remove_diacritics 0`, insert/update/delete triggers, and a rebuild for existing rows.
-- [ ] FTS query builder: tokenise the instruction and tag labels, lower-case, drop stop words, deduplicate, turn each term into a quoted prefix term, join with OR.
-- [ ] Search config: `MIN_TAG_CANDIDATES`, `MAX_CANDIDATES`; `.env.example`.
-- [ ] `CandidateSearch` (in the E4-1 `search` module): the three modes, dedup, origin per candidate, the log line.
-- [ ] README: the fallback, the modes and the settings.
-- [ ] Tests per acceptance criterion.
+- [x] `backend/migrations/0005_chunks_fts.sql`: FTS5 external-content table over `chunks` (`text`, `context`, `source_ref`) with `unicode61 remove_diacritics 0`, insert/update/delete triggers, and a rebuild for existing rows.
+- [x] FTS query builder: tokenise the instruction and tag labels, lower-case, drop stop words, deduplicate, turn each term into a quoted prefix term, join with OR.
+- [x] Search config: `MIN_TAG_CANDIDATES`, `MAX_CANDIDATES`; `.env.example`.
+- [x] `CandidateSearch` (in the E4-1 `search` module): the three modes, dedup, origin per candidate, the log line.
+- [x] README: the fallback, the modes and the settings.
+- [x] Tests per acceptance criterion.
 
 ## Decisions
 
@@ -67,6 +67,26 @@ An SQLite FTS5 index over the chunks, kept in sync by triggers, and a `Candidate
 - **Mode is a call option, not an `.env` setting** (default): the evaluation switches modes per run; the query flow uses `tags+fts`.
 - **Tag candidates come from E4-1's ranked search with `limit = MAX_CANDIDATES`** (default), so the tag hits keep their ranking and the fill-up only appends.
 - **Stop words** (default): a short fixed list of common Swedish function words (e.g. "och", "att", "som", "en", "ett", "för", "med", "på", "av", "i", "är", "det", "den", "till", "om"), kept in code.
+
+- **Code layout** (settled while implementing): `search/fts-query.ts` builds the query, `search/candidate-search.ts` has `createCandidateSearch({ db, tagIndex, config, logger })`, and `MIN_TAG_CANDIDATES` and `MAX_CANDIDATES` join `SearchConfig` in `search/config.ts`. Both are validated at server start, with `MIN_TAG_CANDIDATES` ≤ `MAX_CANDIDATES`. Nothing in the server calls the search yet (E5/E6 do).
+- **The result** carries the candidates, the number of tag candidates, whether full-text search ran, how many it added and the query (`null` when none ran). Mode `fts` counts as the fallback running, with zero tag candidates. Tag labels for the query are read from `tags` by slug, with one statement prepared up front (`json_each`). The full-text search fetches `MAX_CANDIDATES` rows, which always fill the free places.
+- **Clean code**: `words()` in `src/text.ts` is shared by the query builder and the fake judge. `MIGRATIONS_DIR` is exported, and `createTestDatabase` takes an optional migrations directory for the migration test. The search tests share `createIndexLogger`.
+- **Code review fixes**:
+  - Words shorter than 3 characters are left out, since `"ab"*` or `"7"*` would match far too much. Numbers must match exactly (`"1982"`, not a prefix).
+  - `words()` composes the text (NFC) first, so a decomposed "ö" does not split a word.
+  - `fallbackUsed` is true only when a full-text query actually ran. An instruction with no usable words logs `fallbackUsed: false`.
+  - `buildFtsQuery` returns `null`, like the result's `ftsQuery`.
+  - The FTS tests reset their cleanup.
+- **Not changed after code review**:
+  - An FTS5 `prefix=` index helps only for prefix terms of the listed lengths, while the stems here vary from 3 to over 10 characters. On the corpus of about 2,100 chunks, a full-text query takes milliseconds.
+  - `loadSearchConfig` validates all search settings, also when only the bench reads it. An invalid `.env` value should fail wherever it is read.
+  - When re-chunking swaps two chunks' references, the E2-4 writer parks one under a temporary `#<id>`, which reindexes that chunk twice. Swaps are rare, and changing the writer is outside this issue.
+- **Left for E5 (clean-code finding)**: `CandidateSearch` takes a live database handle, while the tag index is a snapshot built at startup. After `index:tag` or re-chunking without a restart, the two halves can disagree. E5, which wires the search into the query flow, should build both from one handle the server owns.
+- **Skipped clean-code suggestion**: one wording for the min ≤ max checks. `search/config.ts` follows its own `BLOOM_HASHES` message and differs from `ingest/chunk-config.ts`.
+- **The update trigger reindexes only when `text`, `context` or `source_ref` actually changes** (settled while implementing; the `WHEN` guard was added in clean code). Tagging state and ordinal updates do not reindex, and neither does the E2-4 writer rewriting a chunk with the same content. A test checks that the index is not written then. The migration's `rebuild` indexes existing chunks; a test migrates a database with chunks from version 4 to 5 and finds them.
+- **The cut keeps at least 5 letters** as specified, so `semester` gives `semes*` and `sekretess` gives `sekret*`.
+- **Known limitation: compounds.** A Swedish compound in the instruction does not match its first part on its own: `sekretessavtal` gives `sekretessav*`, which does not match `sekretess`. Tag labels often contain the base word, which softens this. A compound splitter is out of scope (no stemmer, per the owner's choice).
+- **Real data** (settled while implementing): on a copy of the local database migrated to version 5, "Anställningsavtal med konkurrensklausul och uppsägningstid" with the tag `konkurrensklausul` gave 30 tag candidates and no fallback. "Sekretessavtal om företagshemligheter" with no tags fell back and filled 30 full-text candidates, led by AD rulings on confidentiality and SFS 2018:558 (lag om företagshemligheter).
 
 ## Open Questions
 
