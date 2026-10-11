@@ -12,7 +12,7 @@ export function formatQueryResult(request: QueryRequest, result: QueryResult): s
   const { judging, draft } = result;
   const lines = [
     `Tags: ${result.tags.join(', ') || '–'}`,
-    `Candidates: ${result.candidates} · approved: ${judging.approved} · unknown: ${judging.unknown} · ` +
+    `Candidates: ${result.candidates} · approved: ${formatApproved(judging)} · unknown: ${judging.unknown} · ` +
       `judge calls: ${judging.judgeCalls} · cache hits: ${judging.cacheHits}`,
   ];
   if (draft) {
@@ -23,6 +23,12 @@ export function formatQueryResult(request: QueryRequest, result: QueryResult): s
   }
   lines.push('', ...formatTimings(result));
   return lines.join('\n');
+}
+
+/** The approved count, and how many relevant chunks `RERANK_TOP_K` left out. */
+function formatApproved({ approved, relevant }: QueryResult['judging']): string {
+  if (relevant <= approved) return String(approved);
+  return `${approved} (the best of ${relevant} relevant; raise RERANK_TOP_K to keep more)`;
 }
 
 function formatDraft(request: QueryRequest, draft: GenerationResult): string[] {

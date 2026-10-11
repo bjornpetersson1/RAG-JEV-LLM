@@ -1,17 +1,17 @@
 import { buildApp } from './app.js';
 import { resolveDatabasePath } from './db/config.js';
 import { loadContextLimits } from './generation/config.js';
-import { loadJudgeConfig, loadJudgingConfig } from './judge/config.js';
+import { loadEmbedderConfig } from './embedding/factory.js';
 import { loadLlmConfig } from './llm/config.js';
 import { resolvePort } from './port.js';
 import { loadQueryTranslatorConfig } from './query/config.js';
+import { loadRerankerConfig } from './rerank/factory.js';
 import { loadTagIndex } from './search/load-index.js';
 import { loadSearchConfig, tagIndexBuilder } from './search/config.js';
 import type { BuildTagIndex } from './search/tag-index.js';
 
-const { port, databasePath, buildTagIndex, judgeWarning } = readStartupConfig();
+const { port, databasePath, buildTagIndex } = readStartupConfig();
 const app = buildApp();
-if (judgeWarning) app.log.warn(judgeWarning);
 
 try {
   app.tagIndex = loadTagIndex(databasePath, buildTagIndex, app.log);
@@ -26,21 +26,18 @@ function readStartupConfig(): {
   port: number;
   databasePath: string;
   buildTagIndex: BuildTagIndex;
-  /** Set when the judge falls back to the LLM because JEV is not configured. */
-  judgeWarning?: string;
 } {
   try {
     const port = resolvePort(process.env.PORT);
-    // Fail fast on invalid LLM, query translator, judge and generator settings; later issues build
-    // the roles from them.
+    // Fail fast on invalid LLM, query translator, reranker, embedder and generator settings; later
+    // issues build the roles from them.
     loadLlmConfig(process.env);
     loadQueryTranslatorConfig(process.env);
-    const judgeConfig = loadJudgeConfig(process.env);
-    loadJudgingConfig(process.env);
+    loadRerankerConfig(process.env);
+    loadEmbedderConfig(process.env);
     loadContextLimits(process.env);
     return {
       port,
-      judgeWarning: judgeConfig.warning,
       databasePath: resolveDatabasePath(process.env.DATABASE_PATH),
       buildTagIndex: tagIndexBuilder(loadSearchConfig(process.env)),
     };

@@ -1,0 +1,92 @@
+import { afterEach, describe, expect, it } from 'vitest';
+import { createTestDatabase } from '../db/test-helpers.js';
+import { loadLlmConfig } from '../llm/config.js';
+import { createCapturingLogger } from '../llm/test-helpers.js';
+import { createReranker, loadRerankerConfig, RERANKERS } from './factory.js';
+import { fakeRerankResult } from './test-helpers.js';
+import type { RerankerEntry } from './types.js';
+
+const JEV_KEY = { JEV_API_KEY: 'jev-key' };
+
+let database: ReturnType<typeof createTestDatabase> | undefined;
+
+afterEach(() => {
+  database?.remove();
+  database = undefined;
+});
+
+function deps() {
+  database = createTestDatabase('rerank-');
+  return {
+    db: database.db,
+    llmConfig: loadLlmConfig({ LLM_PROVIDER: 'fake' }),
+    logger: createCapturingLogger(),
+  };
+}
+
+describe('loadRerankerConfig', () => {
+  it('defaults to the LLM reranker keeping 8 chunks', () => {
+    expect(loadRerankerConfig({})).toEqual({ name: 'llm', topK: 8 });
+  });
+
+  it.each(['bge', 'jev', 'llm', 'qwen3'])('accepts RERANKER=%s', (name) => {
+    expect(loadRerankerConfig({ ...JEV_KEY, RERANKER: name, RERANK_TOP_K: '5' })).toEqual({
+      name,
+      topK: 5,
+    });
+  });
+
+  it.each([
+    [{ RERANKER: 'foo' }, 'Invalid RERANKER "foo": expected bge or jev or llm or qwen3'],
+    [{ RERANKER: 'jev' }, 'JEV_API_KEY is required because RERANKER is jev'],
+    [{ RERANK_TOP_K: '0' }, 'Invalid RERANK_TOP_K "0"'],
+    [
+      { JUDGE_IMPL: 'llm' },
+      'JUDGE_IMPL was replaced by RERANKER (bge, jev, llm, qwen3); remove JUDGE_IMPL from .env',
+    ],
+    [{ RERANKER: 'llm', JUDGE_THRESHOLD: '2' }, 'Invalid JUDGE_THRESHOLD "2"'],
+    [{ RERANKER: 'llm', JUDGE_CACHE: 'maybe' }, 'Invalid JUDGE_CACHE "maybe"'],
+  ])('rejects %o', (env, message) => {
+    expect(() => loadRerankerConfig(env)).toThrow(message);
+  });
+});
+
+describe('createReranker', () => {
+  it.each([
+    [{ RERANKER: 'jev', ...JEV_KEY }, 'jev', 'jev-latest'],
+    [{ RERANKER: 'llm' }, 'llm', 'fake'],
+    [{ RERANKER: 'bge' }, 'bge', 'BAAI/bge-reranker-v2-m3'],
+    [{ RERANKER: 'qwen3' }, 'qwen3', 'Qwen3-Reranker'],
+  ])('builds %o from .env alone', (env, name, model) => {
+    const { reranker, topK } = createReranker(env, deps());
+
+    expect(reranker).toMatchObject({ name, model });
+    expect(topK).toBe(8);
+  });
+
+  it.each(['bge', 'qwen3'])('builds the %s placeholder, which throws when used', async (name) => {
+    const { reranker } = createReranker({ RERANKER: name }, deps());
+
+    await expect(reranker.rerank('x', [{ id: '1', text: 'a' }], 8)).rejects.toThrow(
+      `RERANKER=${name} is not implemented yet`,
+    );
+  });
+
+  it('adds a reranker with one registry entry and no other change', async () => {
+    const fake: RerankerEntry = {
+      validate() {},
+      create: () => ({
+        name: 'fake',
+        model: 'fake-model',
+        rerank: async (_query, chunks, topK) => fakeRerankResult(chunks, { a: 0.9 }, { topK }),
+      }),
+    };
+    const registry = { ...RERANKERS, fake };
+
+    const { reranker } = createReranker({ RERANKER: 'fake' }, deps(), registry);
+    const result = await reranker.rerank('x', [{ id: 'a', text: 'A' }], 8);
+
+    expect(reranker.name).toBe('fake');
+    expect(result.ranked.map(({ chunk }) => chunk.id)).toEqual(['a']);
+  });
+});

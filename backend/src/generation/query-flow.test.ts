@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createEvalDatabase } from '../eval/test-helpers.js';
-import type { ChunkJudgement, JudgeAllResult } from '../judge/judge-all.js';
 import { NO_USAGE } from '../llm/client.js';
 import { createFakeGenerator } from '../llm/fakes.js';
 import type { Chunk } from '../llm/types.js';
-import { runQuery, rankByScore, type QueryFlowDependencies } from './query-flow.js';
+import { fakeRerankResult } from '../rerank/test-helpers.js';
+import { runQuery, type QueryFlowDependencies } from './query-flow.js';
 import { createQueryFlow } from './setup.js';
 
 const USAGE = { inputTokens: 7, outputTokens: 3, cacheWriteTokens: 0, cacheReadTokens: 0 };
@@ -14,32 +14,6 @@ const CHUNKS: Record<string, Chunk> = {
   '2': { id: '2', text: 'Två', source: 'SFS 1982:80 2 §' },
   '3': { id: '3', text: 'Tre', source: 'SFS 1982:80 3 §' },
 };
-
-/** Judges the given scores; a chunk without a score ends `unknown`. */
-function judged(chunks: readonly Chunk[], scores: Record<string, number>): JudgeAllResult {
-  const judgements = chunks.map((chunk): ChunkJudgement => {
-    const score = scores[chunk.id];
-    return score === undefined
-      ? { chunkId: chunk.id, status: 'unknown', reason: 'timeout', elapsedMs: 1 }
-      : {
-          chunkId: chunk.id,
-          status: 'judged',
-          score,
-          relevant: score >= 0.5,
-          judgedBy: 'llm',
-          elapsedMs: 1,
-        };
-  });
-  return {
-    judgements,
-    relevant: chunks.filter((chunk) => (scores[chunk.id] ?? 0) >= 0.5),
-    elapsedMs: 40,
-    cacheHits: 1,
-    judgeCalls: 2,
-    unknown: judgements.filter((j) => j.status === 'unknown').length,
-    usage: USAGE,
-  };
-}
 
 function fakeFlow(scores: Record<string, number>) {
   const calls = { judged: [] as string[], generated: [] as string[][] };
@@ -55,9 +29,11 @@ function fakeFlow(scores: Record<string, number>) {
       ftsQuery: null,
     }),
     loadChunks: (ids) => ids.map((id) => CHUNKS[id]),
-    async judge(_instruction, chunks) {
+    async rerank(_instruction, chunks) {
       calls.judged.push(...chunks.map((c) => c.id));
-      return judged(chunks, scores);
+      return fakeRerankResult(chunks, scores, {
+        stats: { calls: 2, cacheHits: 1, usage: USAGE, elapsedMs: 40 },
+      });
     },
     generator: createFakeGenerator((input) => {
       calls.generated.push(input.chunks.map((c) => c.id));
@@ -78,7 +54,13 @@ describe('runQuery', () => {
     expect(calls.generated).toEqual([['2', '1']]);
     expect(result.tags).toEqual(['uppsagning']);
     expect(result.candidates).toBe(3);
-    expect(result.judging).toEqual({ approved: 2, cacheHits: 1, judgeCalls: 2, unknown: 0 });
+    expect(result.judging).toEqual({
+      approved: 2,
+      relevant: 2,
+      cacheHits: 1,
+      judgeCalls: 2,
+      unknown: 0,
+    });
     expect(result.draft?.used.map((c) => c.id)).toEqual(['2', '1']);
     expect(result.draft?.check).toMatchObject({ flags: [], references: 2, sourceAccuracy: 1 });
     expect(result.timings).toMatchObject({ translationMs: 12, judgingMs: 40 });
@@ -101,16 +83,6 @@ describe('runQuery', () => {
   });
 });
 
-describe('rankByScore', () => {
-  it('orders the relevant chunks by descending score, ties in candidate order', () => {
-    const chunks = Object.values(CHUNKS);
-
-    const ranked = rankByScore(judged(chunks, { '1': 0.7, '2': 0.9, '3': 0.7 }));
-
-    expect(ranked.map((c) => c.id)).toEqual(['2', '1', '3']);
-  });
-});
-
 describe('createQueryFlow', () => {
   let database: ReturnType<typeof createEvalDatabase> | undefined;
 
@@ -125,7 +97,7 @@ describe('createQueryFlow', () => {
       DATABASE_PATH: database.path,
       LLM_PROVIDER: 'fake',
       QUERY_TRANSLATOR_IMPL: 'llm',
-      JUDGE_IMPL: 'llm',
+      RERANKER: 'llm',
       JUDGE_CACHE: 'off',
     };
     const flow = createQueryFlow(

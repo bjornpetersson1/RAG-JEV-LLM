@@ -1,8 +1,8 @@
 import { elapsedMs } from '../http.js';
-import type { JudgeAllResult } from '../judge/judge-all.js';
 import type { LlmUsage } from '../llm/client.js';
 import type { Chunk } from '../llm/types.js';
 import type { QueryInput, QueryTags } from '../query/translate-query.js';
+import type { RerankResult, RerankStats } from '../rerank/types.js';
 import type { CandidateSearchResult } from '../search/candidate-search.js';
 import {
   generateDraft,
@@ -19,7 +19,8 @@ export interface QueryFlowDependencies extends GenerationDependencies {
   translate(query: QueryInput): Promise<QueryTags>;
   search(instruction: string, tags: readonly string[]): CandidateSearchResult;
   loadChunks(ids: readonly string[]): Chunk[];
-  judge(instruction: string, chunks: readonly Chunk[]): Promise<JudgeAllResult>;
+  /** The configured reranker with `RERANK_TOP_K`: the relevant chunks, best first. */
+  rerank(instruction: string, chunks: readonly Chunk[]): Promise<RerankResult>;
 }
 
 export interface StepTimings {
@@ -35,14 +36,18 @@ export interface StepTimings {
 export interface QueryResult {
   tags: string[];
   candidates: number;
-  judging: Pick<JudgeAllResult, 'cacheHits' | 'judgeCalls' | 'unknown'> & { approved: number };
+  /** `approved` is what the reranker kept: at most `RERANK_TOP_K` of the `relevant` chunks. */
+  judging: Pick<RerankStats, 'cacheHits' | 'unknown' | 'relevant'> & {
+    approved: number;
+    judgeCalls: number;
+  };
   /** Absent when the judge approved no chunk: no draft is written without sources. */
   draft?: GenerationResult;
   timings: StepTimings;
   usage: { translation?: LlmUsage; judging: LlmUsage; generation?: LlmUsage };
 }
 
-/** Query translation → candidate search → judging → draft, with the time and tokens of each step. */
+/** Query translation → candidate search → rerank → draft, with the time and tokens of each step. */
 export async function runQuery(
   request: QueryRequest,
   deps: QueryFlowDependencies,
@@ -58,8 +63,8 @@ export async function runQuery(
   const chunks = deps.loadChunks(candidates.map((candidate) => String(candidate.chunkId)));
   const searchMs = elapsedMs(searchStarted);
 
-  const judged = await deps.judge(instruction, chunks);
-  const approved = rankByScore(judged);
+  const { ranked, stats } = await deps.rerank(instruction, chunks);
+  const approved = ranked.map(({ chunk }) => chunk);
 
   const draft =
     approved.length > 0 ? await generateDraft({ ...request, chunks: approved }, deps) : undefined;
@@ -68,29 +73,19 @@ export async function runQuery(
     candidates: candidates.length,
     judging: {
       approved: approved.length,
-      cacheHits: judged.cacheHits,
-      judgeCalls: judged.judgeCalls,
-      unknown: judged.unknown,
+      relevant: stats.relevant,
+      cacheHits: stats.cacheHits,
+      judgeCalls: stats.calls,
+      unknown: stats.unknown,
     },
     draft,
     timings: {
       translationMs: translation.elapsedMs,
       searchMs,
-      judgingMs: judged.elapsedMs,
+      judgingMs: stats.elapsedMs,
       generationMs: draft?.elapsedMs,
       totalMs: elapsedMs(started),
     },
-    usage: { translation: translation.usage, judging: judged.usage, generation: draft?.usage },
+    usage: { translation: translation.usage, judging: stats.usage, generation: draft?.usage },
   };
-}
-
-/** The relevant chunks by descending judge score; ties keep the candidate order. */
-export function rankByScore({ relevant, judgements }: JudgeAllResult): Chunk[] {
-  const scores = new Map(
-    judgements.flatMap((judgement) =>
-      judgement.status === 'unknown' ? [] : [[judgement.chunkId, judgement.score] as const],
-    ),
-  );
-  // Array.prototype.sort is stable, so equal scores stay in candidate order.
-  return [...relevant].sort((a, b) => (scores.get(b.id) ?? 0) - (scores.get(a.id) ?? 0));
 }

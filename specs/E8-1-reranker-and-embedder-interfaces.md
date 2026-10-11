@@ -4,7 +4,7 @@
 - **Labels:** `E8 Local retrieval and rerank`
 - **Phase:** E8 Local retrieval and rerank
 - **Depends on:** E5-1 (#15), E5-2 (#16)
-- **Status:** Approved
+- **Status:** Implemented — all acceptance criteria verified (npm ci, lint, format:check, typecheck, 651 tests (647 backend, 4 frontend) and build exit 0; startup errors for `RERANKER=foo`, `JUDGE_IMPL` and `RERANKER=jev` without a key checked on the built server; `npm run query` with fake roles and `RERANKER=llm` on the real database)
 
 ## Summary
 
@@ -56,16 +56,16 @@ The relevance step moves behind one `Reranker` interface, chosen in `.env` with 
 
 ## Tasks
 
-- [ ] `Reranker`, `RerankResult`, `ScoredChunk`, `Embedder` and `Embedding` types.
-- [ ] Reranker config: `RERANKER` (default `llm`), `RERANK_TOP_K` (default 8), the `JUDGE_IMPL` error, the JEV settings for `jev`.
-- [ ] Embedder config: `EMBEDDER` (`bge`, the only value).
-- [ ] Registry and factory for rerankers and embedders.
-- [ ] `JevReranker` (JEV judge with LLM fallback per call, through `judgeAll`) and `LlmReranker` (LLM judge, through `judgeAll`).
-- [ ] Placeholders: `BgeReranker`, `Qwen3Reranker`, `BgeEmbedder`.
-- [ ] Query flow, its setup and `npm run query` call the reranker; server startup validates the reranker config.
-- [ ] `eval:run` calls the reranker for its judge modes.
-- [ ] `.env.example` and README updated.
-- [ ] Tests: config, factory and registry, contract test, query flow and eval unchanged.
+- [x] `Reranker`, `RerankResult`, `ScoredChunk`, `Embedder` and `Embedding` types.
+- [x] Reranker config: `RERANKER` (default `llm`), `RERANK_TOP_K` (default 8), the `JUDGE_IMPL` error, the JEV settings for `jev`.
+- [x] Embedder config: `EMBEDDER` (`bge`, the only value).
+- [x] Registry and factory for rerankers and embedders.
+- [x] `JevReranker` (JEV judge with LLM fallback per call, through `judgeAll`) and `LlmReranker` (LLM judge, through `judgeAll`).
+- [x] Placeholders: `BgeReranker`, `Qwen3Reranker`, `BgeEmbedder`.
+- [x] Query flow, its setup and `npm run query` call the reranker; server startup validates the reranker config.
+- [x] `eval:run` calls the reranker for its judge modes.
+- [x] `.env.example` and README updated.
+- [x] Tests: config, factory and registry, contract test, query flow and eval unchanged.
 
 ## Decisions
 
@@ -79,6 +79,34 @@ The relevance step moves behind one `Reranker` interface, chosen in `.env` with 
 - **`ScoredChunk`** (default): the `Chunk`, the normalised `score`, `reranker` (the implementation name) and `model`; for `jev`, also whether JEV or the LLM fallback answered (today's `judgedBy`).
 - **`Embedding` shape** (default, settled with E8-2): `{ dense: Float32Array; sparse?: Map<string, number> }`, dense vectors normalised; `kind: 'query' | 'passage'` as in the issue. `EMBEDDER` has one value, `bge`, so it is read and validated but only the placeholder exists.
 - **Registry** (default): a map from name to a constructor taking the config and shared dependencies. Adding an implementation is a new file and one map entry.
+
+- **Registry entries validate and create** (settled while implementing): a `RerankerEntry` is `{ validate(env), create(env, deps) }`; `loadRerankerConfig(env, registry)` checks `RERANKER` against the registry's keys and runs the chosen entry's `validate`, so a missing `JEV_API_KEY` or a bad `JUDGE_*` setting fails at startup. Tests pass an extended registry for criterion 4. The embedder has the same shape (`EmbedderEntry`, `EMBEDDERS`).
+- **`RerankResult` also carries `scored`** (settled while implementing): every chunk that got a score, best first, before the threshold and top-K. `eval:run`'s threshold sweep needs the scores below the threshold, which `ranked` drops.
+- **`loadJudgeConfig(env, impl)`** (settled while implementing): the judge config no longer reads an implementation setting; the `jev` or `llm` reranker passes it. `JudgeConfig.impl` is `jev` (JEV with the LLM fallback) or `llm`. The JEV-only judge without fallback is no longer reachable from `.env`, so its factory test ("throws the JEV error for jev") was removed with the mode; the fallback judge's own tests are unchanged.
+- **`eval:run` without a JEV key** (settled while implementing): `tags+jev` uses the `llm` reranker, as `jev-with-fallback` did without a key, so `eval:run` keeps working and the report says the LLM answered. With a key it uses `jev`.
+- **The query output keeps its field names** (settled while implementing): `judging.{approved, cacheHits, judgeCalls, unknown}`, `timings.judgingMs` and `usage.judging` are filled from the reranker's stats, so the CLI output and E6's tests stay the same. `rankByScore` moved into the reranker as `bestFirst` (`rerank/rank.ts`); its tie-order test moved with it.
+- **The server's startup warning for a missing JEV key is gone** (consequence of the owner's decision): `RERANKER=jev` without a key is now a startup error, and `llm` needs no warning.
+- **Clean code**:
+  - **No per-call cache option on `Reranker`**: the cache is a judge setting, so `eval:run` builds its rerankers with `JUDGE_CACHE=on` instead of passing a flag every reranker would have to accept.
+  - **One sort per rerank, and relevance from `judgeAll`**: the judge-based reranker sorts once and keeps the chunks `judgeAll` found relevant, so the threshold rule lives in one place.
+  - **`eval:run` reports each mode's reranker `name` and `model`** (`JudgeIdentity`) instead of rebuilding the judge module's `PrimaryJudge`.
+  - **`Env` is exported from `env.ts`**; a shared `fakeRerankResult` test helper replaces four hand-built fakes.
+- **Skipped clean-code suggestions**:
+  - **Dropping `reranker`/`model` from `ScoredChunk`**: criterion 5 and the issue ask each `ScoredChunk` to name them.
+  - **Judge-only fields (`db`, `llmConfig`, `answeredBy`) on the generic types**: they cost nothing for other rerankers now; revisit if E8-3 needs different dependencies.
+  - **One generic registry helper for rerankers and embedders, and a table of renamed settings**: two small factories and one renamed key do not justify the abstraction yet.
+- **Code review fixes**:
+  - **The query output says when `RERANK_TOP_K` left relevant chunks out**: `RerankStats.relevant` counts the chunks that reached the threshold, and `npm run query` prints e.g. "approved: 8 (the best of 15 relevant; raise RERANK_TOP_K to keep more)".
+  - **A chunk the LLM scored for a failed JEV call names the LLM's model**, not JEV's.
+  - **`eval:run` does not read `RERANK_TOP_K`** (it keeps every relevant chunk) and builds one reranker per distinct name, so without a JEV key both judge modes share one.
+  - **`createReranker` reads the reranker's settings once**: only `loadRerankerConfig` (startup) runs `validate`.
+  - **The example drafts' settings note that `JUDGE_IMPL=llm` is now `RERANKER=llm`.**
+- **PR review fixes**:
+  - **`eval:run` builds the `llm` reranker once** and reuses it for `tags+jev` without a JEV key, instead of a memoising map.
+  - **The eval setup test asserts that all three chunks are kept** (threshold 0), so it fails if eval ever cuts at a top-K.
+- **Not changed (code review)**:
+  - **`returned` for the judge modes is best first instead of candidate order**: only its length and set-based precision/recall are used, so the report is unchanged.
+  - **`answeredBy` counts are judge-only**: a reranker without `answeredBy` (bge) would count as answered by neither; `eval:run`'s judge modes only use `jev` and `llm` until E8-5 reworks the report per reranker.
 
 ## Open Questions
 
