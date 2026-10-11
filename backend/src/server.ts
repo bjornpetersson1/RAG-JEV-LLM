@@ -1,5 +1,6 @@
 import { buildApp } from './app.js';
 import { resolveDatabasePath } from './db/config.js';
+import { loadContextLimits } from './generation/config.js';
 import { loadJudgeConfig, loadJudgingConfig } from './judge/config.js';
 import { loadLlmConfig } from './llm/config.js';
 import { resolvePort } from './port.js';
@@ -30,12 +31,13 @@ function readStartupConfig(): {
 } {
   try {
     const port = resolvePort(process.env.PORT);
-    // Fail fast on invalid LLM, query translator and judge settings; later issues build the roles
-    // from them.
+    // Fail fast on invalid LLM, query translator, judge and generator settings; later issues build
+    // the roles from them.
     loadLlmConfig(process.env);
     loadQueryTranslatorConfig(process.env);
     const judgeConfig = loadJudgeConfig(process.env);
     loadJudgingConfig(process.env);
+    loadContextLimits(process.env);
     return {
       port,
       judgeWarning: judgeConfig.warning,

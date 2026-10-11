@@ -1,10 +1,9 @@
-// LLM-backed role implementations. The tagger (E3-2), query translator (E4-4) and judge (E5-1)
-// prompts are real; the generator's is a placeholder that only makes the wiring work, replaced in
-// E6.
+// LLM-backed role implementations: the tagger (E3-2), query translator (E4-4), judge (E5-1) and
+// generator, which drafts from the E6-1 prompt templates (E6-2).
 
 import { LlmError, sumUsage, type JsonSchema, type LlmClient, type LlmUsage } from './client.js';
+import { loadPromptTemplate, renderPromptTemplate } from '../generation/templates.js';
 import type {
-  Chunk,
   Generator,
   QueryTranslator,
   ScoringJudge,
@@ -48,13 +47,11 @@ const JUDGE_SYSTEM_PROMPT = [
   'Svara med sannolikheten, från 0 till 1, att svaret på frågan är ja: 1 betyder säkert relevant, 0 säkert inte relevant.',
 ].join('\n');
 
+// Citations are read from the text itself (E6-2), so the draft is the only field.
 const DRAFT_SCHEMA: JsonSchema = {
   type: 'object',
-  properties: {
-    text: { type: 'string' },
-    references: { type: 'array', items: { type: 'string' } },
-  },
-  required: ['text', 'references'],
+  properties: { text: { type: 'string' } },
+  required: ['text'],
   additionalProperties: false,
 };
 
@@ -250,32 +247,18 @@ export function createLlmJudge(client: LlmClient): ScoringJudge {
 
 export function createLlmGenerator(client: LlmClient): Generator {
   return {
-    async generate({ template, instruction, chunks }) {
-      const { data } = await client.complete({
-        system:
-          'Draft the document from the template and instruction, using only the sources. ' +
-          'List the ids of the sources you cite.',
-        prompt: `Template:\n${template}\n\nInstruction:\n${instruction}\n\nSources:\n${formatChunks(chunks)}`,
-        schema: DRAFT_SCHEMA,
+    async generate({ template, instruction, chunks, parties }) {
+      const { system, prompt } = renderPromptTemplate(loadPromptTemplate(template), {
+        instruction,
+        chunks,
+        parties,
       });
+      const { data, usage } = await client.complete({ system, prompt, schema: DRAFT_SCHEMA });
       const text = readField(data, 'text');
       if (typeof text !== 'string') throw invalidResponse('a string "text"');
-      const chunkIds = new Set(chunks.map((chunk) => chunk.id));
-      const references = [
-        ...new Set(readStringArray(data, 'references').filter((id) => chunkIds.has(id))),
-      ];
-      return { text, references };
+      return { text, usage };
     },
   };
-}
-
-function formatChunks(chunks: readonly Chunk[]): string {
-  return chunks
-    .map((chunk) => {
-      const source = chunk.source ? ` (${chunk.source})` : '';
-      return `[${chunk.id}]${source} ${chunk.text}`;
-    })
-    .join('\n\n');
 }
 
 function slugSet(vocabulary: readonly Tag[]): ReadonlySet<string> {

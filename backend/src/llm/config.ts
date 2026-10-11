@@ -121,6 +121,11 @@ export function roleModel(config: LlmConfig, role: RoleName): string {
   return roleConfig.provider === 'fake' ? 'fake' : roleConfig.model;
 }
 
+/** A role's provider and model for reports, e.g. `claude-code claude-haiku-5-5`. */
+export function roleLabel(config: LlmConfig, role: RoleName): string {
+  return `${config.roles[role].provider} ${roleModel(config, role)}`;
+}
+
 function isProvider(value: string): value is Provider {
   return (PROVIDERS as readonly string[]).includes(value);
 }

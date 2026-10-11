@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { LlmError, NO_USAGE } from './client.js';
 import { createFakeLlmClient } from './fakes.js';
+import { loadPromptTemplate } from '../generation/templates.js';
 import {
   createLlmGenerator,
   createLlmJudge,
@@ -242,22 +243,42 @@ describe('LLM-backed roles', () => {
     });
   });
 
-  it('generator returns the draft with unique references to given chunks only', async () => {
-    const client = createFakeLlmClient(() => ({ text: 'Draft', references: ['c1', 'c9', 'c1'] }));
+  it('generator drafts from the rendered template and returns the text and usage', async () => {
+    const client = createFakeLlmClient(() => ({ text: 'Utkast [K:c1]' }));
+    const template = loadPromptTemplate('nda');
 
     const draft = await createLlmGenerator(client).generate({
-      template: 'NDA template',
-      instruction: 'Two-year NDA',
+      template: 'nda',
+      instruction: 'Tvåårigt sekretessavtal',
       chunks: [
         { id: 'c1', text: 'Confidentiality…', source: 'SFS 2018:558 2 §' },
         { id: 'c2', text: 'Damages…' },
       ],
+      parties: 'A och B',
     });
 
-    expect(draft).toEqual({ text: 'Draft', references: ['c1'] });
-    expect(client.requests[0].prompt).toContain(
-      '[c1] (SFS 2018:558 2 §) Confidentiality…\n\n[c2] Damages…',
+    expect(draft).toEqual({ text: 'Utkast [K:c1]', usage: NO_USAGE });
+    const [request] = client.requests;
+    expect(request.system).toContain(template.disclaimer);
+    expect(request.prompt).toContain('Tvåårigt sekretessavtal');
+    expect(request.prompt).toContain('A och B');
+    expect(request.prompt).toContain(
+      '[K:c1] SFS 2018:558 2 §\nConfidentiality…\n\n[K:c2]\nDamages…',
     );
+    expect(request.schema).toMatchObject({ required: ['text'] });
+  });
+
+  it('generator rejects an unknown template before calling the model', async () => {
+    const client = createFakeLlmClient(() => ({ text: 'x' }));
+
+    await expect(
+      createLlmGenerator(client).generate({
+        template: 'lease',
+        instruction: 'x',
+        chunks: [{ id: 'c1', text: 'y' }],
+      }),
+    ).rejects.toThrow('Unknown template "lease"');
+    expect(client.requests).toHaveLength(0);
   });
 
   it('rejects a response that does not match the expected shape', async () => {

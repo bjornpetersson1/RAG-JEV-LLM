@@ -18,14 +18,14 @@ function answerForSchema(body: Record<string, unknown>): Response {
   const fields = Object.keys(format.schema.properties);
   if (fields.includes('tags')) return messageResponse({ tags: ['employment', 'salary', 'notice'] });
   if (fields.includes('score')) return messageResponse({ score: 0.9 });
-  return messageResponse({ text: 'Draft', references: ['c1'] });
+  return messageResponse({ text: 'Draft' });
 }
 
 async function callEveryRole(roles: LlmRoles) {
   await roles.tagger.tag({ text: 'text' }, VOCABULARY);
   await roles.queryTranslator.translate('instruction', VOCABULARY);
   await roles.judge.judge('instruction', CHUNK);
-  await roles.generator.generate({ template: 'T', instruction: 'I', chunks: [CHUNK] });
+  await roles.generator.generate({ template: 'nda', instruction: 'I', chunks: [CHUNK] });
 }
 
 /** Builds the roles from `env` alone and returns the model each Anthropic call used, by role. */
