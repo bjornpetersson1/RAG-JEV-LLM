@@ -62,6 +62,7 @@ A post-check of every generated draft: it finds the `[K:<chunk-id>]` citations a
 - **A section without a chapter matches any chapter** (default): "9 § DL" is valid against `SFS 2008:567 2 kap. 9 §`, since drafts often leave the chapter out.
 - **Offsets in UTF-16 code units** (default): what JavaScript string indices use, so the UI can slice the text directly.
 - **Code in `backend/src/generation/`** (default), next to the generator.
+- **Builds on what E6-2 delivered** (spec update after E6-2 merged): `[K:]` citations come from E6-1's `findCitations`, whose offsets are those of the bracket group, so every id in a group `[K:12, K:40]` is flagged with the group's offsets. The post-check runs inside `generateDraft` against its submitted chunks and is part of `GenerationResult`; when no chunk fit the limits there is no text and no post-check. E6-2's interim `outsideCitations` list is replaced by the citation flags, and the CLI's "Citations outside the submitted chunks" line by the post-check output.
 
 ## Open Questions
 
