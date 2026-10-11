@@ -39,7 +39,11 @@ describe('generateDraft', () => {
     expect(result.used[0]).toEqual(CHUNKS[0]);
     expect(result.unused.map((c) => c.id)).toEqual(['12']);
     expect(result.leftOut.map((c) => c.id)).toEqual(['21']);
-    expect(result.outsideCitations).toEqual(['21', '99']);
+    expect(result.check?.flags.map(({ kind, text }) => [kind, text])).toEqual([
+      ['citation', '[K:21]'],
+      ['citation', '[K:99]'],
+    ]);
+    expect(result.check).toMatchObject({ references: 4, valid: 2, sourceAccuracy: 0.5 });
     expect(result.context).toEqual({
       limits: { maxChunks: 2, maxContextChars: 10_000 },
       limitedBy: ['maxChunks'],
@@ -62,7 +66,7 @@ describe('generateDraft', () => {
     );
 
     expect(result.used.map((c) => c.id)).toEqual(['11', '12', '21']);
-    expect(result.outsideCitations).toEqual([]);
+    expect(result.check).toMatchObject({ flags: [], references: 3, valid: 3, sourceAccuracy: 1 });
     expect(result.context.limitedBy).toEqual([]);
   });
 
@@ -100,6 +104,7 @@ describe('generateDraft', () => {
 
     expect(calls).toBe(0);
     expect(result.text).toBeUndefined();
+    expect(result.check).toBeUndefined();
     expect(result.used).toEqual([]);
     expect(result.leftOut).toEqual(CHUNKS);
     expect(result.context.limitedBy).toEqual(['maxContextChars']);

@@ -2,6 +2,7 @@ import type { LlmUsage } from '../llm/client.js';
 import type { Chunk } from '../llm/types.js';
 import type { ContextLimits } from './config.js';
 import type { GenerationResult } from './generate.js';
+import type { PostCheck } from './post-check.js';
 import { LIMIT_OPTIONS } from './query-args.js';
 import type { QueryRequest, QueryResult } from './query-flow.js';
 import { citation } from './templates.js';
@@ -35,14 +36,23 @@ function formatDraft(request: QueryRequest, draft: GenerationResult): string[] {
   const lines = [draft.text, ''];
   lines.push(...formatSources(`Sources used (${draft.used.length}):`, draft.used));
   lines.push(...formatSources(`Unused sources (${draft.unused.length}):`, draft.unused));
-  lines.push(
-    `Citations outside the submitted chunks: ${draft.outsideCitations.length}` +
-      (draft.outsideCitations.length > 0
-        ? ` (${draft.outsideCitations.map(citation).join(' ')})`
-        : ''),
-  );
+  if (draft.check) lines.push(...formatCheck(draft.check));
   if (draft.leftOut.length > 0) lines.push('', ...formatLimitNotice(request, draft));
   return lines;
+}
+
+function formatCheck({ flags, references, valid, sourceAccuracy }: PostCheck): string[] {
+  const accuracy =
+    sourceAccuracy === null
+      ? '– (no references)'
+      : `${Math.floor(sourceAccuracy * 100)} % (${valid} of ${references} references)`;
+  return [
+    `Source accuracy: ${accuracy}`,
+    `Flagged references (${flags.length}):`,
+    ...flags.map(
+      ({ kind, text, start, end, reason }) => `  ${start}–${end} ${kind} "${text}": ${reason}`,
+    ),
+  ];
 }
 
 function formatSources(heading: string, chunks: readonly Chunk[]): string[] {

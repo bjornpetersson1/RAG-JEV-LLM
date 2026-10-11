@@ -4,7 +4,7 @@
 - **Labels:** `E6 Generation`
 - **Phase:** 4. Judging and generation
 - **Depends on:** E6-2 (#20)
-- **Status:** Approved
+- **Status:** Implemented — all acceptance criteria verified (npm ci, lint, format:check, typecheck, 619 tests (615 backend, 4 frontend) and build exit 0; `npm run query` with fake roles prints the source accuracy and flags)
 
 ## Summary
 
@@ -45,12 +45,12 @@ A post-check of every generated draft: it finds the `[K:<chunk-id>]` citations a
 
 ## Tasks
 
-- [ ] Citation check against the submitted ids, with offsets.
-- [ ] Free-text reference detection (provisions, statutes, cases) and the abbreviation table.
-- [ ] Matching of free-text references against the submitted chunks' source references.
-- [ ] Source accuracy and counts.
-- [ ] Add the post-check to the E6-2 generation result and the `query` CLI output.
-- [ ] Unit and flow tests for every acceptance criterion.
+- [x] Citation check against the submitted ids, with offsets.
+- [x] Free-text reference detection (provisions, statutes, cases) and the abbreviation table.
+- [x] Matching of free-text references against the submitted chunks' source references.
+- [x] Source accuracy and counts.
+- [x] Add the post-check to the E6-2 generation result and the `query` CLI output.
+- [x] Unit and flow tests for every acceptance criterion.
 
 ## Decisions
 
@@ -63,6 +63,25 @@ A post-check of every generated draft: it finds the `[K:<chunk-id>]` citations a
 - **Offsets in UTF-16 code units** (default): what JavaScript string indices use, so the UI can slice the text directly.
 - **Code in `backend/src/generation/`** (default), next to the generator.
 - **Builds on what E6-2 delivered** (spec update after E6-2 merged): `[K:]` citations come from E6-1's `findCitations`, whose offsets are those of the bracket group, so every id in a group `[K:12, K:40]` is flagged with the group's offsets. The post-check runs inside `generateDraft` against its submitted chunks and is part of `GenerationResult`; when no chunk fit the limits there is no text and no post-check. E6-2's interim `outsideCitations` list is replaced by the citation flags, and the CLI's "Citations outside the submitted chunks" line by the post-check output.
+
+- **Law names count like abbreviations** (implementation): the table holds the abbreviations and the common names of the imported laws (`LAS`/`anställningsskyddslagen`, `AvtL`/`avtalslagen`, `FHL`/`företagshemlighetslagen`, `SemL`/`semesterlagen`, `DL`/`diskrimineringslagen`, `ATL`/`arbetstidslagen`, `MBL`/`medbestämmandelagen`, `FLL`/`föräldraledighetslagen`), and names are matched with a lower- or upper-case first letter. A name or abbreviation alone is a whole-statute reference, as the spec says for abbreviations; drafts usually write "enligt semesterlagen" rather than an SFS number. The laws without a common short name (SFS 2018:218, 2002:293, 2012:854) are found only by SFS number or `lagen (…)`.
+- **Detection order** (implementation): provisions are matched first (section, optional chapter and paragraph, then the law), so "7 § LAS" is one reference; a law name inside a provision is not counted again. `[K:]` citations are blanked out (offsets kept) before free text is read.
+- **Flag reasons** (implementation): `chunk <id> was not submitted` for a citation; `no submitted chunk is from <document[ chapter][ section]>` for free text.
+- **Checked on the E6-2 examples** (verification): run over `prompts/examples/` against their submitted chunks, the employment draft scores 23 of 27 (85 %): "arbetstidslagen", "semesterlagen" (twice) and "38 § avtalslagen" are flagged, since only court cases discussing them were submitted. The NDA draft scores 35 of 35. The examples themselves are not regenerated.
+- **CLI output** (implementation): "Source accuracy: 85 % (23 of 27 references)" or "– (no references)", then "Flagged references (n):" with offsets, kind, text and reason per flag; this replaces E6-2's interim "Citations outside the submitted chunks" line.
+
+- **Fixes from code review**, each with a test. The first five were cases where a wrong reference passed as valid or was missed:
+  - paragraphs written `2 st.` or `första och andra stycket` are read;
+  - a section list `7 och 8 §§ LAS` gives one reference per section, sharing the list's offsets;
+  - a law name right after a `§` that the pattern could not read (e.g. `7 § i LAS`) is not counted as a whole-statute reference, which would always pass;
+  - `8 § (1982:80)` is read, as the Goals say;
+  - law names in the genitive (`semesterlagens`, `LAS:s`) are read;
+  - `lagen (1982:80) om anställningsskydd (LAS)` counts once;
+  - `NJA 2015 s 123` without the dot is read;
+  - a `[K:` group no longer runs across lines (E6-1's `findCitations`), so an unclosed bracket cannot hide later references;
+  - the source accuracy is rounded down, so a draft with a flag never shows 100 %;
+  - `checkDraft` takes the citations `generateDraft` already found and masks them in one pass.
+- **Example trailers updated** (code review): the two examples in `prompts/examples/` now end with the post-check output computed over their drafts, with a note that the run itself printed E6-2's interim line.
 
 ## Open Questions
 

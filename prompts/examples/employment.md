@@ -6,7 +6,7 @@ A real run of `npm run query` (E6-2) on 2026-10-11, kept to show what the `emplo
 npm run query -- "Anställningsavtal för en säljare med provision och konkurrensklausul i tolv månader efter anställningens slut." --template employment
 ```
 
-Settings: `LLM_PROVIDER=claude-code` (the Claude Code subscription, no API key), query translator and judge `claude-haiku-5-5`, generator `claude-sonnet-5-5`, `JUDGE_IMPL=llm` (no JEV key yet, so the LLM judged, as in E5-3; its scores came from the judge cache of the E5-3 evaluation where available), default context limits.
+Settings: `LLM_PROVIDER=claude-code` (the Claude Code subscription, no API key), query translator and judge `claude-haiku-5-5`, generator `claude-sonnet-5-5`, `JUDGE_IMPL=llm` (no JEV key yet, so the LLM judged, as in E5-3; its scores came from the judge cache of the E5-3 evaluation where available), default context limits. The source accuracy and flagged references below were added afterwards by running the E6-3 post-check over this draft and its submitted chunks; the run itself printed E6-2's interim line "Citations outside the submitted chunks: 0".
 
 ## Query
 
@@ -92,7 +92,12 @@ Unused sources (7):
   [K:740] AD 2002 nr 15, Domskäl, Frågan om anställningsform, del 1/6
   [K:741] AD 2002 nr 15, Domskäl, Frågan om anställningsform, del 2/6
   [K:935] AD 2010 nr 90, Inledning, T.S. har nu anställning i konkurrerande verksamhet
-Citations outside the submitted chunks: 0
+Source accuracy: 85 % (23 of 27 references)
+Flagged references (4):
+  1651–1666 free-text "arbetstidslagen": no submitted chunk is from SFS 1982:673
+  1808–1821 free-text "semesterlagen": no submitted chunk is from SFS 1977:480
+  1923–1936 free-text "semesterlagen": no submitted chunk is from SFS 1977:480
+  3668–3684 free-text "38 § avtalslagen": no submitted chunk is from SFS 1915:218 38 §
 
 Time (ms): translation 8502 · search 8 · judging 4952 · generation 25091 · total 38553
 Tokens: translation in 2 / out 932 · judging in 4 / out 500 · generation in 2 / out 2760

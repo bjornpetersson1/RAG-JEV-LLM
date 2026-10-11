@@ -80,6 +80,7 @@ describe('runQuery', () => {
     expect(result.candidates).toBe(3);
     expect(result.judging).toEqual({ approved: 2, cacheHits: 1, judgeCalls: 2, unknown: 0 });
     expect(result.draft?.used.map((c) => c.id)).toEqual(['2', '1']);
+    expect(result.draft?.check).toMatchObject({ flags: [], references: 2, sourceAccuracy: 1 });
     expect(result.timings).toMatchObject({ translationMs: 12, judgingMs: 40 });
     expect(result.timings.searchMs).toBeGreaterThanOrEqual(0);
     expect(result.timings.generationMs).toBeGreaterThanOrEqual(0);
@@ -146,5 +147,6 @@ describe('createQueryFlow', () => {
     expect(result.draft?.used[0].source).toBe('SFS 1982:80 7 §');
     expect(result.draft?.context.limits).toEqual({ maxChunks: 1, maxContextChars: 60_000 });
     expect(result.draft?.text).toContain('inte juridisk rådgivning');
+    expect(result.draft?.check).toMatchObject({ flags: [], sourceAccuracy: 1 });
   });
 });

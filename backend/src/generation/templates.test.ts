@@ -257,6 +257,10 @@ describe('findCitations', () => {
     ]);
   });
 
+  it('does not read an unclosed [K: across lines', () => {
+    expect(findCitations('Se [K:1\n\nText [K:2].').map(({ id }) => id)).toEqual(['2']);
+  });
+
   it('ignores placeholders and text without citations', () => {
     expect(findCitations('Lön: [lön], start [tillträdesdag].')).toEqual([]);
   });
