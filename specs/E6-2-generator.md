@@ -77,6 +77,7 @@ The `Generator` role drafts an employment agreement or NDA from the lawyer's ins
 - **Candidate mode `tags+fts`** (default): the search's default mode and the one the UI will use; the CLI does not add a mode flag.
 - **Exit code 0 when nothing is approved** (default): it is a valid outcome, not an error.
 - **Code in `backend/src/generation/`** (default), next to the E6-1 template loader.
+- **Builds on what E6-1 delivered** (spec update after E6-1 merged): templates are rendered with `loadPromptTemplate` / `renderPromptTemplate` (which require at least one chunk, consistent with stopping when nothing is approved), citations are parsed with E6-1's `findCitations` (one entry per id, groups such as `[K:12, K:40]` included), and the disclaimer line to enforce is the template's `disclaimer` part. The placeholder chunk formatting in `llm/roles.ts` is removed with the placeholder generator.
 
 ## Open Questions
 
