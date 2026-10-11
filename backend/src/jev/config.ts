@@ -19,7 +19,12 @@ const DEFAULT_JEV_SETTINGS = {
 
 /** Whether `JEV_API_KEY` is set, i.e. whether JEV can be called at all. */
 export function hasJevKey(env: Record<string, string | undefined>): boolean {
-  return Boolean(env.JEV_API_KEY?.trim());
+  return jevKey(env) !== undefined;
+}
+
+/** The trimmed `JEV_API_KEY`, or undefined when it is unset or blank. */
+function jevKey(env: Record<string, string | undefined>): string | undefined {
+  return env.JEV_API_KEY?.trim() || undefined;
 }
 
 /**
@@ -32,7 +37,7 @@ export function loadJevConfig(
   requiredBy: string,
   timeoutMs?: number,
 ): JevConfig {
-  const apiKey = env.JEV_API_KEY?.trim();
+  const apiKey = jevKey(env);
   if (!apiKey) throw new Error(`JEV_API_KEY is required because ${requiredBy}`);
   // Read even when overridden, so an invalid value fails at startup whichever role uses JEV.
   const jevTimeoutMs = readPositiveInteger(
