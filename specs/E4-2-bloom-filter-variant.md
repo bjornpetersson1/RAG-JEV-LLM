@@ -90,6 +90,7 @@ A second `TagIndex` implementation built on a bit-sliced bloom filter signature 
   - The per-tag false positive rate counts the returned chunks that lack the tag, rather than subtracting counts.
   - An unverified index keeps no exact tag lists and marks no query tags (2.2 MB instead of 3.6 MB).
   - The bench builds its three indexes through one helper, and the README says `BLOOM_VERIFY` does not apply to it.
+- **`description` is typed explicitly** on the bloom index (PR review), so a change to its shape is a compile error.
 - **Skipped clean-code suggestions**: binary search instead of the build-time `Map` from chunk id to ordinal (about 10–30 ms of build time, which is not measured against a limit); lifting the shared match counts into `BaseTagIndex` (two implementations so far).
 
 ## Open Questions

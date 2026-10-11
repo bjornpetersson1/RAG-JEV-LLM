@@ -5,6 +5,7 @@ import {
   rankByMatches,
   type BuildTagIndex,
   type ChunkTag,
+  type IndexDescription,
   type RankedHit,
   type RankedOptions,
   type TagIndex,
@@ -45,7 +46,7 @@ class BitSlicedBloomIndex extends BaseTagIndex implements BloomTagIndex {
   readonly chunkCount: number;
   readonly tagCount: number;
   readonly falsePositiveRate: number;
-  readonly description;
+  readonly description: IndexDescription & BloomSettings & { falsePositiveRate: number };
   readonly #verify: boolean;
   /** Every tagged chunk id in ascending order; a chunk's position is its ordinal. */
   readonly #chunkIds: Uint32Array;
