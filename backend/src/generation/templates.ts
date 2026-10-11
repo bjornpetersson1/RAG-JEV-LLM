@@ -25,8 +25,15 @@ const SLOTS: Partial<Record<Part, readonly string[]>> = {
 // Anything in double braces, so a misspelt slot such as `{{ lön }}` is reported, not sent as is.
 const SLOT_PATTERN = /\{\{([^}]*)\}\}/g;
 
-/** A chunk citation as the templates ask the model to write it, e.g. `[K:12]`; group 1 is the id. */
-export const CITATION_PATTERN = /\[K:([^\]\s]+)\]/g;
+// A bracket group of citations: `[K:12]`, or several ids as `[K:12, K:40]` or `[K:12, 40]`.
+const CITATION_GROUP_PATTERN = /\[K:([^\]]*)\]/g;
+
+/** One cited chunk id, with the offsets of the bracket group it was written in. */
+export interface FoundCitation {
+  id: string;
+  start: number;
+  end: number;
+}
 
 export type PromptTemplate = { id: Template } & Record<Part, string>;
 
@@ -115,6 +122,19 @@ export function renderPromptTemplate(template: PromptTemplate, input: PromptInpu
 /** The citation of a chunk, as the templates ask the model to write it. */
 export function citation(chunkId: string): string {
   return `[K:${chunkId}]`;
+}
+
+/** Every chunk id cited in a draft, in text order, one entry per id even inside a group. */
+export function findCitations(text: string): FoundCitation[] {
+  return [...text.matchAll(CITATION_GROUP_PATTERN)].flatMap((match) => {
+    const start = match.index;
+    const end = start + match[0].length;
+    return match[1]
+      .split(',')
+      .map((item) => item.trim().replace(/^K:\s*/, ''))
+      .filter((id) => id !== '')
+      .map((id) => ({ id, start, end }));
+  });
 }
 
 function formatChunks(chunks: readonly Chunk[]): string {

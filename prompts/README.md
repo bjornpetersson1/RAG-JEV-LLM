@@ -42,6 +42,7 @@ Slots are filled in one pass, so text such as `{{chunks}}` inside the instructio
 The model cites a source by writing `[K:<chunk-id>]` right after the sentence or clause that rests on it, for example `Provanställningen får vara högst sex månader [K:12].` Several sources are written in a row: `[K:12][K:40]`.
 
 - `<chunk-id>` is the chunk's id in the database (`chunks.id`), exactly as it appears in `{{chunks}}`.
+- The templates ask for one id per bracket, but the parser (`findCitations` in `backend/src/generation/templates.ts`) also reads groups such as `[K:12, K:40]`.
 - Only ids from the supplied chunks may be cited. The generator (E6-2) maps citations to source references, and the post-check (E6-3) flags any citation that does not match a submitted chunk.
 
 ## Placeholders

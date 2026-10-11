@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { Chunk } from '../llm/types.js';
 import { TEMPLATES, type Template } from '../tagging/vocabulary.js';
 import {
-  CITATION_PATTERN,
+  findCitations,
   loadPromptTemplate,
   parsePromptTemplate,
   PROMPTS_DIR,
@@ -130,10 +130,10 @@ describe('renderPromptTemplate', () => {
     );
   });
 
-  it('writes chunk citations that CITATION_PATTERN reads back', () => {
+  it('writes chunk citations that findCitations reads back', () => {
     const template = loadPromptTemplate('employment');
     const { prompt } = renderPromptTemplate(template, { instruction: INSTRUCTION, chunks: CHUNKS });
-    const ids = [...prompt.matchAll(CITATION_PATTERN)].map(([, id]) => id);
+    const ids = findCitations(prompt).map(({ id }) => id);
     expect(ids).toEqual(['12', '40', '77']);
   });
 });
@@ -236,3 +236,32 @@ describe('parsePromptTemplate', () => {
 function escape(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
 }
+
+describe('findCitations', () => {
+  it('finds single citations with the offsets of their brackets', () => {
+    const text = 'Lön betalas månadsvis [K:12]. Semester [K:40][K:7].';
+    expect(findCitations(text)).toEqual([
+      { id: '12', start: 22, end: 28 },
+      { id: '40', start: 39, end: 45 },
+      { id: '7', start: 45, end: 50 },
+    ]);
+    expect(text.slice(22, 28)).toBe('[K:12]');
+  });
+
+  it('returns one entry per id in a bracket group', () => {
+    expect(findCitations('Se [K:12, K:40] och [K:3,4].')).toEqual([
+      { id: '12', start: 3, end: 15 },
+      { id: '40', start: 3, end: 15 },
+      { id: '3', start: 20, end: 27 },
+      { id: '4', start: 20, end: 27 },
+    ]);
+  });
+
+  it('ignores placeholders and text without citations', () => {
+    expect(findCitations('Lön: [lön], start [tillträdesdag].')).toEqual([]);
+  });
+
+  it('can be called repeatedly with the same result', () => {
+    expect(findCitations('[K:1]')).toEqual(findCitations('[K:1]'));
+  });
+});

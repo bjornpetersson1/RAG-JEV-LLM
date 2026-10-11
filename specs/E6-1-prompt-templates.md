@@ -4,7 +4,7 @@
 - **Labels:** `E6 Generation`
 - **Phase:** 4. Judging and generation
 - **Depends on:** E1-2 (#2)
-- **Status:** Implemented — all acceptance criteria verified (npm ci, lint, format:check, typecheck, 552 tests (548 backend, 4 frontend) and build exit 0); the real-LLM example drafts are verified in E6-2
+- **Status:** Implemented — all acceptance criteria verified (npm ci, lint, format:check, typecheck, 556 tests (552 backend, 4 frontend) and build exit 0); the real-LLM example drafts are verified in E6-2
 
 ## Summary
 
@@ -73,7 +73,7 @@ Two prompt templates, one for employment agreements (`employment`) and one for N
 - **Stricter template validation** (code review): an unknown or repeated `##` part, an empty part, and anything in double braces that is not a known slot (e.g. `{{ lön }}`) fail loading, since each would silently cut or leak prompt text.
 - **At least one chunk** (code review): rendering with no chunks throws; E6-2 stops before generation when nothing is approved, so an empty source list is a caller error.
 - **Parties wording** (code review): the templates say to use the parties under "Parter" exactly as given, instead of calling them fictional, since a caller may pass real parties.
-- **Shared citation format** (code review): `citation()` and `CITATION_PATTERN` are exported from the template module, so E6-2 and E6-3 parse the same format the prompt writes.
+- **Shared citation format** (code review, reshaped in PR review): `citation()` writes the format and `findCitations(text)` reads it, both exported from the template module so E6-2 and E6-3 parse what the prompt asks for. `findCitations` returns one entry per id with the offsets of its bracket group, and accepts groups (`[K:12, K:40]`, `[K:12, 40]`) as E6-2 and E6-3 require; its regex is private, so no caller shares a global regex's `lastIndex`.
 - **Templates read once** (code review): loaded templates are kept per file path.
 - **Left to E6-2** (code review findings, not fixed here): the placeholder generator in `llm/roles.ts` still formats chunks as `[id] (source)`, and `GenerateInput` has no `parties`; E6-2 replaces that generator with the template and adds optional parties to its input, as its spec says.
 - **README** (implementation): a short "Prompt templates" section in the root README points to `prompts/README.md`.
