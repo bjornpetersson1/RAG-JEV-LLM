@@ -69,6 +69,13 @@ An evaluation set of 20 queries with marked relevant chunks, a labelling helper,
 - **Macro averages over queries; precision 0 on an empty result** (default): every query weighs the same; an empty answer is penalised in precision as well as recall.
 - **YAML parsing** (default): if no YAML parser is in the repo already, the `yaml` package is added as the only new dependency; the issue names the `.yaml` file.
 
+- **Builds on E5-1 and E5-2 as merged** (spec update before implementing):
+  - The judge modes build their judge with `createJudging`, with `JUDGE_IMPL` forced per mode, and run E5-2's `judgeAll` with the cache on. The sweep reads the scores in `judgeAll`'s result.
+  - Without `JEV_API_KEY`, E5-1 turns `jev-with-fallback` into the LLM judge. `tags+jev` and `tags+llm` then ask the same judge and share its cached scores, and the report says the `tags+jev` row was answered by the LLM.
+  - The three tag modes judge or return the candidates of candidate search mode `tags` (E4-3), so they are compared on the same candidates. `fts` uses mode `fts`.
+- **`sourceRef` is the stored source reference** (spec update): `chunks.source_ref` already starts with the document identifier, e.g. `SFS 1982:80 4 b §` or `AD 2001 nr 91, Domskäl, del 3/3`. A relevant chunk is therefore `{ document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 4 b §' }`, looked up by both.
+- **The `claude-code` provider calls `claude -p`** (checked before implementing): it sends the system prompt, `--json-schema`, `--output-format json`, `--model` and no tools, and reads `structured_output` and `usage` from the JSON result. A trial call took about 4 s. It goes through E1-2's retry and logging wrapper like the Anthropic transport.
+
 ## Open Questions
 
 - None.
