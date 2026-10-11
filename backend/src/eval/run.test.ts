@@ -139,7 +139,7 @@ describe('runEvaluation', () => {
     expect(failures).toEqual(['anst-01']);
     expect(result.modes.tags).toMatchObject({ precision: 1, recall: 1 });
     expect(formatForTerminal(result)).toContain(
-      '1 queries failed and are left out of every average:\n  - anst-01: claude exited with code 1',
+      '1 query failed (left out of every average):\n  - anst-01: claude exited with code 1',
     );
     expect(formatAsMarkdown(result, { startedAt: new Date(), settings: {} })).toContain(
       '- anst-01: claude exited with code 1',

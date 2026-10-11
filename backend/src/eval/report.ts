@@ -87,7 +87,7 @@ export function formatAsMarkdown(result: EvalResult, context: ReportContext): st
 function failureLines({ failed }: EvalResult): string[] {
   if (failed.length === 0) return [];
   return [
-    `${failed.length} queries failed and are left out of every average:`,
+    `${failed.length} ${failed.length === 1 ? 'query' : 'queries'} failed (left out of every average):`,
     ...failed.map(({ id, error }) => `- ${id}: ${error}`),
   ];
 }
