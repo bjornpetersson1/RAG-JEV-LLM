@@ -1,6 +1,7 @@
 import { RoaringBitmap32, roaringLibraryInitialize } from 'roaring-wasm';
 import {
   BaseTagIndex,
+  ordinalsOf,
   rankByMatches,
   type BuildTagIndex,
   type ChunkTag,
@@ -17,6 +18,7 @@ export const buildRoaringIndex: BuildTagIndex = (chunkTags) => new RoaringTagInd
 class RoaringTagIndex extends BaseTagIndex {
   readonly chunkCount: number;
   readonly tagCount: number;
+  readonly description = { implementation: 'roaring' };
   readonly #bitmaps = new Map<string, RoaringBitmap32>();
   /** Every tagged chunk id in ascending order; a chunk's position is its ordinal. */
   readonly #chunkIds: Uint32Array;
@@ -43,9 +45,7 @@ class RoaringTagIndex extends BaseTagIndex {
       this.#bitmaps.set(slug, bitmap);
     }
     this.#chunkIds = this.#union([...this.#bitmaps.values()]);
-    // Ordinals keep the count array as large as the corpus, however high re-chunking pushes the ids.
-    const ordinalOf = new Map<number, number>();
-    this.#chunkIds.forEach((chunkId, ordinal) => ordinalOf.set(chunkId, ordinal));
+    const ordinalOf = ordinalsOf(this.#chunkIds);
     for (const [slug, bitmap] of this.#bitmaps) {
       this.#ordinals.set(
         slug,

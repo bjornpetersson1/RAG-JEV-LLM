@@ -93,6 +93,18 @@ export function describeTagIndexContract(name: string, build: BuildTagIndex): vo
       expect(index.searchRanked(tags, { minMatches: 4 })).toEqual([]);
     });
 
+    it('counts a chunk–tag pair given twice once', () => {
+      const repeated = build([...CONTRACT_CHUNK_TAGS, { chunkId: 7, slug: 'semester' }]);
+      try {
+        expect(repeated.searchAll(['semester'])).toEqual([7]);
+        expect(repeated.searchRanked(['semester', 'lon'])).toEqual(
+          index.searchRanked(['semester', 'lon']),
+        );
+      } finally {
+        repeated.dispose();
+      }
+    });
+
     it('gives the same ranking when searched again', () => {
       const tags = ['uppsagning', 'lon'];
       expect(index.searchRanked(tags)).toEqual(index.searchRanked(tags));

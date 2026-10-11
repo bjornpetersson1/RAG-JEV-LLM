@@ -35,3 +35,27 @@ export function readShare(
   }
   return share;
 }
+
+/** `true` or `false` at `key`, or `fallback` when it is unset or empty. */
+export function readBoolean(
+  env: Record<string, string | undefined>,
+  key: string,
+  fallback: boolean,
+): boolean {
+  return readOneOf(env, key, ['true', 'false'], fallback ? 'true' : 'false') === 'true';
+}
+
+/** One of `values` at `key`, or `fallback` when it is unset or empty. */
+export function readOneOf<T extends string>(
+  env: Record<string, string | undefined>,
+  key: string,
+  values: readonly T[],
+  fallback: T,
+): T {
+  const value = env[key]?.trim();
+  if (!value) return fallback;
+  if (!(values as readonly string[]).includes(value)) {
+    throw new Error(`Invalid ${key} "${value}": expected ${values.join(' or ')}`);
+  }
+  return value as T;
+}
