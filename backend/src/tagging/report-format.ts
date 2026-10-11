@@ -1,6 +1,4 @@
-import { existsSync, mkdirSync } from 'node:fs';
-import { join } from 'node:path';
-import { writeFileAtomically } from '../ingest/files.js';
+import { escapeCell, writeMarkdownReport } from '../reports.js';
 import { formatUsd } from '../llm/pricing.js';
 import { TAGS_PER_CHUNK } from '../llm/roles.js';
 import type { ChunkReference, TagCount, TaggingReport } from './report.js';
@@ -62,13 +60,7 @@ export function formatReportAsMarkdown(report: TaggingReport): string {
 
 /** Writes the Markdown report to `<dir>/tagging-<UTC timestamp>.md` and returns the path. */
 export function writeReport(report: TaggingReport, dir: string, now = new Date()): string {
-  mkdirSync(dir, { recursive: true });
-  // Two reports within one second (e.g. index:tag then index:report) must not overwrite each other.
-  const base = join(dir, `tagging-${fileTimestamp(now)}`);
-  let path = `${base}.md`;
-  for (let copy = 2; existsSync(path); copy += 1) path = `${base}-${copy}.md`;
-  writeFileAtomically(path, formatReportAsMarkdown(report));
-  return path;
+  return writeMarkdownReport(dir, 'tagging', formatReportAsMarkdown(report), now);
 }
 
 /** The `index:tag` run summary for the terminal. */
@@ -120,11 +112,6 @@ function tagRow(tag: TagCount): string {
   return `| ${cells.join(' | ')} |`;
 }
 
-/** A pipe would end the table cell early. */
-function escapeCell(text: string): string {
-  return text.replace(/\\/g, '\\\\').replace(/\|/g, '\\|');
-}
-
 function describeChunk(chunk: ChunkReference): string {
   return `#${chunk.id} ${chunk.sourceRef}`;
 }
@@ -133,12 +120,4 @@ function percent(share: number): string {
   const rounded = Math.round(share * 100);
   // A tag on a few chunks must not look like one on none.
   return share > 0 && rounded === 0 ? '<1%' : `${rounded}%`;
-}
-
-/** E.g. `20261010T143000Z`: sortable and safe in file names on every platform. */
-function fileTimestamp(date: Date): string {
-  return date
-    .toISOString()
-    .replace(/[-:]/g, '')
-    .replace(/\.\d{3}/, '');
 }

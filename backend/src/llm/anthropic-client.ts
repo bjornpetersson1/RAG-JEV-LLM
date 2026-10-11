@@ -1,10 +1,11 @@
 import {
   LlmError,
+  toLlmUsage,
+  type ApiUsage,
   type LlmClient,
   type LlmLogger,
   type LlmRequest,
   type LlmResponse,
-  type LlmUsage,
 } from './client.js';
 import { isFetchTimeout } from '../http.js';
 import { withRetryAndLogging } from './retrying-client.js';
@@ -28,12 +29,7 @@ export interface AnthropicClientOptions {
 interface MessagesResponse {
   content?: unknown;
   stop_reason?: unknown;
-  usage?: {
-    input_tokens?: number;
-    output_tokens?: number;
-    cache_creation_input_tokens?: number;
-    cache_read_input_tokens?: number;
-  };
+  usage?: ApiUsage;
 }
 
 export function createAnthropicClient(options: AnthropicClientOptions): LlmClient {
@@ -107,12 +103,7 @@ async function httpError(response: Response): Promise<LlmError> {
 
 function parseMessage(body: unknown): LlmResponse {
   const message: MessagesResponse = typeof body === 'object' && body !== null ? body : {};
-  const usage: LlmUsage = {
-    inputTokens: message.usage?.input_tokens ?? 0,
-    outputTokens: message.usage?.output_tokens ?? 0,
-    cacheWriteTokens: message.usage?.cache_creation_input_tokens ?? 0,
-    cacheReadTokens: message.usage?.cache_read_input_tokens ?? 0,
-  };
+  const usage = toLlmUsage(message.usage);
   const unusable = (reason: string) => new LlmError(reason, { retryable: false, usage });
 
   if (message.stop_reason !== 'end_turn') {
