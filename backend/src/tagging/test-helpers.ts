@@ -5,10 +5,11 @@ import { FETCHED_AT } from '../ingest/test-helpers.js';
 
 /** A temporary migrated database with a helper to add a document's chunks. */
 export function createTaggingWorkspace() {
-  const { db, remove } = createTestDatabase('tagging-');
+  const { db, path, remove } = createTestDatabase('tagging-');
 
   return {
     db,
+    path,
     /** Adds a law with one chunk per text and returns the chunk ids in order. */
     addChunks(identifier: string, texts: string[]): number[] {
       upsertDocument(db, {
@@ -39,6 +40,13 @@ export function createTaggingWorkspace() {
           .prepare('SELECT id FROM chunks WHERE document_id = ? ORDER BY ordinal')
           .all(documentId) as { id: number }[]
       ).map((row) => row.id);
+    },
+    /** Links the chunk to the stored tag with `slug`. */
+    linkTag(chunkId: number, slug: string): void {
+      db.prepare(
+        `INSERT INTO chunk_tags (chunk_id, tag_id, model, vocabulary_version, created_at)
+         SELECT ?, id, 'fake', 'v1', '2026-10-10T08:00:00.000Z' FROM tags WHERE slug = ?`,
+      ).run(chunkId, slug);
     },
     remove,
   };

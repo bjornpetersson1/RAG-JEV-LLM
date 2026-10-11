@@ -16,10 +16,12 @@
     "data:chunk": "tsx --env-file-if-exists=../.env src/ingest/cli.ts chunk",
     "index:vocabulary": "tsx --env-file-if-exists=../.env src/tagging/cli.ts vocabulary",
     "index:tag": "tsx --env-file-if-exists=../.env src/tagging/cli.ts tag",
-    "index:report": "tsx --env-file-if-exists=../.env src/tagging/cli.ts report"
+    "index:report": "tsx --env-file-if-exists=../.env src/tagging/cli.ts report",
+    "bench:index": "tsx --expose-gc --env-file-if-exists=../.env src/search/bench.ts"
   },
   "dependencies": {
-    "fastify": "^5.12.5"
+    "fastify": "^5.12.5",
+    "roaring-wasm": "^1.1.0"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",

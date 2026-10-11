@@ -133,6 +133,22 @@ The report checks the vocabulary and the tagging. `index:report` syncs the vocab
 
 Every report is also written in full to `reports/tagging-<UTC timestamp>.md`, which is git-ignored.
 
+## Search index
+
+When the backend starts it reads `chunk_tags` and builds an in-memory inverted index: one roaring bitmap of chunk ids per tag slug. It logs `Tag index built` with the number of chunks and tags, the build time and the memory used. The server does not create or migrate the database. If the database is missing, not migrated or has no tags, the server starts with an empty index and logs a warning naming the command to run. After `index:tag`, restart the server to pick up the new tags.
+
+The index searches in three modes:
+
+- AND: chunks with every tag.
+- OR: chunks with any tag.
+- Ranked OR: chunks with at least `minMatches` of the tags (default 1), with the most matching tags first, cut to `limit` (default 200). This is the default for queries.
+
+```bash
+npm run bench:index   # time each mode over 100,000 synthetic chunks; fails if a median is 5 ms or more
+```
+
+The benchmark generates the same seeded data every run (3–8 tags per chunk out of 183, with a few broad tags and many narrow ones). It runs 20 queries of 3 tags and 20 of 5 tags through 25 rounds, and prints the build time, the memory and the median and p95 time per mode.
+
 ## LLM configuration
 
 Each LLM role (tagger, query translator, judge, generator) gets its provider and model from `.env`, so switching needs no code change:
