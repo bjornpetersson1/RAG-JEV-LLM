@@ -2,6 +2,7 @@ import { buildApp } from './app.js';
 import { resolveDatabasePath } from './db/config.js';
 import { loadLlmConfig } from './llm/config.js';
 import { resolvePort } from './port.js';
+import { loadQueryTranslatorConfig } from './query/config.js';
 import { loadTagIndex } from './search/load-index.js';
 import { loadSearchConfig, tagIndexBuilder } from './search/config.js';
 import type { BuildTagIndex } from './search/tag-index.js';
@@ -25,8 +26,9 @@ function readStartupConfig(): {
 } {
   try {
     const port = resolvePort(process.env.PORT);
-    // Fail fast on invalid LLM settings; later issues build the roles from this config for their routes.
+    // Fail fast on invalid LLM and query translator settings; later issues build the roles from them.
     loadLlmConfig(process.env);
+    loadQueryTranslatorConfig(process.env);
     return {
       port,
       databasePath: resolveDatabasePath(process.env.DATABASE_PATH),

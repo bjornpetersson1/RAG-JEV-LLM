@@ -160,6 +160,20 @@ Migration `0005_chunks_fts` adds an SQLite FTS5 index over each chunk's text, co
 
 Candidate search takes the tag index's ranked hits. With fewer than `MIN_TAG_CANDIDATES` (default 10), full-text hits not already found are appended, up to `MAX_CANDIDATES` (default 30). Each candidate records whether it came from `tag` or `fts`, and every search logs whether the fallback ran and how many candidates it added. The modes `fts` (full text only) and `tags` (tags only) are baselines for the evaluation.
 
+## Query translation
+
+A lawyer's instruction becomes vocabulary tags for the search. `QUERY_TRANSLATOR_IMPL` chooses how:
+
+- `llm` (default): the query translator's LLM, with the whole vocabulary in a cached Swedish system prompt. It returns at most 8 slugs, and unknown or repeated ones are dropped.
+- `jev`: TypeSafe's JEV model, with the instruction as the state.
+  - A Choice question ("Vilket rättsområde handlar texten om?") scores the 10 areas.
+  - The tags of the up to 3 most probable areas then get one Noul question each ("Handlar texten om <beskrivning>?"), one call per area, in parallel.
+  - Tags scoring at least `QUERY_TRANSLATOR_THRESHOLD` (default 0.5) are kept, highest first, at most 8.
+  - The result also carries every tag's score and the area scores, for the UI.
+  - JEV needs `JEV_API_KEY`. `JEV_BASE_URL`, `JEV_MODEL` and `JEV_TIMEOUT_MS` are optional, and calls are not retried.
+
+Choosing a template (`employment` or `nda`) adds its preset tags from `sources/tags.json`. A template without free text uses only its presets and calls no translator. With free text, the presets come first, followed by up to 8 translated tags that are not presets. Without free text and without a template, the result is no tags. Every translation reports the time it took and, when the translator gives it, the tokens it used.
+
 ## LLM configuration
 
 Each LLM role (tagger, query translator, judge, generator) gets its provider and model from `.env`, so switching needs no code change:

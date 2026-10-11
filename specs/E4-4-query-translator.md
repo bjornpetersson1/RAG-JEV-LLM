@@ -4,7 +4,7 @@
 - **Labels:** `E4 Index and search`
 - **Phase:** 4. Judging and generation
 - **Depends on:** E1-2 (#2), E3-1 (#8), E4-1 (#11), E5-1 (#15, not done — see Decisions)
-- **Status:** Approved
+- **Status:** Implemented — all acceptance criteria verified (npm ci, lint, format:check, typecheck, 435 tests (431 backend, 4 frontend) and build exit 0; the LLM translator run live with claude-haiku-5-5; JEV verified with a fake fetch only, no JEV_API_KEY)
 
 ## Summary
 
@@ -49,13 +49,13 @@ The lawyer's instruction becomes a set of vocabulary tags for the E4-1 index, th
 
 ## Tasks
 
-- [ ] `backend/src/jev/`: config (`JEV_API_KEY`, `JEV_BASE_URL`, `JEV_TIMEOUT_MS`), a `fetch`-based client with `noul` and `choice` question types per the TypeSafe docs (docs.typesafe.ai), timeout and typed errors; injected `fetch` for tests.
-- [ ] Extend `QueryTranslator` to take `{ instruction, template? }` and return `{ tags: { slug, origin, score? }[], areaScores?, elapsedMs, usage? }`; update the fake and its callers.
-- [ ] Real Swedish LLM prompt for the query translator, with the vocabulary as a cached system prompt (as in E3-2) and the cap of 8.
-- [ ] JEV query translator: Choice over areas, parallel Noul calls per chosen area, threshold, ordering and cap.
-- [ ] Template presets from the E3-1 vocabulary file and the merge.
-- [ ] Config: `QUERY_TRANSLATOR_IMPL`, `QUERY_TRANSLATOR_THRESHOLD`; factory wiring; server startup validation; `.env.example`; README.
-- [ ] Tests per acceptance criterion.
+- [x] `backend/src/jev/`: config (`JEV_API_KEY`, `JEV_BASE_URL`, `JEV_TIMEOUT_MS`), a `fetch`-based client with `noul` and `choice` question types per the TypeSafe docs (docs.typesafe.ai), timeout and typed errors; injected `fetch` for tests.
+- [x] Extend `QueryTranslator` to take `{ instruction, template? }` and return `{ tags: { slug, origin, score? }[], areaScores?, elapsedMs, usage? }`; update the fake and its callers.
+- [x] Real Swedish LLM prompt for the query translator, with the vocabulary as a cached system prompt (as in E3-2) and the cap of 8.
+- [x] JEV query translator: Choice over areas, parallel Noul calls per chosen area, threshold, ordering and cap.
+- [x] Template presets from the E3-1 vocabulary file and the merge.
+- [x] Config: `QUERY_TRANSLATOR_IMPL`, `QUERY_TRANSLATOR_THRESHOLD`; factory wiring; server startup validation; `.env.example`; README.
+- [x] Tests per acceptance criterion.
 
 ## Decisions
 
@@ -70,6 +70,34 @@ The lawyer's instruction becomes a set of vocabulary tags for the E4-1 index, th
 - **The LLM prompt caches the vocabulary** (default), as the E3-2 tagger does.
 - **`JEV_TIMEOUT_MS` default 30000, no retries** (default): a query translation sits on the user's critical path; E5-1 decides retries and fallback for judging.
 - **Tags keep their slug as the key** (default), which is what the E4-1 index searches by.
+
+- **JEV REST shape** (settled while implementing, from https://docs.typesafe.ai/introduction/quickstart): `POST <JEV_BASE_URL>/systemone` with `Authorization: Bearer <key>` and a body of `{ state, model, questions }`, where each question is named and has a `type` (`noul`/`choice`), `instructions` and, for Choice, `criteria` (option → description). The answers come back under the same names: Noul as `{ type, noul }`, Choice as `{ type, choice, confidence, probabilities }`, with `usage.input_tokens`/`output_tokens`. The client checks every answer it asked for and raises `JevError` with a kind: `http`, `timeout`, `network` or `response`. Every call is logged.
+- **`JEV_MODEL`, default `jev-latest`** (settled while implementing, beyond the spec's keys): the request needs a model, and the docs name `jev-latest`. `JEV_BASE_URL` defaults to `https://api.typesafe.ai/v1`.
+- **`QueryTranslator.translate(instruction, vocabulary)` returns a `Translation`** (settled while implementing): `{ tags: { slug, score? }[], areaScores?, askedTags?, usage? }`. The template merge, the `origin` per tag and the timing live in one place, `translateQuery({ instruction, template }, { translator, vocabulary, presets })` in `src/query/translate-query.ts`, so neither implementation repeats them. This refines the task "extend `QueryTranslator` to take `{ instruction, template? }`". `askedTags` holds every tag JEV scored, kept or not, for the UI.
+- **Code layout**: `src/jev/` (config, client), `src/query/` (config, factory, JEV translator, `translateQuery`). `QUERY_TRANSLATOR_IMPL` and `QUERY_TRANSLATOR_THRESHOLD` are read by `loadQueryTranslatorConfig`. The JEV settings are required and validated only for `jev`, but the threshold is validated always. The server checks both at startup. `createQueryTranslator(config, { llmTranslator, logger, fetch })` returns the LLM roles' translator for `llm`.
+- **Areas JEV picks**: the three most probable areas with a probability above 0. When JEV gives no probabilities, its single `choice` is used. The Choice options are the area slugs with their Swedish display names from E3-1 (`AREAS`).
+- **`MAX_QUERY_TAGS` = 8** in `llm/roles.ts`, next to `TAGS_PER_CHUNK`, shared by both translators. `translate` takes `{ exclude }`: `translateQuery` passes the template's presets, which each translator drops before the cap. That way the 8 are always new tags (code review).
+- **The LLM prompt** (Swedish) shares the vocabulary formatting with the tagger (`vocabularySections`) and is cached per vocabulary like the tagger's.
+- **Live LLM run** (settled while implementing): with `claude-haiku-5-5` on the real vocabulary, "Anställningsavtal för en säljare med provision, konkurrensklausul i 12 månader och sex månaders uppsägningstid" gave 8 fitting tags (anställningsavtal, konkurrensklausul, provision, uppsägningstid, …). The call took 3.2 s and cost 0.0014 USD, writing the cache. The NDA template with free text gave its 23 presets plus `uppdragstagares-sekretess`; that call read 9,521 cached tokens and cost 0.0004 USD.
+- **Clean code**:
+  - The JEV client logs every call with the same fields as the LLM clients: `role`, `provider`, `model`, `latencyMs`, tokens or the error message. It reports its tokens as `LlmUsage`, which the JEV translator sums into `Translation.usage`.
+  - The JEV translator builds its questions once per vocabulary.
+  - `groupByArea` (`llm/roles.ts`), `isFetchTimeout` and `elapsedMs` (`src/http.ts`) and `isTemplate` (`tagging/vocabulary.ts`) are shared. The Anthropic client now also treats an `AbortError` from its timeout as a timeout.
+- **Code review fixes**:
+  - `translateQuery` returns the translator's `usage`.
+  - Without free text the translator is never called: an empty instruction with no template gives no tags.
+  - An empty template string is rejected as an unknown template.
+  - The JEV client checks each answer against its question's type, and that Noul scores and Choice probabilities lie within 0–1. Anything else is a `JevError` of kind `response`.
+  - `ask` takes an optional `AbortSignal`. When one area's call fails, the translator cancels the others (kind `aborted`). Only a `TimeoutError` counts as a timeout, so a cancellation is not retried or logged as one.
+  - `groupByArea` moved to `tagging/vocabulary.ts`, so the JEV path does not import the LLM roles module for it.
+  - The LLM translator memoizes its slug set together with its prompt, as the tagger does.
+- **Not changed after clean code**:
+  - **JEV as a provider in the LLM role config** (`LLM_QUERY_TRANSLATOR_PROVIDER=jev`) would remove the separate `QUERY_TRANSLATOR_IMPL`. It was not done, because it changes approved criterion 3 and E5-1 plans the same pattern, `JUDGE_IMPL=jev|llm|jev-with-fallback`, which a provider value cannot express. Consequence: with `QUERY_TRANSLATOR_IMPL=jev`, the LLM role config is still validated for the query translator. Set `LLM_QUERY_TRANSLATOR_PROVIDER=fake` if no Anthropic key should be needed.
+  - **One Noul call for all chosen areas** instead of one per area would save HTTP calls, but the approved design keeps each call within one area's 14–22 questions, since JEV's per-call limit is unknown.
+  - **One opaque `details` field** instead of `areaScores` and `askedTags` on `Translation`: the UI (E7) needs them typed.
+  - The per-vocabulary memo of the LLM prompt stays, as in the tagger.
+- **Not wired into the server yet**: `translateQuery` and `createQueryTranslator` are called by the query flow in E5/E6. The server validates their settings at startup.
+- **JEV not called live**: there is still no `JEV_API_KEY`, so the JEV client and translator are verified with a fake `fetch` only.
 
 ## Open Questions
 

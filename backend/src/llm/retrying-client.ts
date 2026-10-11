@@ -8,6 +8,7 @@ import {
 } from './client.js';
 import { estimateCostUsd } from './pricing.js';
 import type { RoleName } from './types.js';
+import { elapsedMs } from '../http.js';
 
 const BASE_BACKOFF_MS = 500;
 const MAX_BACKOFF_MS = 30_000;
@@ -39,7 +40,7 @@ export function withRetryAndLogging(attempt: LlmAttempt, options: RetryAndLogOpt
         role,
         provider,
         model,
-        latencyMs: Math.round(performance.now() - started),
+        latencyMs: elapsedMs(started),
         attempts,
       });
 

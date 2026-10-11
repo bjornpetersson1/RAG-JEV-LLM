@@ -24,10 +24,9 @@ describe('fake roles', () => {
       retried: false,
       usage: NO_USAGE,
     });
-    await expect(createFakeQueryTranslator().translate(text, VOCABULARY)).resolves.toEqual([
-      'anstallning',
-      'konkurrensklausul',
-    ]);
+    await expect(createFakeQueryTranslator().translate(text, VOCABULARY)).resolves.toEqual({
+      tags: [{ slug: 'anstallning' }, { slug: 'konkurrensklausul' }],
+    });
   });
 
   it('judge scores the share of instruction keywords found in the chunk', async () => {
@@ -73,7 +72,7 @@ describe('fake roles', () => {
     ).resolves.toMatchObject({ tags: ['x'] });
     await expect(
       createFakeQueryTranslator(() => ['y']).translate('t', VOCABULARY),
-    ).resolves.toEqual(['y']);
+    ).resolves.toEqual({ tags: [{ slug: 'y' }] });
     await expect(
       createFakeJudge(() => ({ relevant: false, score: 0.1 })).judge('t', chunk),
     ).resolves.toEqual({

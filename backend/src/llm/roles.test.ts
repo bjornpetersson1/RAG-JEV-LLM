@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LlmError } from './client.js';
+import { LlmError, NO_USAGE } from './client.js';
 import { createFakeLlmClient } from './fakes.js';
 import {
   createLlmGenerator,
@@ -167,12 +167,47 @@ describe('LLM-backed roles', () => {
     });
   });
 
-  it('query translator keeps only known tags', async () => {
-    const client = createFakeLlmClient(() => ({ tags: ['lon', 'other'] }));
+  describe('query translator', () => {
+    it('sends the instruction with the vocabulary as a cached Swedish system prompt', async () => {
+      const client = createFakeLlmClient(() => ({ tags: [] }));
 
-    await expect(
-      createLlmQueryTranslator(client).translate('Draft a termination clause', VOCABULARY),
-    ).resolves.toEqual(['lon']);
+      await createLlmQueryTranslator(client).translate(
+        'Anställningsavtal för en säljare',
+        VOCABULARY,
+      );
+
+      const [request] = client.requests;
+      expect(request).toMatchObject({
+        prompt: 'Uppdrag:\nAnställningsavtal för en säljare',
+        cacheSystem: true,
+      });
+      expect(request.system).toContain('Välj högst 8 taggar');
+      expect(request.system).toContain('- vite: Vite – avtalat vite');
+    });
+
+    it('drops unknown and repeated slugs and keeps the rest in the model order', async () => {
+      const client = createFakeLlmClient(() => ({ tags: ['vite', 'other', 'LON', 'vite', 'lon'] }));
+
+      await expect(
+        createLlmQueryTranslator(client).translate('Vite och lön', VOCABULARY),
+      ).resolves.toEqual({ tags: [{ slug: 'vite' }, { slug: 'lon' }], usage: NO_USAGE });
+    });
+
+    it('keeps at most 8 tags', async () => {
+      const client = createFakeLlmClient(() => ({ tags: VOCABULARY.map((tag) => tag.slug) }));
+
+      const { tags } = await createLlmQueryTranslator(client).translate('Allt', VOCABULARY);
+
+      expect(tags.map((tag) => tag.slug)).toEqual(VOCABULARY.slice(0, 8).map((tag) => tag.slug));
+    });
+
+    it('returns no tags when the model picks none', async () => {
+      const client = createFakeLlmClient(() => ({ tags: [] }));
+
+      await expect(
+        createLlmQueryTranslator(client).translate('Väder', VOCABULARY),
+      ).resolves.toMatchObject({ tags: [] });
+    });
   });
 
   it('judge returns the judgement with the score clamped to 0–1', async () => {
