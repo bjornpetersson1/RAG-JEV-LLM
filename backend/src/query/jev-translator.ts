@@ -1,5 +1,6 @@
 import { JevError, type JevClient, type JevQuestion } from '../jev/client.js';
 import { sumUsage } from '../llm/client.js';
+import { memoizeByIdentity } from '../memo.js';
 import { MAX_QUERY_TAGS } from '../llm/roles.js';
 import type { QueryTranslator, Tag, TranslatedTag } from '../llm/types.js';
 import { AREAS, groupByArea, type Area } from '../tagging/vocabulary.js';
@@ -25,12 +26,7 @@ interface PreparedVocabulary {
  * `threshold` are kept, highest score first, at most {@link MAX_QUERY_TAGS}.
  */
 export function createJevQueryTranslator(client: JevClient, threshold: number): QueryTranslator {
-  const prepared = new WeakMap<readonly Tag[], PreparedVocabulary>();
-  const prepare = (vocabulary: readonly Tag[]) => {
-    let entry = prepared.get(vocabulary);
-    if (!entry) prepared.set(vocabulary, (entry = prepareVocabulary(vocabulary)));
-    return entry;
-  };
+  const prepare = memoizeByIdentity(prepareVocabulary);
 
   return {
     async translate(instruction, vocabulary, { exclude } = {}) {

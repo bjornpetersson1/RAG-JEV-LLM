@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { isOneOf } from '../env.js';
 
 /** The areas the vocabulary is grouped into, with their Swedish display names. */
 export const AREAS = {
@@ -22,7 +23,7 @@ export const TEMPLATES = ['employment', 'nda'] as const;
 export type Template = (typeof TEMPLATES)[number];
 
 export function isTemplate(value: string): value is Template {
-  return (TEMPLATES as readonly string[]).includes(value);
+  return isOneOf(TEMPLATES, value);
 }
 
 /** The tags per area, areas in order of first appearance. */

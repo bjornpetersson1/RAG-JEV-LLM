@@ -37,8 +37,12 @@ describe('loadJevConfig', () => {
       'Invalid JEV_BASE_URL "not a url": expected a URL',
     ],
     [
+      { JEV_API_KEY: 'key', JEV_TIMEOUT_MS: '2147483648' },
+      'Invalid JEV_TIMEOUT_MS "2147483648": expected an integer from 1 to 2147483647',
+    ],
+    [
       { JEV_API_KEY: 'key', JEV_TIMEOUT_MS: '0' },
-      'Invalid JEV_TIMEOUT_MS "0": expected a positive integer',
+      'Invalid JEV_TIMEOUT_MS "0": expected an integer from 1 to 2147483647',
     ],
   ])('rejects %o', (env, message) => {
     expect(() => loadJevConfig(env, 'the judge uses JEV')).toThrow(message);

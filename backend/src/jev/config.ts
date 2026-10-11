@@ -9,6 +9,9 @@ export interface JevConfig {
   timeoutMs: number;
 }
 
+// Node timers (and so AbortSignal.timeout) cannot represent delays above 2^31 - 1 ms.
+const MAX_TIMER_MS = 2 ** 31 - 1;
+
 const DEFAULT_JEV_SETTINGS = {
   baseUrl: 'https://api.typesafe.ai/v1',
   model: 'jev-latest',
@@ -32,6 +35,11 @@ export function loadJevConfig(
     apiKey,
     baseUrl: baseUrl.replace(/\/+$/, ''),
     model: env.JEV_MODEL?.trim() || DEFAULT_JEV_SETTINGS.model,
-    timeoutMs: readPositiveInteger(env, 'JEV_TIMEOUT_MS', DEFAULT_JEV_SETTINGS.timeoutMs),
+    timeoutMs: readPositiveInteger(
+      env,
+      'JEV_TIMEOUT_MS',
+      DEFAULT_JEV_SETTINGS.timeoutMs,
+      MAX_TIMER_MS,
+    ),
   };
 }

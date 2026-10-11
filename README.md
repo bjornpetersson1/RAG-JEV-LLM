@@ -135,16 +135,16 @@ Every report is also written in full to `reports/tagging-<UTC timestamp>.md`, wh
 
 ## Search index
 
-When the backend starts it reads `chunk_tags` and builds an in-memory inverted index: one roaring bitmap of chunk ids per tag slug. It logs `Tag index built` with the number of chunks and tags, the build time and the memory used. The server does not create or migrate the database. If the database is missing, not migrated or has no tags, the server starts with an empty index and logs a warning naming the command to run. After `index:tag`, restart the server to pick up the new tags.
+When the backend starts it reads `chunk_tags` and builds the in-memory tag index that `TAG_INDEX` selects: by default the inverted index, one roaring bitmap of chunk ids per tag slug. It logs `Tag index built` with the implementation, the number of chunks and tags, the build time and the memory the index keeps. The `dev` and `start` scripts run Node with `--expose-gc`, so that figure is measured after garbage collection. The server does not create or migrate the database. If the database is missing, not migrated or has no tags, the server starts with an empty index and logs a warning naming the command to run. After `index:tag`, restart the server to pick up the new tags.
 
 The index searches in three modes:
 
 - AND: chunks with every tag.
 - OR: chunks with any tag.
-- Ranked OR: chunks with at least `minMatches` of the tags (default 1), with the most matching tags first, cut to `limit` (default 200). This is the default for queries.
+- Ranked OR: chunks with at least `minMatches` of the tags (default 1), with the most matching tags first, cut to `limit` (default 200). Candidate search uses it.
 
 ```bash
-npm run bench:index   # time each mode over 100,000 synthetic chunks; fails if a median is 5 ms or more
+npm run bench:index   # time each mode over 100,000 synthetic chunks; fails if a roaring median is 5 ms or more
 ```
 
 `TAG_INDEX` chooses the implementation the server builds:
@@ -158,11 +158,11 @@ The benchmark generates the same seeded data every run (3–8 tags per chunk out
 
 Migration `0005_chunks_fts` adds an SQLite FTS5 index over each chunk's text, context and source reference, kept in step with `chunks` by triggers. Its tokenizer folds case but keeps å, ä and ö apart from a and o. The full-text query takes the words of the instruction and the chosen tags' labels, and drops common Swedish stop words and words shorter than 3 characters. Numbers must match exactly. Every other word becomes a prefix term, so inflected forms match: a word of 6 letters or more is first cut by up to 3 letters, keeping at least 5 (`uppsägningen` → `uppsägnin*`). The terms are joined with OR and ranked by bm25.
 
-Candidate search takes the tag index's ranked hits. With fewer than `MIN_TAG_CANDIDATES` (default 10), full-text hits not already found are appended, up to `MAX_CANDIDATES` (default 30). Each candidate records whether it came from `tag` or `fts`, and every search logs whether the fallback ran and how many candidates it added. The modes `fts` (full text only) and `tags` (tags only) are baselines for the evaluation.
+Candidate search (`createCandidateSearch`; the query flow in E5/E6 will call it, no HTTP route uses it yet) takes the tag index's ranked hits. With fewer than `MIN_TAG_CANDIDATES` (default 10), full-text hits not already found are appended, up to `MAX_CANDIDATES` (default 30). Each candidate records whether it came from `tag` or `fts`, and every search logs whether the fallback ran and how many candidates it added. The modes `fts` (full text only) and `tags` (tags only) are baselines for the evaluation.
 
 ## Query translation
 
-A lawyer's instruction becomes vocabulary tags for the search. `QUERY_TRANSLATOR_IMPL` chooses how:
+A lawyer's instruction becomes vocabulary tags for the search (`translateQuery`; the query flow in E5/E6 will call it, the server so far only validates the settings). `QUERY_TRANSLATOR_IMPL` chooses how:
 
 - `llm` (default): the query translator's LLM, with the whole vocabulary in a cached Swedish system prompt. It returns at most 8 slugs, and unknown or repeated ones are dropped.
 - `jev`: TypeSafe's JEV model, with the instruction as the state.

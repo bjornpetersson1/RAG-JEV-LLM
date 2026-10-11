@@ -13,6 +13,7 @@ import type {
   TaggingInput,
   TaggingResult,
 } from './types.js';
+import { memoizeByIdentity } from '../memo.js';
 import { groupByArea } from '../tagging/vocabulary.js';
 
 /** How many tags the tagger asks for per chunk. */
@@ -54,15 +55,10 @@ const DRAFT_SCHEMA: JsonSchema = {
  */
 export function createLlmTagger(client: LlmClient): Tagger {
   // A run passes the same vocabulary for every chunk; build its prompt and slug set once.
-  const prepared = new WeakMap<readonly Tag[], { system: string; known: ReadonlySet<string> }>();
-  const prepare = (vocabulary: readonly Tag[]) => {
-    let entry = prepared.get(vocabulary);
-    if (!entry) {
-      entry = { system: taggerSystemPrompt(vocabulary), known: slugSet(vocabulary) };
-      prepared.set(vocabulary, entry);
-    }
-    return entry;
-  };
+  const prepare = memoizeByIdentity((vocabulary: readonly Tag[]) => ({
+    system: taggerSystemPrompt(vocabulary),
+    known: slugSet(vocabulary),
+  }));
 
   return {
     async tag(chunk, vocabulary) {
@@ -183,15 +179,10 @@ function sortTags(
  */
 export function createLlmQueryTranslator(client: LlmClient): QueryTranslator {
   // A server passes the same vocabulary on every query; build its prompt and slug set once.
-  const prepared = new WeakMap<readonly Tag[], { system: string; known: ReadonlySet<string> }>();
-  const prepare = (vocabulary: readonly Tag[]) => {
-    let entry = prepared.get(vocabulary);
-    if (!entry) {
-      entry = { system: queryTranslatorSystemPrompt(vocabulary), known: slugSet(vocabulary) };
-      prepared.set(vocabulary, entry);
-    }
-    return entry;
-  };
+  const prepare = memoizeByIdentity((vocabulary: readonly Tag[]) => ({
+    system: queryTranslatorSystemPrompt(vocabulary),
+    known: slugSet(vocabulary),
+  }));
 
   return {
     async translate(instruction, vocabulary, { exclude } = {}) {

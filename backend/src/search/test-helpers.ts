@@ -17,7 +17,7 @@ const CONTRACT_CHUNK_TAGS: ChunkTag[] = Object.entries(TAGGED).flatMap(([slug, i
 
 /**
  * The behaviour every {@link TagIndex} must have, run against the implementation `build` creates.
- * E4-2 runs it against the bloom filter index.
+ * Both the roaring index (E4-1) and the bloom filter index (E4-2) run it.
  */
 export function describeTagIndexContract(name: string, build: BuildTagIndex): void {
   describe(`${name} (TagIndex contract)`, () => {

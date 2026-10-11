@@ -1,6 +1,7 @@
 import { closeSync, mkdirSync, openSync, readSync, rmSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
+import { memoizeByIdentity } from '../memo.js';
 
 /** Suffixes of the database file and the side files SQLite keeps next to it in WAL mode. */
 export const DATABASE_FILE_SUFFIXES = ['', '-wal', '-shm'];
@@ -54,15 +55,7 @@ export function inTransaction<T>(db: DatabaseSync, work: () => T): T {
  * runs the same statements for every document.
  */
 export function preparedOnce<T>(prepare: (db: DatabaseSync) => T): (db: DatabaseSync) => T {
-  const cache = new WeakMap<DatabaseSync, T>();
-  return (db) => {
-    let statements = cache.get(db);
-    if (!statements) {
-      statements = prepare(db);
-      cache.set(db, statements);
-    }
-    return statements;
-  };
+  return memoizeByIdentity(prepare);
 }
 
 /**
