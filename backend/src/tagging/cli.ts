@@ -1,6 +1,6 @@
 import { withDatabase } from '../db/with-database.js';
 import { describeError } from '../errors.js';
-import type { LlmLogger } from '../llm/client.js';
+import { createConsoleLogger } from '../llm/console-logger.js';
 import { loadLlmConfig, roleModel } from '../llm/config.js';
 import { createLlmRoles } from '../llm/factory.js';
 import { parsePositiveInteger } from '../env.js';
@@ -14,10 +14,7 @@ const USAGE = 'Usage: index <vocabulary | tag [--force] [--limit <n>] | report>'
 
 const [command, ...flags] = process.argv.slice(2);
 
-const consoleLogger: LlmLogger = {
-  info: (entry, message) => console.log(`${message} ${JSON.stringify(entry)}`),
-  error: (entry, message) => console.error(`${message} ${JSON.stringify(entry)}`),
-};
+const consoleLogger = createConsoleLogger();
 
 try {
   process.exitCode = await run();

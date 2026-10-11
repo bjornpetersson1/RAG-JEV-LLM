@@ -123,12 +123,6 @@ describe('createJevClient', () => {
       'no valid noul answer to "vite"',
     ],
     [
-      'a cancelled call',
-      () => new DOMException('cancelled', 'AbortError'),
-      'aborted',
-      'The JEV call was cancelled',
-    ],
-    [
       'a noul that is not a number',
       () => Response.json({ answers: { vite: { type: 'noul', noul: 'high' } } }),
       'response',
@@ -149,6 +143,23 @@ describe('createJevClient', () => {
     expect(logger.error).toHaveBeenCalledWith(
       expect.objectContaining({ role: 'queryTranslator', error: (error as Error).message }),
       'JEV call failed',
+    );
+  });
+
+  it('raises a typed error for a cancelled call and logs it as a cancellation, not a failure', async () => {
+    const { fetch } = createFakeFetch(() => new DOMException('cancelled', 'AbortError'));
+    const logger = createCapturingLogger();
+    const client = createJevClient({ ...CONFIG, role: 'judge', logger, fetch });
+
+    const error = await client
+      .ask('text', { vite: { type: 'noul', instructions: 'Handlar texten om vite?' } })
+      .catch((caught: unknown) => caught);
+
+    expect(error).toMatchObject({ kind: 'aborted', message: 'The JEV call was cancelled' });
+    expect(logger.error).not.toHaveBeenCalled();
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({ role: 'judge', error: 'The JEV call was cancelled' }),
+      'JEV call cancelled',
     );
   });
 });

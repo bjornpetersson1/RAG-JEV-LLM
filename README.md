@@ -174,11 +174,68 @@ A lawyer's instruction becomes vocabulary tags for the search (`translateQuery`;
 
 Choosing a template (`employment` or `nda`) adds its preset tags from `sources/tags.json`. A template without free text uses only its presets and calls no translator. With free text, the presets come first, followed by up to 8 translated tags that are not presets. Without free text and without a template, the result is no tags. Every translation reports the time it took and, when the translator gives it, the tokens it used.
 
+## Judging
+
+A judge decides whether a candidate chunk is relevant to the lawyer's instruction (`createJudge`; the query flow in E5/E6 will call it, the server so far only validates the settings). Both judges answer the same question about the same text: the chunk's source reference and text, asked "Är texten relevant för följande uppdrag: <instruktion>?". Each returns a score from 0 to 1, whether it reaches `JUDGE_THRESHOLD` (default 0.5), which judge answered, and the tokens used. `JUDGE_IMPL` chooses how:
+
+- `jev-with-fallback` (default): JEV, with the chunk as the state and the question as one Noul question. When JEV fails (timeout, network or HTTP error, malformed answer), the judge's LLM answers instead, and a warning names the chunk and the cause. Without `JEV_API_KEY` the server logs a warning at startup and judges with the LLM.
+- `jev`: JEV only; an error is thrown. Needs `JEV_API_KEY`.
+- `llm`: the judge's LLM (`LLM_JUDGE_PROVIDER`/`LLM_JUDGE_MODEL`), asked for the probability that the answer is yes.
+
+JEV gets `JUDGE_TIMEOUT_MS` (default 10000) per judgement and is not retried. Chunks are sent whole; one that JEV refuses as too large falls back like any other JEV error.
+
+### Parallel judging and the judge cache
+
+`judgeAll(instruction, chunks, deps, { cache })` judges a query's candidate chunks with the judge from `createJudging` (the judge, its cache identity and the threshold, from one config) in parallel, at most `JUDGE_CONCURRENCY` (default 8) calls at a time. A chunk whose judgement fails, or takes longer than `JUDGE_CHUNK_TIMEOUT_MS` (default 30000, fallback included), is `unknown`: it counts as not relevant, and a warning names it. When `JUDGE_TOTAL_TIMEOUT_MS` (default 60000) is reached, calls in flight are cancelled, every chunk not yet judged is `unknown`, and the judgements finished so far are returned.
+
+Scores are cached in the `judge_cache` table:
+
+- The key is the question asked about the instruction (trimmed, lower-cased, whitespace collapsed), the judge (JEV for `jev` and `jev-with-fallback`, else the LLM), its model and the chunk. A chunk whose text has changed is judged again.
+- Only the primary judge's scores are stored, so an LLM fallback answer is asked for again next time.
+- Relevance is decided against the current `JUDGE_THRESHOLD` when the score is read, so changing the threshold needs no new calls.
+- `JUDGE_CACHE=off`, or `{ cache: false }` per call, skips the cache entirely, e.g. for timing measurements. Deleting the table's rows clears it.
+
+The result has each chunk's status (`judged`, `cached` or `unknown`), score, relevance, judge and time, plus the total time, cache hits, judge calls, unknown chunks and tokens used.
+
+### JEV limits
+
+TypeSafe does not document JEV's maximum state size, pricing or rate limits. `npm run jev:probe` measures them against the real API with the judge's timeout `JUDGE_TIMEOUT_MS` (needs `JEV_API_KEY`; the calls are billed): latency over 10 sequential calls, the largest state accepted (doubling from 1,000 characters) and how a burst of 20 concurrent calls is answered.
+
+**Observed so far: nothing.** The project has no JEV key yet, so the limits are not measured, and JEV's request shape is only checked against the documentation with faked responses. Run the probe once a key exists and record the results here.
+
+## Evaluation
+
+`eval/queries.yaml` holds 20 lawyer instructions (10 employment agreements, 10 NDAs, 6 with a template). Each lists the chunks relevant to it, by document identifier and stored source reference. Claude drafted the queries and marked the chunks from the candidates `eval:label` lists, and the owner reviews the file.
+
+```bash
+npm run eval:label -- anst-01 [--chars 300]   # candidates for one query: tag search, then full text
+npm run eval:run                              # precision, recall and the threshold sweep
+```
+
+`eval:run` runs every query through four modes and prints precision and recall (macro averages over the queries):
+
+- `tags`: tag-search candidates (E4-1);
+- `tags+jev`: those candidates as approved by the judge with `JUDGE_IMPL=jev-with-fallback`;
+- `tags+llm`: the same, with `JUDGE_IMPL=llm`;
+- `fts`: full-text candidates only (E4-3).
+
+For each judge mode, thresholds from 0.1 to 0.9 are applied to the judge's scores, and the threshold with the highest F1 is recommended. The judge cache is on, so the sweep and repeated runs cost no new calls. The full report, with one row per query, goes to `reports/eval-<timestamp>.md`.
+
+Without `JEV_API_KEY`, `tags+jev` is answered by the LLM, and the report says so. To run without the paid API, use the Claude Code provider. It starts the `claude` CLI without `ANTHROPIC_API_KEY`, so the calls go to your subscription even when `.env` has a key. A `claude` call takes several seconds, so give the judge more time than the defaults, which are sized for JEV and the API:
+
+```bash
+LLM_PROVIDER=claude-code LLM_MODEL=claude-haiku-5-5 LLM_TIMEOUT_MS=120000 \
+  JUDGE_CHUNK_TIMEOUT_MS=150000 JUDGE_TOTAL_TIMEOUT_MS=600000 npm run eval:run
+```
+
+The first run's report is kept in `eval/report-2026-10-11.md`. A query that fails, e.g. because the CLI keeps failing, is listed in the report and left out of the averages, and the command exits non-zero.
+
 ## LLM configuration
 
 Each LLM role (tagger, query translator, judge, generator) gets its provider and model from `.env`, so switching needs no code change:
 
-- `LLM_PROVIDER` (`anthropic` or `fake`) and `LLM_MODEL` are the defaults for every role.
+- `LLM_PROVIDER` (`anthropic`, `claude-code` or `fake`) and `LLM_MODEL` are the defaults for every role.
+  - `claude-code` runs the local `claude` CLI in print mode (no tools, structured JSON output) on your Claude Code subscription, so it needs no `ANTHROPIC_API_KEY`. A call takes a few seconds, so it suits evaluation runs, not timing.
 - `LLM_<ROLE>_PROVIDER` and `LLM_<ROLE>_MODEL` override them for one role, where `ROLE` is `TAGGER`, `QUERY_TRANSLATOR`, `JUDGE` or `GENERATOR`.
 - `LLM_TIMEOUT_MS` and `LLM_MAX_RETRIES` tune the request timeout and retries.
 

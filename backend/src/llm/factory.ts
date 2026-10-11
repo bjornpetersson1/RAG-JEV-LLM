@@ -1,4 +1,5 @@
 import { createAnthropicClient } from './anthropic-client.js';
+import { createClaudeCodeClient, type RunProcess } from './claude-code-client.js';
 import type { LlmClient, LlmLogger } from './client.js';
 import type { LlmConfig } from './config.js';
 import {
@@ -18,6 +19,8 @@ import type { LlmRoles, RoleName } from './types.js';
 export interface LlmDependencies {
   logger: LlmLogger;
   fetch?: typeof fetch;
+  /** Runs the `claude` CLI for the `claude-code` provider; replaced in tests. */
+  runProcess?: RunProcess;
 }
 
 /** Builds every role with the provider and model the config gives it. */
@@ -25,16 +28,17 @@ export function createLlmRoles(config: LlmConfig, deps: LlmDependencies): LlmRol
   const build = <T>(role: RoleName, real: (client: LlmClient) => T, fake: () => T): T => {
     const roleConfig = config.roles[role];
     if (roleConfig.provider === 'fake') return fake();
+    const common = {
+      role,
+      model: roleConfig.model,
+      timeoutMs: config.timeoutMs,
+      maxRetries: config.maxRetries,
+      logger: deps.logger,
+    };
     return real(
-      createAnthropicClient({
-        role,
-        model: roleConfig.model,
-        apiKey: roleConfig.apiKey,
-        timeoutMs: config.timeoutMs,
-        maxRetries: config.maxRetries,
-        logger: deps.logger,
-        fetch: deps.fetch,
-      }),
+      roleConfig.provider === 'claude-code'
+        ? createClaudeCodeClient({ ...common, run: deps.runProcess })
+        : createAnthropicClient({ ...common, apiKey: roleConfig.apiKey, fetch: deps.fetch }),
     );
   };
 

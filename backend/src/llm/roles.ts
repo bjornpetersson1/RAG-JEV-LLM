@@ -1,18 +1,19 @@
-// LLM-backed role implementations. The tagger (E3-2) and query translator (E4-4) prompts are real;
-// the others are placeholders that only make the wiring work, replaced in E5-1 (judge) and E6
-// (generator).
+// LLM-backed role implementations. The tagger (E3-2), query translator (E4-4) and judge (E5-1)
+// prompts are real; the generator's is a placeholder that only makes the wiring work, replaced in
+// E6.
 
 import { LlmError, sumUsage, type JsonSchema, type LlmClient, type LlmUsage } from './client.js';
 import type {
   Chunk,
   Generator,
-  Judge,
   QueryTranslator,
+  ScoringJudge,
   Tag,
   Tagger,
   TaggingInput,
   TaggingResult,
 } from './types.js';
+import { judgedText, relevanceQuestion } from './judge-question.js';
 import { memoizeByIdentity } from '../memo.js';
 import { groupByArea } from '../tagging/vocabulary.js';
 
@@ -34,10 +35,18 @@ const TAGS_SCHEMA: JsonSchema = {
 
 const JUDGEMENT_SCHEMA: JsonSchema = {
   type: 'object',
-  properties: { relevant: { type: 'boolean' }, score: { type: 'number' } },
-  required: ['relevant', 'score'],
+  properties: { score: { type: 'number' } },
+  required: ['score'],
   additionalProperties: false,
 };
+
+// Only a number comes back; the margin covers a model that explains itself despite the schema.
+const JUDGEMENT_MAX_TOKENS = 1000;
+
+const JUDGE_SYSTEM_PROMPT = [
+  'Du bedömer om en text ur svensk lagstiftning eller rättspraxis är relevant för en jurists uppdrag.',
+  'Svara med sannolikheten, från 0 till 1, att svaret på frågan är ja: 1 betyder säkert relevant, 0 säkert inte relevant.',
+].join('\n');
 
 const DRAFT_SCHEMA: JsonSchema = {
   type: 'object',
@@ -220,20 +229,21 @@ function queryTranslatorSystemPrompt(vocabulary: readonly Tag[]): string {
   ].join('\n');
 }
 
-export function createLlmJudge(client: LlmClient): Judge {
+/** Asks the LLM the JEV judge's question, for the probability that the answer is yes. */
+export function createLlmJudge(client: LlmClient): ScoringJudge {
   return {
     async judge(instruction, chunk) {
-      const { data } = await client.complete({
-        system: 'Decide whether the text is relevant to the instruction. Give a score from 0 to 1.',
-        prompt: `Instruction:\n${instruction}\n\nText:\n${chunk.text}`,
+      const { data, usage } = await client.complete({
+        system: JUDGE_SYSTEM_PROMPT,
+        prompt: `${relevanceQuestion(instruction)}\n\nText:\n${judgedText(chunk)}`,
         schema: JUDGEMENT_SCHEMA,
+        maxTokens: JUDGEMENT_MAX_TOKENS,
       });
-      const relevant = readField(data, 'relevant');
-      const score = readField(data, 'score');
-      if (typeof relevant !== 'boolean' || typeof score !== 'number' || Number.isNaN(score)) {
-        throw invalidResponse('a boolean "relevant" and a numeric "score"');
+      const value = readField(data, 'score');
+      if (typeof value !== 'number' || Number.isNaN(value)) {
+        throw invalidResponse('a numeric "score"');
       }
-      return { relevant, score: Math.min(1, Math.max(0, score)) };
+      return { score: Math.min(1, Math.max(0, value)), judgedBy: 'llm', usage };
     },
   };
 }

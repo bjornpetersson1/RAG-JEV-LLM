@@ -23,6 +23,8 @@ export interface RetryAndLogOptions {
   maxRetries: number;
   logger: LlmLogger;
   sleep?: (ms: number) => Promise<void>;
+  /** Whether the log estimates the cost from API prices (default true). */
+  priced?: boolean;
 }
 
 /**
@@ -30,7 +32,9 @@ export interface RetryAndLogOptions {
  * entry per call (role, provider, model, latency, attempts, tokens and estimated cost).
  */
 export function withRetryAndLogging(attempt: LlmAttempt, options: RetryAndLogOptions): LlmClient {
-  const { role, provider, model, maxRetries, logger } = options;
+  const { role, provider, model, maxRetries, logger, priced = true } = options;
+  const usageFields = (usage: LlmUsage | undefined) =>
+    usage ? { ...usage, ...(priced ? { costUsd: estimateCostUsd(model, usage) } : {}) } : {};
   const sleep = options.sleep ?? defaultSleep;
 
   return {
@@ -47,7 +51,7 @@ export function withRetryAndLogging(attempt: LlmAttempt, options: RetryAndLogOpt
       for (let attempts = 1; ; attempts += 1) {
         try {
           const result = await attempt(request);
-          logger.info({ ...callFields(attempts), ...usageFields(model, result.usage) }, 'LLM call');
+          logger.info({ ...callFields(attempts), ...usageFields(result.usage) }, 'LLM call');
           return result;
         } catch (error) {
           const llmError = toLlmError(error);
@@ -60,7 +64,7 @@ export function withRetryAndLogging(attempt: LlmAttempt, options: RetryAndLogOpt
           logger.error(
             {
               ...callFields(attempts),
-              ...usageFields(model, llmError.usage),
+              ...usageFields(llmError.usage),
               error: llmError.message,
             },
             'LLM call failed',
@@ -70,10 +74,6 @@ export function withRetryAndLogging(attempt: LlmAttempt, options: RetryAndLogOpt
       }
     },
   };
-}
-
-function usageFields(model: string, usage: LlmUsage | undefined) {
-  return usage ? { ...usage, costUsd: estimateCostUsd(model, usage) } : {};
 }
 
 function toLlmError(error: unknown): LlmError {

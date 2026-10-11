@@ -41,10 +41,18 @@ export interface Chunk {
   source?: string;
 }
 
-export interface Judgement {
-  relevant: boolean;
+export interface JudgeScore {
   /** Probability-like relevance score between 0 and 1. */
   score: number;
+  /** Which judge answered: JEV, or an LLM (also when it stood in for JEV). */
+  judgedBy: 'jev' | 'llm';
+  /** Tokens used by the call. */
+  usage: LlmUsage;
+}
+
+export interface Judgement extends JudgeScore {
+  /** Whether the score reaches the threshold (`JUDGE_THRESHOLD`). */
+  relevant: boolean;
 }
 
 export interface GenerateInput {
@@ -93,8 +101,14 @@ export interface QueryTranslator {
   ): Promise<Translation>;
 }
 
+/** Scores a chunk's relevance to an instruction; `createJudge` applies the threshold to it. */
+export interface ScoringJudge {
+  /** `signal` cancels a JEV call; an LLM call cannot be cancelled and runs to its end. */
+  judge(instruction: string, chunk: Chunk, signal?: AbortSignal): Promise<JudgeScore>;
+}
+
 export interface Judge {
-  judge(instruction: string, chunk: Chunk): Promise<Judgement>;
+  judge(instruction: string, chunk: Chunk, signal?: AbortSignal): Promise<Judgement>;
 }
 
 export interface Generator {
@@ -104,6 +118,6 @@ export interface Generator {
 export interface LlmRoles {
   tagger: Tagger;
   queryTranslator: QueryTranslator;
-  judge: Judge;
+  judge: ScoringJudge;
   generator: Generator;
 }

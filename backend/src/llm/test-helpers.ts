@@ -30,5 +30,5 @@ export function messageResponse(data: unknown, inputTokens = 100, outputTokens =
 }
 
 export function createCapturingLogger() {
-  return { info: vi.fn(), error: vi.fn() } satisfies LlmLogger;
+  return { info: vi.fn(), warn: vi.fn(), error: vi.fn() } satisfies LlmLogger;
 }
