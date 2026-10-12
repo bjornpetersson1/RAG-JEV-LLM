@@ -27,6 +27,7 @@ export function createBgeEmbedder(
   return {
     name: 'bge',
     model: BGE_M3_MODEL,
+    dtype: config.dtype,
     async embed(texts, kind) {
       if (texts.length === 0) return [];
       const encode = await encoder();

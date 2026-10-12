@@ -14,6 +14,8 @@ export interface Embedder {
   /** The `EMBEDDER` value, e.g. `bge`. */
   readonly name: string;
   readonly model: string;
+  /** The precision the model runs in, e.g. `int8`; stored vectors are keyed by model and this. */
+  readonly dtype: string;
   /** One embedding per text, in order; batching happens inside. */
   embed(texts: readonly string[], kind: EmbedKind): Promise<Embedding[]>;
 }

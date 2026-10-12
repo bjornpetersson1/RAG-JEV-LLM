@@ -12,8 +12,12 @@ export type CandidateMode = 'tags+fts' | 'fts' | 'tags';
 
 export interface Candidate {
   chunkId: number;
-  /** Which search found the chunk; a chunk both find counts as `tag`. */
-  origin: 'tag' | 'fts';
+  /**
+   * Which search found the chunk: tag search or its full-text fallback (a chunk both find counts as
+   * `tag`), or, for hybrid retrieval (E8-4), the ranking that contributed most to its fused score,
+   * or `named` for a provision the instruction names (e.g. "7 § LAS").
+   */
+  origin: 'tag' | 'fts' | 'dense' | 'lexical' | 'named';
 }
 
 export interface CandidateSearchInput {

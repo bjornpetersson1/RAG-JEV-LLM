@@ -3,7 +3,7 @@ import type { LlmUsage } from '../llm/client.js';
 import type { Chunk } from '../llm/types.js';
 import type { QueryInput, QueryTags } from '../query/translate-query.js';
 import type { RerankResult, RerankStats } from '../rerank/types.js';
-import type { CandidateSearchResult } from '../search/candidate-search.js';
+import type { Candidate } from '../search/candidate-search.js';
 import {
   generateDraft,
   type DraftRequest,
@@ -16,8 +16,13 @@ export type QueryRequest = Omit<DraftRequest, 'chunks'>;
 
 /** The steps of the query flow, each built from `.env` in `setup.ts` or faked in tests. */
 export interface QueryFlowDependencies extends GenerationDependencies {
-  translate(query: QueryInput): Promise<QueryTags>;
-  search(instruction: string, tags: readonly string[]): CandidateSearchResult;
+  /** Absent when the retriever uses no tags (`RETRIEVER=bge`): the query is then not translated. */
+  translate?(query: QueryInput): Promise<QueryTags>;
+  /** The configured retriever's candidates, best first. */
+  search(
+    instruction: string,
+    tags: readonly string[],
+  ): Promise<{ candidates: readonly Candidate[] }>;
   loadChunks(ids: readonly string[]): Chunk[];
   /** The configured reranker with `RERANK_TOP_K`: the relevant chunks, best first. */
   rerank(instruction: string, chunks: readonly Chunk[]): Promise<RerankResult>;
@@ -55,11 +60,11 @@ export async function runQuery(
   const started = performance.now();
   const { instruction, template } = request;
 
-  const translation = await deps.translate({ instruction, template });
-  const tags = translation.tags.map((tag) => tag.slug);
+  const translation = await deps.translate?.({ instruction, template });
+  const tags = translation?.tags.map((tag) => tag.slug) ?? [];
 
   const searchStarted = performance.now();
-  const { candidates } = deps.search(instruction, tags);
+  const { candidates } = await deps.search(instruction, tags);
   const chunks = deps.loadChunks(candidates.map((candidate) => String(candidate.chunkId)));
   const searchMs = elapsedMs(searchStarted);
 
@@ -80,12 +85,12 @@ export async function runQuery(
     },
     draft,
     timings: {
-      translationMs: translation.elapsedMs,
+      translationMs: translation?.elapsedMs ?? 0,
       searchMs,
       judgingMs: stats.elapsedMs,
       generationMs: draft?.elapsedMs,
       totalMs: elapsedMs(started),
     },
-    usage: { translation: translation.usage, judging: stats.usage, generation: draft?.usage },
+    usage: { translation: translation?.usage, judging: stats.usage, generation: draft?.usage },
   };
 }

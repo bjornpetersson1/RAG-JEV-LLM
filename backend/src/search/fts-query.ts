@@ -59,15 +59,36 @@ const MIN_STEM = 5;
  * (`"1982"`). Null when no word is left.
  */
 export function buildFtsQuery(instruction: string, tagLabels: readonly string[]): string | null {
-  const kept = words([instruction, ...tagLabels].join(' ')).filter(
+  return queryOf(
+    [instruction, ...tagLabels].join(' '),
     (word) => word.length >= MIN_WORD_LENGTH && !STOP_WORDS.has(word),
   );
-  const terms = [...new Set(kept.map(term))];
+}
+
+/**
+ * An FTS5 query for the lexical half of hybrid retrieval (E8-4): like {@link buildFtsQuery}, but
+ * every number is kept whatever its length, so section numbers ("7", "33") and the parts of an SFS
+ * number ("1982", "80") match the chunks' `source_ref`. Null when no term is left.
+ */
+export function buildLexicalQuery(text: string): string | null {
+  return queryOf(
+    text,
+    (word) => isNumber(word) || (word.length >= MIN_WORD_LENGTH && !STOP_WORDS.has(word)),
+  );
+}
+
+/** The distinct terms of the words `keep` accepts, joined with OR; null when none is left. */
+function queryOf(text: string, keep: (word: string) => boolean): string | null {
+  const terms = [...new Set(words(text).filter(keep).map(term))];
   return terms.length > 0 ? terms.join(' OR ') : null;
 }
 
+function isNumber(word: string): boolean {
+  return /^\p{N}+$/u.test(word);
+}
+
 function term(word: string): string {
-  if (/^\p{N}+$/u.test(word)) return `"${word}"`;
+  if (isNumber(word)) return `"${word}"`;
   const stem =
     word.length < TRIM_FROM_LENGTH
       ? word

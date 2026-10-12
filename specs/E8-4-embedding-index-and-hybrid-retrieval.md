@@ -4,7 +4,7 @@
 - **Labels:** `E8 Local retrieval and rerank`
 - **Phase:** E8 Local retrieval and rerank
 - **Depends on:** E8-1 (#65), E8-2 (#66); uses E8-3 (#67) for the rerank step
-- **Status:** Approved
+- **Status:** Implemented — all acceptance criteria verified (npm ci, lint, format:check, typecheck, 729 tests (725 backend, 4 frontend) and build exit 0; `npm run index:embed` on the real corpus (2,116 chunks, then 0); `retrieve` and `query` with the real models; server startup checked with and without embeddings)
 
 ## Summary
 
@@ -53,16 +53,16 @@ Every chunk is embedded once with the configured `Embedder` and its vector cache
 
 ## Tasks
 
-- [ ] Migration: `chunk_embeddings (chunk_id, model, dtype, text_hash, dense BLOB, sparse TEXT NULL)`, keyed so a model or dtype change re-embeds.
-- [ ] `index:embed` command: find stale chunks, embed in batches with progress, store.
-- [ ] Vector store: load into a contiguous `Float32Array` at startup, cosine top-N.
-- [ ] Lexical half: bge-m3 sparse dot product if available (E8-2), else FTS5 BM25 over `chunks_fts` with the instruction's words and law abbreviations expanded (`LAS` → `1982:80`) using E6-3's table.
-- [ ] RRF fusion with `RRF_K` and per-list weights; `both` fuses the tag ranking and the hybrid ranking the same way.
-- [ ] Settings: `RETRIEVER` (default `tags`), `RETRIEVE_CANDIDATES` (default 40, 30–50 recommended), `RRF_K` (default 60), `RRF_WEIGHT_DENSE` / `RRF_WEIGHT_LEXICAL` / `RRF_WEIGHT_TAGS` (default 1); `.env.example`.
-- [ ] Query flow: candidates from the configured retriever; translation skipped for `bge`; candidate origin reported (`tag`, `fts`, `dense`, `lexical`).
-- [ ] `retrieve` CLI.
-- [ ] README: storage motivation and the retriever settings.
-- [ ] Tests with a fake embedder.
+- [x] Migration: `chunk_embeddings (chunk_id, model, dtype, text_hash, dense BLOB)`, keyed so a model or dtype change re-embeds.
+- [x] `index:embed` command: find stale chunks, embed in batches with progress, store.
+- [x] Vector store: load into a contiguous `Float32Array` at startup, cosine top-N.
+- [x] Lexical half: FTS5 BM25 over `chunks_fts` with the instruction's words, its numbers (section numbers included) and law abbreviations replaced by their SFS number (`LAS` → `1982:80`) through `replaceLawAbbreviations`.
+- [x] RRF fusion with `RRF_K` and per-list weights; `both` fuses the tag ranking and the hybrid ranking the same way.
+- [x] Settings: `RETRIEVER` (default `tags`), `RETRIEVE_CANDIDATES` (default 40, 30–50 recommended), `RRF_K` (default 60), `RRF_WEIGHT_DENSE` / `RRF_WEIGHT_LEXICAL` / `RRF_WEIGHT_TAGS` (default 1); `.env.example`.
+- [x] Query flow: candidates from the configured retriever; translation skipped for `bge`; candidate origin reported (`tag`, `fts`, `dense`, `lexical`).
+- [x] `retrieve` CLI.
+- [x] README: storage motivation and the retriever settings.
+- [x] Tests with a fake embedder.
 
 ## Decisions
 
@@ -74,6 +74,38 @@ Every chunk is embedded once with the configured `Embedder` and its vector cache
 - **Lexical half follows E8-2's finding** (from E8-2): sparse weights if the runtime gives them, otherwise FTS5 BM25. With FTS5, known law abbreviations are expanded to their SFS number, because `source_ref` holds `SFS 1982:80 7 §`, not `LAS`.
 - **Vectors keyed by chunk, model, dtype and a hash of the embedded text** (from the issue, plus dtype): int8 and fp32 vectors differ, so a dtype change re-embeds instead of mixing them.
 - **Rerank in `retrieve`** (from the issue): `retrieve` uses the configured `RERANKER`; with E8-3 merged that is `bge`.
+- **Builds on E8-1, E8-2 and E8-3 as merged** (spec update before implementing):
+  - **No sparse output** (E8-2): the lexical half is SQLite FTS5 BM25, and `chunk_embeddings` has no sparse column.
+  - **The lexical query keeps numbers of any length** (settled for this spec): E4-3's `buildFtsQuery` drops words shorter than three characters, which drops section numbers ("7", "80"), so "7 § LAS" would only match "1982". The hybrid lexical query reuses its word handling but keeps every number as an exact term, and replaces law abbreviations by their SFS number with E8-2's `replaceLawAbbreviations`, so `source_ref` (`SFS 1982:80 7 §`) matches.
+  - **The embedded text is E8-2's `passageText`** (heading path and text), the same text the BGE reranker scores. The query is embedded with `kind: 'query'`, which spells out law abbreviations (E8-2).
+  - **`index:embed` batches chunks of similar length** (as E8-3's reranker does), since a batch is padded to its longest text. At about 0.7–1.2 s per chunk (E8-2), a full index of ~2,100 chunks takes 25–45 minutes on the demo machine; progress is printed.
+  - **The model cache is `data/models.nosync`** (E8-3) and the default reranker is `bge` (E8-3), so `retrieve` reranks with BGE unless `.env` says otherwise.
+- **Settled while implementing**:
+  - **Named provisions come first** (needed for criterion 3): with plain RRF, "7 § LAS" did not bring LAS 7 § into the top 10 on the real corpus. The dense half placed other LAS sections first, and the lexical half matched "7", "1982" and "80" separately, so 7 a §, 7 b § and others scored alike. A chunk whose provision the instruction names (found with E6-3's `findFreeTextReferences` and matched with the post-check's `citesSource`) is now always a candidate, ahead of the fused ranking, with origin `named`. The BM25 half still adds chunks the dense half misses (unit test).
+  - **One embedding row per chunk** (`chunk_embeddings`, primary key `chunk_id`): a changed text, model or precision replaces the row. Rows are stored every 32 chunks, so an interrupted `index:embed` keeps its progress.
+  - **The query flow's `search` is asynchronous, and `translate` is optional**: `bge` embeds the question, and leaves out translation.
+  - **The server checks the vectors at startup** for `bge` and `both` (read-only, no model loaded) and exits with a message naming `npm run index:embed`.
+  - **Measured** (criterion 5): full index 2,116 chunks in 42.9 min (int8); 8.7 MB in memory, 0.4 s load, 4.8 ms per full scan.
+  - **The repo moved out of iCloud Drive** (`~/Documents/Repos` → `~/Repos`, owner's decision): iCloud renamed packages in `node_modules` into conflict copies and loaded the CPU.
+- **Clean code**:
+  - **Reference parsing moved to `legal/references.ts`** (from `generation/post-check.ts`): the post-check and hybrid retrieval both use it, so retrieval does not depend on the generation layer.
+  - **Shared helpers**: `sha256` in `text.ts` (the judge cache and the embedding store), `countRows`, `preparedOnce` for the FTS and provision statements, one internal query builder behind `buildFtsQuery` and `buildLexicalQuery`, `namedFirst` for the named-provision merge, `FAKE_IDENTITY` and `unitLength` in the test helpers.
+  - **Setup split for E8-5**: `loadRetrievalResources` loads the embedder and vectors once; `createRetriever` builds any retriever from them, so `eval:run --retriever tags,bge,both` can share one load.
+  - **The server's startup check counts stale chunks only** (`assertEmbeddingsReady`), without decoding the vectors or loading a model.
+- **Skipped clean-code suggestions**:
+  - **Dropping the per-load text hash**: hashing 2,116 chunks takes tens of milliseconds and is what notices a chunk whose text changed.
+  - **A top-N heap for the dense ranking, and one fewer BLOB copy**: under a millisecond per search.
+  - **One shared retrieve/query-flow builder, and the retriever owning translation**: the two callers differ (draft vs. no draft); E8-5 decides whether eval moves onto `Retriever`.
+  - **Pinning named provisions for `tags` too**: the spec keeps `tags` as it was.
+- **Code review fixes**:
+  - **A weight of 0 switches a ranking off**: its chunks no longer fill free places, and with `RRF_WEIGHT_DENSE=0` the question is not embedded at all.
+  - **Named provisions take at most half the candidates**: a section named without its chapter matches it in every chapter, so pinning could otherwise crowd out the fused ranking.
+  - **The embedder reports its own precision** (`Embedder.dtype`), and stored vectors are keyed by it, instead of reading `EMBEDDER_DTYPE` for any embedder.
+  - **An empty index gives no candidates**, and a stored vector of the wrong length fails with a message naming `index:embed` instead of shifting the rows.
+  - **One import of `text.ts`** in the judge cache.
+- **Not changed (code review)**:
+  - **`retrieve` and `query` build the whole query side** (LLM config, vocabulary, tag index) even for `RETRIEVER=bge`: the app validates the LLM config everywhere, the server included, and the tag index builds in about 10 ms.
+  - **The first embedding includes loading bge-m3** (about 4 s): the README says so; the Embedder interface has no separate load step, and adding one only for timing is not worth it.
 
 ## Open Questions
 
