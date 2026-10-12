@@ -47,7 +47,7 @@ The draft from E7-1's stream is rendered as Markdown with every source reference
 ## Tasks
 
 - [ ] Post-check: return matched free-text references (offset, text, chunk id) alongside the flags.
-- [ ] Stream: the draft event carries the draft, the post-check with matches and flags, and the sources with document title, `source_url`, score, reranker, origin and text; a rerank event carries the turned-down candidates.
+- [ ] Result: E7-1's `result` event carries the whole `QueryResult`; it gains every candidate as a source (chunk text, document title and `source_url`, candidate origin, rerank score and reranker), so the cited, sent and turned-down groups come from one list, and the post-check gains its matches.
 - [ ] Add `react-markdown`; turn citations and matched references into links before parsing, flags into marked spans.
 - [ ] Source list component with the three groups, expand and highlight.
 - [ ] Disclaimer and copy-to-clipboard.
@@ -63,6 +63,8 @@ The draft from E7-1's stream is rendered as Markdown with every source reference
 - **The score shown is the reranker's score and name** (default): the issue says "JEV score"; with `RERANKER=bge` or `llm` the score comes from that reranker, so the label names it.
 - **"Copy draft" copies the Markdown as written** (default), including the `[K:]` citations.
 - **The disclaimer is shown above the draft** (default), even though the template's last line also carries it.
+
+- **Builds on E7-1 and E5-4 as merged** (spec update before implementing): the stream sends the whole `QueryResult` in its `result` event, so the sources and the post-check's matches go into `QueryResult` instead of separate events. A source is every candidate the flow loaded, with its candidate origin, its document's title and `source_url` (loaded with the chunk), and the reranker's score where it scored one. Which group a source falls in follows from the draft (`used`, `unused`) and the approved chunks. The reference RAG has no rerank, so its sources have no score and none are turned down.
 
 ## Open Questions
 
