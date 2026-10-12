@@ -39,6 +39,8 @@ export interface Chunk {
   text: string;
   /** Where the text comes from, e.g. "SFS 1982:80 7 §" or a case reference. */
   source?: string;
+  /** The heading path, e.g. "Lag (1982:80) om anställningsskydd › … › 7 §", for the local models. */
+  context?: string;
 }
 
 export interface JudgeScore {

@@ -46,7 +46,7 @@ export function createQueryServices(
     logger,
   );
   const selectChunks = db.prepare(
-    'SELECT id, text, source_ref FROM chunks WHERE id IN (SELECT value FROM json_each(?))',
+    'SELECT id, text, source_ref, context FROM chunks WHERE id IN (SELECT value FROM json_each(?))',
   );
 
   return {
@@ -57,7 +57,7 @@ export function createQueryServices(
       const byId = new Map(rows.map((row) => [String(row.id), row]));
       return ids.flatMap((id): Chunk[] => {
         const row = byId.get(id);
-        return row ? [{ id, text: row.text, source: row.source_ref }] : [];
+        return row ? [{ id, text: row.text, source: row.source_ref, context: row.context }] : [];
       });
     },
     translatorLabel:
@@ -69,4 +69,5 @@ interface ChunkRow {
   id: number;
   text: string;
   source_ref: string;
+  context: string;
 }

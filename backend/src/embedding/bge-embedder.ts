@@ -1,7 +1,7 @@
 import { spellOutLawAbbreviations } from '../legal/law-names.js';
 import { BGE_M3_MODEL } from '../models/catalog.js';
 import { loadLocalModelConfig, type LocalModelConfig } from '../models/config.js';
-import { inBatches, loadTextEncoder, type EncodeTexts } from '../models/runtime.js';
+import { inBatches, lazyRetry, loadTextEncoder } from '../models/runtime.js';
 import type { Embedder, EmbedderEntry, Embedding } from './types.js';
 
 /** bge-m3, dense only (E8-2), on the local model runtime. */
@@ -23,18 +23,13 @@ export function createBgeEmbedder(
   config: LocalModelConfig,
   loadEncoder: typeof loadTextEncoder = loadTextEncoder,
 ): Embedder {
-  let encoder: Promise<EncodeTexts> | undefined;
+  const encoder = lazyRetry(() => loadEncoder(BGE_M3_MODEL, config.dtype, config.cacheDir));
   return {
     name: 'bge',
     model: BGE_M3_MODEL,
     async embed(texts, kind) {
       if (texts.length === 0) return [];
-      // A failed load (e.g. a download error) is not kept, so the next call tries again.
-      encoder ??= loadEncoder(BGE_M3_MODEL, config.dtype, config.cacheDir).catch((error) => {
-        encoder = undefined;
-        throw error;
-      });
-      const encode = await encoder;
+      const encode = await encoder();
       const inputs = kind === 'query' ? texts.map(spellOutLawAbbreviations) : texts;
       const embeddings: Embedding[] = [];
       for (const batch of inBatches(inputs, config.batchSize)) {

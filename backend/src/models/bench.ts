@@ -8,15 +8,12 @@ import { withDatabase } from '../db/with-database.js';
 import { isOneOf } from '../env.js';
 import { describeError } from '../errors.js';
 import { elapsedMs } from '../http.js';
-import { BGE_M3_MODEL, BGE_RERANKER_MODEL } from './catalog.js';
+import { BGE_M3_MODEL, BGE_RERANKER_MAX_TOKENS, BGE_RERANKER_MODEL } from './catalog.js';
 import { loadLocalModelConfig, MODEL_DTYPES, type ModelDtype } from './config.js';
-import { loadSamplePassages } from './passages.js';
+import { BENCH_INSTRUCTION, loadSamplePassages } from './passages.js';
 import { inBatches, loadCrossEncoder, loadTextEncoder } from './runtime.js';
 
 const SAMPLE_SIZE = 100;
-const RERANK_MAX_TOKENS = 1024;
-const QUERY =
-  'Anställningsavtal för en säljare med sex månaders provanställning och konkurrensklausul';
 
 try {
   const { values } = parseArgs({ options: { dtype: { type: 'string', default: 'int8' } } });
@@ -46,8 +43,8 @@ async function run(dtype: ModelDtype, passages: string[]): Promise<void> {
   started = performance.now();
   for (const batch of inBatches(passages, batchSize)) {
     await score(
-      batch.map((passage) => ({ query: QUERY, passage })),
-      RERANK_MAX_TOKENS,
+      batch.map((passage) => ({ query: BENCH_INSTRUCTION, passage })),
+      BGE_RERANKER_MAX_TOKENS,
     );
   }
   const scoreMs = elapsedMs(started);

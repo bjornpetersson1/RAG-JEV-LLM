@@ -1,5 +1,10 @@
 import type { DatabaseSync } from 'node:sqlite';
 
+/** The instruction the model benchmarks score chunks against, so their tables can be compared. */
+export const BENCH_INSTRUCTION =
+  'Anställningsavtal för en säljare med sex månaders provanställning och konkurrensklausul';
+import type { Chunk } from '../llm/types.js';
+
 /**
  * What a local model reads for a chunk: its heading path (law or case title, chapter, section),
  * then its text. Unlike the judge's `judgedText` (source reference and text), the heading path
@@ -25,4 +30,23 @@ export function loadPassage(db: DatabaseSync, sourceRef: string): string {
     PassageRow | undefined;
   if (!row) throw new Error(`No chunk "${sourceRef}" in the database; run the data import first`);
   return passageText(row);
+}
+
+/**
+ * `count` chunks spread evenly over the corpus by id, as the query flow loads them, so their
+ * lengths are typical, for timing the reranker. Fewer when the corpus is smaller.
+ */
+export function loadSampleChunks(db: DatabaseSync, count: number): Chunk[] {
+  const ids = (db.prepare('SELECT id FROM chunks ORDER BY id').all() as { id: number }[]).map(
+    ({ id }) => id,
+  );
+  const picked = Array.from(
+    { length: Math.min(count, ids.length) },
+    (_, i) => ids[Math.floor((i * ids.length) / Math.min(count, ids.length))],
+  );
+  const select = db.prepare('SELECT id, text, source_ref, context FROM chunks WHERE id = ?');
+  return picked.map((id) => {
+    const row = select.get(id) as { text: string; source_ref: string; context: string };
+    return { id: String(id), text: row.text, source: row.source_ref, context: row.context };
+  });
 }

@@ -178,9 +178,9 @@ Choosing a template (`employment` or `nda`) adds its preset tags from `sources/t
 
 The relevance step sits behind one `Reranker` interface (`backend/src/rerank/`). `RERANKER` in `.env` picks the implementation, and nothing else in the code branches on it:
 
-- `llm` (default for now): the judge's LLM (`LLM_JUDGE_PROVIDER`/`LLM_JUDGE_MODEL`), asked for the probability that the answer is yes.
+- `bge` (default): the local cross-encoder bge-reranker-v2-m3 (see [Local models](#local-models)). It scores each chunk's heading path and text against the instruction and turns the logit into a score with a sigmoid. Pairs over 1,024 tokens are cut at the end of the chunk, with a warning. Its scores are not calibrated like JEV's or the LLM's, so it has its own threshold, `RERANK_THRESHOLD_BGE` (default 0: only `RERANK_TOP_K` cuts); `RERANKER_DTYPE` (`int8` default, or `fp32`) and `RERANKER_BATCH_SIZE` (default 8) tune it. Nothing is cached.
+- `llm`: the judge's LLM (`LLM_JUDGE_PROVIDER`/`LLM_JUDGE_MODEL`), asked for the probability that the answer is yes.
 - `jev`: JEV, with the chunk as the state and the question as one Noul question. When a JEV call fails (timeout, network or HTTP error, malformed answer), the judge's LLM answers that chunk instead, and a warning names the chunk and the cause. Needs `JEV_API_KEY`; without it the server refuses to start.
-- `bge`: the local cross-encoder bge-reranker-v2-m3 (E8-3; until then a placeholder that fails when used).
 - `qwen3`: a placeholder for a later experiment.
 
 `JUDGE_IMPL` was replaced by `RERANKER`; a `.env` that still sets it fails at startup. A reranker scores every candidate, drops those below the threshold and unknown chunks, and returns the best `RERANK_TOP_K` (default 8), best first. Every reranker returns the same shape: the chunk, a score from 0 to 1, the reranker and its model. Adding one is a new file with a `RerankerEntry` and one entry in `RERANKERS` (`backend/src/rerank/factory.ts`).
@@ -212,7 +212,7 @@ TypeSafe does not document JEV's maximum state size, pricing or rate limits. `np
 
 ## Local models
 
-bge-m3 (embeddings) and bge-reranker-v2-m3 (reranking) run locally, in Node, through [transformers.js](https://github.com/huggingface/transformers.js) 3.x on onnxruntime-node, on the CPU. They are downloaded from Hugging Face on first use into `MODEL_CACHE_DIR` (default `data/models`, git-ignored): about 0.6 GB per model in int8 and 2.3 GB in fp32. `EMBEDDER_DTYPE` picks the precision (`int8` by default).
+bge-m3 (embeddings) and bge-reranker-v2-m3 (reranking) run locally, in Node, through [transformers.js](https://github.com/huggingface/transformers.js) 3.x on onnxruntime-node, on the CPU. They are downloaded from Hugging Face on first use into `MODEL_CACHE_DIR` (default `data/models.nosync`, git-ignored; the `.nosync` suffix keeps iCloud Drive from uploading the models when the repo is in a synced folder such as `~/Documents`): about 0.6 GB per model in int8 and 2.3 GB in fp32. `EMBEDDER_DTYPE` picks the precision (`int8` by default).
 
 ```bash
 npm run embed:smoke                   # "7 § LAS" must be nearer LAS 7 § than Dataskyddslagen 1 kap. 7 §
@@ -242,6 +242,17 @@ Run-to-run variation on this laptop is large: earlier runs, with other work on t
 **Sparse output is not available.** The ONNX export gives bge-m3's dense vectors only; its sparse (lexical) weights come from a separate `sparse_linear.pt` head that is not part of any ONNX repackaging. E8-4 therefore uses SQLite FTS5 BM25 as the lexical half of hybrid search.
 
 **Law abbreviations.** bge-m3 does not know Swedish law abbreviations: "7 § LAS" came out nearer Dataskyddslagen 1 kap. 7 § (cosine 0.485) than LAS 7 § (0.478), in int8 and fp32 alike. The embedder therefore spells out known abbreviations in queries (E6-3's table: "7 § LAS" → "7 § LAS (Lag (1982:80) om anställningsskydd)"), after which LAS 7 § wins clearly (0.578 against 0.474).
+
+### Rerank latency (E8-3)
+
+`npm run bench:rerank -- --dtype int8|fp32` reranks 30 and 50 real chunks (spread over the corpus, 1,033 characters on average) against a Swedish instruction on the demo machine, 5 runs each, in batches of 8 pairs of similar length:
+
+| dtype | 30 chunks (median of 5) | 50 chunks (median of 5) | model load |
+| ----- | ----------------------- | ----------------------- | ---------- |
+| int8  | 29.2 s                  | 54.6 s                  | 4.2 s      |
+| fp32  | 41.7 s                  | 79.2 s                  | 9.7 s      |
+
+Measured with a 1-minute load average of 3.9 at the start (iCloud Drive was still syncing); the model load includes scoring one pair. Batching pairs of similar length made this about 15–20 % faster than batching in candidate order (35.9 s and 64.6 s in int8). int8 is about 30 % faster than fp32 here. At about 1 s per chunk, reranking 30 candidates takes about half a minute per query on this laptop.
 
 ### Licences
 

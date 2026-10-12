@@ -5,6 +5,7 @@ import { createTestDatabase } from '../db/test-helpers.js';
 import { loadLlmConfig } from '../llm/config.js';
 import { createCapturingLogger, messageResponse } from '../llm/test-helpers.js';
 import type { Chunk } from '../llm/types.js';
+import { createBgeReranker, loadBgeRerankerConfig } from './bge-reranker.js';
 import { createReranker } from './factory.js';
 import { fakeRerankResult } from './test-helpers.js';
 import type { Reranker, RerankerDependencies } from './types.js';
@@ -51,6 +52,13 @@ function deps(): RerankerDependencies {
   };
 }
 
+/** A cross-encoder whose logit for a pair gives the passage's score in `SCORES`. */
+const fakeCrossEncoder = async () => async (pairs: readonly { passage: string }[]) =>
+  pairs.map(({ passage }) => {
+    const score = scoreIn(passage);
+    return { logit: Math.log(score / (1 - score)), truncated: false };
+  });
+
 /** A reranker outside the registry, scoring from `SCORES` without any call. */
 const fakeReranker: Reranker = {
   name: 'fake',
@@ -65,6 +73,17 @@ const RERANKERS: [string, () => Reranker, string][] = [
     'jev-latest',
   ],
   ['llm', () => createReranker({ RERANKER: 'llm' }, deps()).reranker, 'claude-haiku-5-5'],
+  // The model is faked: its logit for a chunk is the one whose sigmoid is the chunk's score.
+  [
+    'bge',
+    () =>
+      createBgeReranker(
+        loadBgeRerankerConfig({ RERANK_THRESHOLD_BGE: '0.5' }),
+        createCapturingLogger(),
+        fakeCrossEncoder,
+      ),
+    'onnx-community/bge-reranker-v2-m3-ONNX',
+  ],
   ['fake', () => fakeReranker, 'fake-model'],
 ];
 
@@ -84,7 +103,11 @@ describe.each(RERANKERS)('the %s reranker', (name, build, model) => {
     const result = await build().rerank('Anställningsavtal', CHUNKS, CHUNKS.length);
 
     expect(result.ranked.map(({ chunk }) => chunk.id)).toEqual(['b', 'c', 'e', 'a']);
-    expect(result.scored.map(({ score }) => score)).toEqual([0.95, 0.8, 0.7, 0.6, 0.1]);
+    const expected = [0.95, 0.8, 0.7, 0.6, 0.1];
+    // BGE's scores come back through a sigmoid of the fake logit, so they are equal to rounding.
+    expect(result.scored.map(({ score }) => score)).toEqual(
+      name === 'bge' ? expected.map((score) => expect.closeTo(score, 10)) : expected,
+    );
   });
 });
 
