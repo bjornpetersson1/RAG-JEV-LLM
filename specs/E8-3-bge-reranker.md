@@ -13,7 +13,7 @@
 ## Goals
 
 - `BgeReranker` implementing E8-1's `Reranker`, with batching and any concurrency limit inside it.
-- The scored text is the chunk's context and text, as the judge reads it today; truncation at 1,024 tokens, logged when it happens.
+- The scored text is E8-2's `passageText`: the chunk's heading path (`context`) and text; truncation at 1,024 tokens, logged when it happens.
 - Its own threshold setting, so the BGE score scale does not inherit `JUDGE_THRESHOLD`.
 - Latency on the demo machine for 30 and 50 real chunks in fp32 and int8, in the README.
 - `RERANKER=bge` as the default.
@@ -59,6 +59,12 @@
 - **Its own threshold, `RERANK_THRESHOLD_BGE`, default 0** (owner): BGE's sigmoid scores are not calibrated like JEV's or the LLM's, so `JUDGE_THRESHOLD` keeps applying to `jev` and `llm` only. With 0, only `RERANK_TOP_K` cuts; E8-5 / #58 can set a measured value. Departs from E8-1's "threshold, then top-K" only in which threshold applies.
 - **Same runtime as E8-2** (from E8-2): the model loads through E8-2's runtime and cache; E8-2's spike already showed it runs.
 - **Model loaded once, lazily** (default): on the first `rerank` call, so a server with `RERANKER=llm` never loads it; the load time is logged and reported separately in the benchmark.
+- **Builds on E8-1 and E8-2 as merged** (spec update before implementing):
+  - The model loads through E8-2's `loadCrossEncoder` (`models/runtime.ts`) from `BGE_RERANKER_MODEL` (`onnx-community/bge-reranker-v2-m3-ONNX`, `models/catalog.ts`), with `loadLocalModelConfig(env, 'RERANKER')` for `RERANKER_DTYPE`, `RERANKER_BATCH_SIZE` and `MODEL_CACHE_DIR`.
+  - The scored text is E8-2's `passageText` (heading path and text), not the judge's `judgedText` (source reference and text); the issue's "context + text" is this. The "as the judge reads it" in the Goals was wrong and is corrected. `Chunk` gets an optional `context`, which `loadChunks` now fills; a chunk without it is scored on its source reference and text.
+  - E8-2's measurements: scoring takes 0.7–1.2 s per pair on the demo machine, so reranking 30 candidates takes roughly 20–40 s. `bench:rerank` measures it properly.
+  - E8-2's code review: transformers.js 3.8 truncates a pair at `max_length` without a pair-aware strategy. `BgeReranker` therefore truncates the passage itself so the pair fits 1,024 tokens, and logs it.
+  - E8-1's `RerankResult` (`ranked`, `scored`, `stats` with `relevant`) and `bestFirst` are used as they are; BGE needs no cache, so `calls` is the number of chunks scored and `cacheHits` 0.
 
 ## Open Questions
 
