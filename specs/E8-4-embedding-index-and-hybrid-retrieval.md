@@ -53,10 +53,10 @@ Every chunk is embedded once with the configured `Embedder` and its vector cache
 
 ## Tasks
 
-- [ ] Migration: `chunk_embeddings (chunk_id, model, dtype, text_hash, dense BLOB, sparse TEXT NULL)`, keyed so a model or dtype change re-embeds.
+- [ ] Migration: `chunk_embeddings (chunk_id, model, dtype, text_hash, dense BLOB)`, keyed so a model or dtype change re-embeds.
 - [ ] `index:embed` command: find stale chunks, embed in batches with progress, store.
 - [ ] Vector store: load into a contiguous `Float32Array` at startup, cosine top-N.
-- [ ] Lexical half: bge-m3 sparse dot product if available (E8-2), else FTS5 BM25 over `chunks_fts` with the instruction's words and law abbreviations expanded (`LAS` → `1982:80`) using E6-3's table.
+- [ ] Lexical half: FTS5 BM25 over `chunks_fts` with the instruction's words, its numbers (section numbers included) and law abbreviations replaced by their SFS number (`LAS` → `1982:80`) through `replaceLawAbbreviations`.
 - [ ] RRF fusion with `RRF_K` and per-list weights; `both` fuses the tag ranking and the hybrid ranking the same way.
 - [ ] Settings: `RETRIEVER` (default `tags`), `RETRIEVE_CANDIDATES` (default 40, 30–50 recommended), `RRF_K` (default 60), `RRF_WEIGHT_DENSE` / `RRF_WEIGHT_LEXICAL` / `RRF_WEIGHT_TAGS` (default 1); `.env.example`.
 - [ ] Query flow: candidates from the configured retriever; translation skipped for `bge`; candidate origin reported (`tag`, `fts`, `dense`, `lexical`).
@@ -74,6 +74,12 @@ Every chunk is embedded once with the configured `Embedder` and its vector cache
 - **Lexical half follows E8-2's finding** (from E8-2): sparse weights if the runtime gives them, otherwise FTS5 BM25. With FTS5, known law abbreviations are expanded to their SFS number, because `source_ref` holds `SFS 1982:80 7 §`, not `LAS`.
 - **Vectors keyed by chunk, model, dtype and a hash of the embedded text** (from the issue, plus dtype): int8 and fp32 vectors differ, so a dtype change re-embeds instead of mixing them.
 - **Rerank in `retrieve`** (from the issue): `retrieve` uses the configured `RERANKER`; with E8-3 merged that is `bge`.
+- **Builds on E8-1, E8-2 and E8-3 as merged** (spec update before implementing):
+  - **No sparse output** (E8-2): the lexical half is SQLite FTS5 BM25, and `chunk_embeddings` has no sparse column.
+  - **The lexical query keeps numbers of any length** (settled for this spec): E4-3's `buildFtsQuery` drops words shorter than three characters, which drops section numbers ("7", "80"), so "7 § LAS" would only match "1982". The hybrid lexical query reuses its word handling but keeps every number as an exact term, and replaces law abbreviations by their SFS number with E8-2's `replaceLawAbbreviations`, so `source_ref` (`SFS 1982:80 7 §`) matches.
+  - **The embedded text is E8-2's `passageText`** (heading path and text), the same text the BGE reranker scores. The query is embedded with `kind: 'query'`, which spells out law abbreviations (E8-2).
+  - **`index:embed` batches chunks of similar length** (as E8-3's reranker does), since a batch is padded to its longest text. At about 0.7–1.2 s per chunk (E8-2), a full index of ~2,100 chunks takes 25–45 minutes on the demo machine; progress is printed.
+  - **The model cache is `data/models.nosync`** (E8-3) and the default reranker is `bge` (E8-3), so `retrieve` reranks with BGE unless `.env` says otherwise.
 
 ## Open Questions
 
