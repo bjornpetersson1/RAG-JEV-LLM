@@ -50,9 +50,9 @@ async function run(dtype: ModelDtype, passages: string[]): Promise<void> {
       RERANK_MAX_TOKENS,
     );
   }
+  const scoreMs = elapsedMs(started);
   // The process's peak, including activations freed after each batch; in kilobytes.
   const peakRssBytes = process.resourceUsage().maxRSS * 1024;
-  const scoreMs = elapsedMs(started);
 
   console.log(
     '| dtype | bge-m3 load | embed 100 chunks | reranker load | score 100 pairs | peak RSS |',
