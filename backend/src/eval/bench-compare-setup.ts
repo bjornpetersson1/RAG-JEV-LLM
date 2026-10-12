@@ -1,5 +1,5 @@
 // Builds `bench:compare`'s two flows from `.env` and the database (E5-4): the main flow as `.env`
-// configures it, and the reference RAG, sharing one embedder so its model loads once.
+// configures it, and the reference RAG, sharing one load of the embedder and vectors.
 
 import type { DatabaseSync } from 'node:sqlite';
 import { createEmbedder } from '../embedding/factory.js';

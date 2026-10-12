@@ -345,13 +345,13 @@ npm run bench:compare [-- --runs 5] [--limit <n>] [--no-draft]
 `bench:compare` (E5-4) runs every evaluation query through the main flow (as `.env` configures it) and the [reference RAG](#reference-rag), `--runs` times each (default 5). Within a run the two flows take turns going first, the embedder and a local reranker are loaded before anything is timed, and the judge cache is off, so an `llm` or `jev` reranker is measured on every run. One row per flow gives the median and p90 over every run of:
 
 - total time;
-- search time: retrieval and loading the chunks, embedding the instruction included;
+- search time: retrieval and loading the chunks, embedding the instruction included, and the embedding time on its own (`–` for tag search, which embeds nothing);
 - rerank time (main flow only) and generation time;
 - LLM time: query translation, generation and, for `llm` or `jev`, the rerank (a local reranker such as `bge` is not LLM time);
-- precision and recall of the chunks sent to the generator (the main flow's approved chunks, the reference RAG's top k), macro averages over the queries, averaged over the runs;
+- precision and recall of the chunks sent to the generator (the main flow's approved chunks, the reference RAG's top k, in both cases those that fit the context limits when a draft is written), macro averages over the queries, averaged over the runs;
 - source accuracy: valid references / all references over every draft (E6-3).
 
-The table is printed and appended to the "Main flow vs reference RAG" table in that day's `eval/report-<date>.md`. `--limit <n>` runs only the first n queries and `--no-draft` measures retrieval and rerank without generation. A query that fails in a run is listed and left out of that run, and the command then exits non-zero.
+The table is printed and appended to the "Main flow vs reference RAG" table in that day's `eval/report-<date>.md`. `--limit <n>` runs only the first n queries and `--no-draft` measures retrieval and rerank without generation. A query that fails in a run is listed, and that query and run is left out of both flows, so the rows are compared on the same samples (the `samples` column counts them); a flow with no measured sample shows `–`. The command then exits non-zero.
 
 The first full run (2026-10-12, in `eval/report-2026-10-12.md`, 84 of 100 query and run pairs after the subscription's session limit stopped some calls): the reference RAG took a median 29.5 s against the main flow's 71.8 s with `RERANKER=bge`, almost all of the difference being the BGE rerank (37.0 s); the main flow sent better chunks (precision 0.398 against 0.302, recall 0.254 against 0.208); source accuracy was about equal (0.917 and 0.914).
 
