@@ -152,7 +152,7 @@ describe('loadPromptTemplate', () => {
 
   it('names the id and the available templates for an unknown id', () => {
     expect(() => loadPromptTemplate('lease')).toThrow(
-      'Unknown template "lease": expected one of employment, nda',
+      'Unknown template "lease": expected employment or nda',
     );
   });
 

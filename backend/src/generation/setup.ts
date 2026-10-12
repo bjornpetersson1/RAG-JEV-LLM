@@ -9,6 +9,7 @@ import { createQueryServices } from '../query/services.js';
 import { translateQuery } from '../query/translate-query.js';
 import { createReranker } from '../rerank/factory.js';
 import type { Reranker } from '../rerank/types.js';
+import type { TagIndex } from '../search/tag-index.js';
 import type { RetrieverName } from '../retrieval/config.js';
 import { createConfiguredRetriever, type RetrievalSource } from '../retrieval/setup.js';
 import { loadContextLimits, type ContextLimits } from './config.js';
@@ -31,6 +32,8 @@ export function createQueryFlow(
   limits: Partial<ContextLimits> = {},
   /** For `RETRIEVER=bge|both`; by default `EMBEDDER` and its stored vectors. */
   retrieval?: RetrievalSource,
+  /** The server's tag index; by default built from the database. */
+  tagIndex?: TagIndex,
 ): ConfiguredQueryFlow {
   const llmConfig = loadLlmConfig(env);
   const { reranker, topK } = createReranker(env, { db, llmConfig, logger });
@@ -41,6 +44,7 @@ export function createQueryFlow(
     logger,
     llmConfig,
     roles,
+    tagIndex,
   );
   const retriever = createConfiguredRetriever(db, env, candidateSearch, retrieval);
   return {

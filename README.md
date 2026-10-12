@@ -406,6 +406,27 @@ npm run query -- "Anställningsavtal för en säljare med sex månaders provanst
 
 The output has the main flow's format, without tags or judging, and the time for embedding the instruction, search (embedding included), generation and in total. `npm run bench:compare` compares the two flows on the evaluation queries (see [Main flow vs reference RAG](#main-flow-vs-reference-rag)).
 
+## Web UI
+
+`npm run dev` starts the backend and the React UI (Vite proxies `/api/*` to the backend). The form (E7-1) has a required contract type, _Anställningsavtal_ (`employment`) or _Sekretessavtal_ (`nda`), an optional free-text instruction, and an option to also run the [reference RAG](#reference-rag). Both paths run the same flow:
+
+- **Template alone.** The template's preset tags are the query's tags. The search, rerank and generator are asked the template's default instruction, the contract itself ("Anställningsavtal" / "Sekretessavtal"), and the UI says that this text was used. Generic words such as "upprätta" are left out because they would match unrelated chunks in full-text search.
+- **Template with free text.** The translated tags are added to the presets (see [Query translation](#query-translation)).
+
+As each step finishes, the UI shows the tags (marked _mall_ for a preset, _översatt_ for a translated tag), the number of candidates and how many of them came from the full-text fallback, the number the reranker approved, and finally the draft. With the reference option, the reference RAG runs after the main flow, never at the same time, so neither distorts the other's timings. The UI texts are in Swedish, like the sources and drafts.
+
+### `POST /query`
+
+The body is `{ "template": "employment" | "nda", "instruction"?: string, "reference"?: boolean }`. An invalid body answers 400 with `{ "error": "…" }`. A query sent while another is running answers 409, because the flow uses every CPU core. Otherwise the answer is `application/x-ndjson`, one JSON event per line:
+
+- `{ "type": "start", "flow": "main" | "reference", "steps": [...] }` when a flow begins, with the steps it will run in order, e.g. `["search", "rerank", "generation"]` with `RETRIEVER=bge`. The UI shows the next of these as running.
+- `{ "type": "step", "flow", "step": "translation", "tags", "elapsedMs" }`, then `"search"` (`candidates`, `fallback`, `embeddingMs`, `searchMs`), `"rerank"` (`approved`, `relevant`, `elapsedMs`) and `"generation"` (`elapsedMs`). A flow without a step, e.g. the reference RAG without translation and rerank, sends no event for it.
+- `{ "type": "result", "flow", "result" }` with the flow's whole result: tags, counts, approved chunks, draft with post-check, timings and tokens.
+- `{ "type": "error", "flow", "message" }` when a flow fails, which ends the stream. An example is the reference RAG before `npm run index:embed`.
+- `{ "type": "done" }` after the last flow.
+
+The server builds the main flow at startup on the existing database, sharing the server's tag index. It builds the reference RAG the first time a query asks for it, and the two flows share one load of the embedder and vectors. Without a database, the server still starts, without this route, and logs a warning; it never creates or migrates the database. If the main flow cannot be built, e.g. with `RETRIEVER=bge` before `npm run index:embed`, the server exits with the reason. If the client goes away, e.g. a closed tab, the query stops before its next step, and the server takes new queries once the current step is done.
+
 ## LLM configuration
 
 Each LLM role (tagger, query translator, judge, generator) gets its provider and model from `.env`, so switching needs no code change:

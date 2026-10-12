@@ -26,6 +26,7 @@ function result(draft?: GenerationResult, relevant = draft ? 2 : 0): QueryResult
     flow: 'main',
     tags: ['anstallningsavtal', 'provanstallning'],
     candidates: 30,
+    fallback: 0,
     approved: draft ? [...draft.used, ...draft.unused] : [],
     judging: { relevant, cacheHits: 4, judgeCalls: 26, unknown: 0 },
     draft,

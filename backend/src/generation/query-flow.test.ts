@@ -8,7 +8,7 @@ import { indexEmbeddings } from '../retrieval/index-embeddings.js';
 import { createFakeEmbedder } from '../retrieval/test-helpers.js';
 import type { Chunk } from '../llm/types.js';
 import { fakeRerankResult } from '../rerank/test-helpers.js';
-import { runQuery, type QueryFlowDependencies } from './query-flow.js';
+import { runQuery, type QueryFlowDependencies, type QueryStep } from './query-flow.js';
 import { createQueryFlow } from './setup.js';
 
 const USAGE = { inputTokens: 7, outputTokens: 3, cacheWriteTokens: 0, cacheReadTokens: 0 };
@@ -86,6 +86,87 @@ describe('runQuery', () => {
     expect(result.flow).toBe('main');
     expect(result.approved.map((c) => c.id)).toEqual(['2', '1']);
     expect(result.timings.embeddingMs).toBe(25);
+  });
+
+  it('reports each step as soon as it is done', async () => {
+    const { deps } = fakeFlow({ '1': 0.6, '2': 0.9, '3': 0.2 });
+    const steps: QueryStep[] = [];
+
+    await runQuery({ instruction: 'Säljare', template: 'employment' }, deps, {
+      onStep: (step) => steps.push(step),
+    });
+
+    expect(steps.map(({ step }) => step)).toEqual([
+      'translation',
+      'search',
+      'rerank',
+      'generation',
+    ]);
+    expect(steps[0]).toMatchObject({ tags: [{ slug: 'uppsagning', origin: 'translated' }] });
+    expect(steps[1]).toMatchObject({ candidates: 3, fallback: 0 });
+    expect(steps[2]).toMatchObject({ approved: 2, relevant: 2, elapsedMs: 40 });
+  });
+
+  it('asks search, rerank and generator the template’s default instruction without free text', async () => {
+    const { deps, calls } = fakeFlow({ '1': 0.6 });
+    const asked: string[] = [];
+    const translated: string[] = [];
+
+    const result = await runQuery(
+      { instruction: '  ', template: 'nda' },
+      {
+        ...deps,
+        translate: async (query) => {
+          translated.push(query.instruction);
+          return { tags: [], elapsedMs: 0 };
+        },
+        search: async (instruction, tags) => {
+          asked.push(instruction);
+          return deps.search(instruction, tags);
+        },
+      },
+    );
+
+    expect(translated).toEqual(['  ']);
+    expect(asked).toEqual(['Sekretessavtal']);
+    expect(calls.generated).toEqual([['1']]);
+    expect(result.defaultInstruction).toBe('Sekretessavtal');
+  });
+
+  it('counts the candidates the full-text fallback added', async () => {
+    const { deps } = fakeFlow({});
+
+    const result = await runQuery(
+      { instruction: 'Säljare', template: 'nda' },
+      {
+        ...deps,
+        search: async () => ({
+          candidates: [
+            { chunkId: 1, origin: 'tag' as const },
+            { chunkId: 2, origin: 'fts' as const },
+          ],
+        }),
+      },
+    );
+
+    expect(result.fallback).toBe(1);
+    expect(result.defaultInstruction).toBeUndefined();
+  });
+
+  it('stops before the next step once the signal is aborted', async () => {
+    const { deps, calls } = fakeFlow({ '1': 0.6 });
+    const abort = new AbortController();
+
+    const run = runQuery({ instruction: 'Säljare', template: 'nda' }, deps, {
+      signal: abort.signal,
+      onStep: ({ step }) => {
+        if (step === 'search') abort.abort();
+      },
+    });
+
+    await expect(run).rejects.toThrow();
+    expect(calls.judged).toEqual([]);
+    expect(calls.generated).toEqual([]);
   });
 
   it('writes no draft when none is asked for', async () => {

@@ -4,7 +4,7 @@
 - **Labels:** `E7 UI and measurement`
 - **Phase:** 5. UI and measurement
 - **Depends on:** E1-1 (#1), E6-2 (#20), E4-4 (#14); uses E5-4 (#18) for the reference option
-- **Status:** Approved
+- **Status:** Implemented — all acceptance criteria verified (npm ci, lint, format:check, typecheck, 823 tests (800 backend, 23 frontend) and build exit 0; `npm run dev` with fake LLM roles and the real BGE reranker: both form paths, with and without the reference RAG, run end to end in headless Chrome)
 
 ## Summary
 
@@ -31,7 +31,7 @@ The React UI gets a form: a required contract type (employment agreement or NDA)
 
 1. **Template selection and free text both start the same flow.**
    - With only a contract type chosen, submitting runs the flow with the template's preset tags; with free text as well, the translated tags are added (E4-4). Both go through the same `runQuery` and the same endpoint.
-   - Without free text, the flow uses a fixed Swedish instruction per template (e.g. "Upprätta ett anställningsavtal.") for reranking, embedding and generation, since those need a question; the UI shows that this text was used.
+   - Without free text, the flow uses a fixed Swedish instruction per template (e.g. "Anställningsavtal") for reranking, embedding and generation, since those need a question; the UI shows that this text was used.
    - Submitting without a contract type is not possible in the UI, and the endpoint answers 400 with a message.
    - A frontend test submits both paths and asserts the request body; a backend test runs both through the route with fakes and gets a draft.
 2. **Tags, candidate count and approved count are shown.**
@@ -47,12 +47,12 @@ The React UI gets a form: a required contract type (employment agreement or NDA)
 
 ## Tasks
 
-- [ ] `runQuery` reports each step through an optional callback (translation, retrieval, rerank, generation) without changing its result; the reference flow (E5-4) runs through `runQuery` too, so it reports its steps the same way.
-- [ ] Server: build the query flow and the reference flow at startup; `POST /query` (served at `/api/query` through the Vite proxy) with request validation, NDJSON streaming, a one-at-a-time guard and error events.
-- [ ] Default instruction per template when the free text is empty.
-- [ ] Frontend: form, streaming client, step state, result sections, error display; Swedish texts.
-- [ ] README: the UI, the endpoint and its events.
-- [ ] Tests.
+- [x] `runQuery` reports each step through an optional callback (translation, retrieval, rerank, generation) without changing its result; the reference flow (E5-4) runs through `runQuery` too, so it reports its steps the same way.
+- [x] Server: build the query flow and the reference flow at startup; `POST /query` (served at `/api/query` through the Vite proxy) with request validation, NDJSON streaming, a one-at-a-time guard and error events.
+- [x] Default instruction per template when the free text is empty.
+- [x] Frontend: form, streaming client, step state, result sections, error display; Swedish texts.
+- [x] README: the UI, the endpoint and its events.
+- [x] Tests.
 
 ## Decisions
 
@@ -66,6 +66,28 @@ The React UI gets a form: a required contract type (employment agreement or NDA)
 - **The endpoint lives in E7-1** (owner, E5-4): one place for the API, with the reference flow as an option.
 
 - **Builds on E5-4 as merged** (spec update before implementing): the reference RAG is a set of query-flow steps that `runQuery` runs (`createReferenceFlow`), so one step callback in `runQuery` covers both flows. `QueryResult` leaves out steps that did not run (`judging`, `translationMs`, `embeddingMs`, `judgingMs`) and lists the `approved` chunks; the stream's events follow that shape. The candidate's origin (`tag`, `fts`, `dense`, …) gives the fallback count.
+
+- **Settled while implementing**:
+  - **The default instruction lives in `runQuery`** (`DEFAULT_INSTRUCTIONS`): with an empty instruction, translation still gets the empty text (so only the presets are used) and every later step gets the default. `QueryResult.defaultInstruction` says when it was used, and `QueryResult.fallback` counts the full-text candidates.
+  - **Step events** (`QueryStep`): `translation`, `search`, `rerank` and `generation`, each sent after its step and only for the steps the flow has. The draft itself comes in the `result` event with the whole `QueryResult`, which E7-2 renders.
+  - **The route is registered only when the app gets flows** (`buildApp({ queryFlows })`), so the health tests and other uses of the app need no database. The server opens the database (and migrates it) and builds the flows at startup, with a quiet console logger as the CLI uses. A startup failure prints its message and exits.
+  - **The reference option is off by default here**; E7-3 turns it on.
+  - **Each flow starts with a `start` event listing the steps it will run** (`plannedSteps`), so the UI shows the right step as running, e.g. no translation with `RETRIEVER=bge` and no rerank for the reference RAG. It does not have to know each flow's configuration.
+  - **Both flows share one load of the embedder and vectors** in the server (`createQueryFlows`), loaded at startup when `RETRIEVER` needs them, otherwise with the first reference query.
+  - **One template check** (`assertTemplate`) replaces the three copies in the query translation, the prompt templates and the default instruction.
+  - **The UI shows tag slugs**, marked _mall_ or _översatt_; the vocabulary's labels are not sent.
+  - **The frontend mirrors the event types** (`frontend/src/query.ts`) instead of importing them from the backend (clean code suggested a shared module): the backend types reach Node-only modules (`node:sqlite`, the LLM clients) that the browser build cannot type-check.
+- **Code review fixes**:
+  - **A client that goes away stops the query** before its next step (`QueryOptions.signal`, aborted when the response closes unfinished), so a closed tab no longer holds the one-query lock for the rest of the run.
+  - **The default instruction is the contract itself** ("Anställningsavtal", "Sekretessavtal"): a generic word such as "upprätta" would match unrelated chunks in the full-text fallback and the BM25 half.
+  - **The server never creates or migrates the database**: without one it starts without `POST /query` and warns. The flows share the server's tag index, so it is built once and disposed on close. The flows' own startup check replaces `checkRetrieverReady`, which is removed with its tests (`createQueryFlows` failing on missing embeddings is tested instead).
+  - **The UI says the reference RAG is being prepared** between the main flow's result and the reference RAG's start, while the server loads the embedder and vectors.
+  - **The stream reader is released** however reading ends, and a line that is not JSON is reported as an invalid answer, not as a broken-off one.
+- **Not changed (code review)**: **recording the Swedish UI strings as an exception in `CLAUDE.md`**. The exception is the owner's decision in this spec; changing `CLAUDE.md` is left to the owner.
+- **Skipped clean-code suggestions**:
+  - **Moving the default instructions into the prompt files**: `runQuery` would then read a prompt file before translation; two sentences in code are simpler.
+  - **A shared flow runner for the route and the CLI, and one timing shape for step events**: E7-3 adds the run log and the timing panel and decides there.
+  - **Dropping the server's separate tag index (`app.tagIndex`)**: unused by the query flow, but it predates this issue and is out of its scope.
 
 ## Open Questions
 

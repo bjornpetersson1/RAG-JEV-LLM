@@ -1,13 +1,41 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
+import type { QueryResult, QueryStepName } from './query';
+import { controlledStream, stubFetch } from './test-helpers';
+
+const RESULT: QueryResult = {
+  flow: 'main',
+  tags: ['anstallningsavtal', 'provanstallning'],
+  candidates: 30,
+  fallback: 6,
+  approved: [{ id: '11', text: 'a' }],
+  draft: { text: '# Anställningsavtal\n\nText [K:11].', used: [], unused: [] },
+};
+
+const MAIN_STEPS: QueryStepName[] = ['translation', 'search', 'rerank', 'generation'];
+
+function submitForm({ template = 'Anställningsavtal', instruction = '', reference = false } = {}) {
+  fireEvent.click(screen.getByLabelText(template));
+  if (instruction) {
+    fireEvent.change(screen.getByLabelText('Instruktion (valfri)'), {
+      target: { value: instruction },
+    });
+  }
+  if (reference) fireEvent.click(screen.getByLabelText('Kör även referens-RAG för jämförelse'));
+  fireEvent.click(screen.getByRole('button', { name: 'Skapa utkast' }));
+}
+
+function queryBody(fetchMock: ReturnType<typeof stubFetch>): unknown {
+  const [, init] = fetchMock.mock.calls.find(([url]) => url === '/api/query') ?? [];
+  return JSON.parse(String(init?.body));
+}
 
 describe('App', () => {
   afterEach(cleanup);
 
   it('shows the backend health status', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(Response.json({ status: 'ok' }));
-    vi.stubGlobal('fetch', fetchMock);
+    const fetchMock = stubFetch(() => new Promise(() => {}));
 
     render(<App />);
 
@@ -28,5 +56,198 @@ describe('App', () => {
     render(<App />);
 
     expect(await screen.findByText('Backend: unreachable')).toBeDefined();
+  });
+});
+
+describe('the query form', () => {
+  afterEach(cleanup);
+
+  it('cannot be submitted without a contract type', () => {
+    stubFetch(() => new Promise(() => {}));
+    render(<App />);
+
+    expect(screen.getByRole('button', { name: 'Skapa utkast' }).hasAttribute('disabled')).toBe(
+      true,
+    );
+  });
+
+  it.each([
+    ['the template alone', {}, { template: 'employment', instruction: '', reference: false }],
+    [
+      'the template with free text and the reference RAG',
+      { template: 'Sekretessavtal', instruction: ' Konsult med kunddata ', reference: true },
+      { template: 'nda', instruction: 'Konsult med kunddata', reference: true },
+    ],
+  ])('starts the same query from %s', async (_case, form, body) => {
+    const fetchMock = stubFetch(() => new Promise(() => {}));
+    render(<App />);
+
+    submitForm(form);
+
+    await screen.findByRole('button', { name: 'Kör…' });
+    expect(queryBody(fetchMock)).toEqual(body);
+  });
+
+  it('shows tags, candidates and approved chunks as each step arrives, then the draft', async () => {
+    const stream = controlledStream();
+    stubFetch(() => Promise.resolve(stream.response));
+    render(<App />);
+    submitForm({ instruction: 'Säljare med provanställning' });
+
+    await act(async () => stream.send({ type: 'start', flow: 'main', steps: MAIN_STEPS }));
+    expect(await screen.findByText('Översätter frågan till taggar…')).toBeDefined();
+
+    await act(async () =>
+      stream.step({
+        step: 'translation',
+        tags: [
+          { slug: 'anstallningsavtal', origin: 'preset' },
+          { slug: 'provanstallning', origin: 'translated' },
+        ],
+        elapsedMs: 800,
+      }),
+    );
+    expect(await screen.findByText('anstallningsavtal (mall)')).toBeDefined();
+    expect(screen.getByText('provanstallning (översatt)')).toBeDefined();
+    expect(screen.getByText('Söker kandidater…')).toBeDefined();
+
+    await act(async () =>
+      stream.step({ step: 'search', candidates: 30, fallback: 6, searchMs: 3 }),
+    );
+    expect(await screen.findByText('30 kandidater, varav 6 från fritextsökning')).toBeDefined();
+
+    await act(async () =>
+      stream.step({ step: 'rerank', approved: 8, relevant: 12, elapsedMs: 30_000 }),
+    );
+    expect(await screen.findByText('8 godkända av rerankern')).toBeDefined();
+    expect(screen.getByText('Skriver utkast…')).toBeDefined();
+    expect(screen.queryByText(/Text \[K:11\]/)).toBeNull();
+
+    await act(async () => {
+      stream.send({ type: 'result', flow: 'main', result: RESULT });
+      stream.send({ type: 'done' });
+      stream.end();
+    });
+    expect(await screen.findByText(/Text \[K:11\]/)).toBeDefined();
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Skapa utkast' })).toBeDefined();
+  });
+
+  it('follows the plan the backend sends: no translation step for a flow without one', async () => {
+    const stream = controlledStream();
+    stubFetch(() => Promise.resolve(stream.response));
+    render(<App />);
+    submitForm();
+
+    await act(async () =>
+      stream.send({ type: 'start', flow: 'main', steps: ['search', 'rerank'] }),
+    );
+
+    expect(await screen.findByText('Söker kandidater…')).toBeDefined();
+    expect(screen.queryByText('Översätter frågan till taggar…')).toBeNull();
+  });
+
+  it('says which instruction was used without free text, and shows the reference RAG after the main flow', async () => {
+    const stream = controlledStream();
+    stubFetch(() => Promise.resolve(stream.response));
+    render(<App />);
+    submitForm({ reference: true });
+
+    await act(async () => {
+      stream.send({ type: 'start', flow: 'main', steps: MAIN_STEPS });
+      stream.send({
+        type: 'result',
+        flow: 'main',
+        result: { ...RESULT, defaultInstruction: 'Anställningsavtal' },
+      });
+      stream.send({ type: 'start', flow: 'reference', steps: ['search', 'generation'] });
+      stream.step({ step: 'search', candidates: 8, fallback: 0, searchMs: 400 }, 'reference');
+    });
+
+    expect(
+      await screen.findByText(
+        'Ingen fritext angavs, så instruktionen "Anställningsavtal" användes.',
+      ),
+    ).toBeDefined();
+    expect(screen.queryByText('Förbereder referens-RAG…')).toBeNull();
+    const reference = screen.getByRole('region', { name: 'Referens-RAG' });
+    expect(reference.textContent).toContain('8 närmaste chunkar skickas till generatorn');
+    expect(reference.textContent).toContain('Skriver utkast…');
+  });
+
+  it.each([
+    [
+      'an error answer',
+      () => Promise.resolve(Response.json({ error: 'boom' }, { status: 500 })),
+      'Servern svarade med fel 500: boom',
+    ],
+    [
+      'a query already running',
+      () => Promise.resolve(Response.json({ error: 'busy' }, { status: 409 })),
+      'En fråga körs redan. Vänta tills den är klar och försök igen.',
+    ],
+    [
+      'an unreachable backend',
+      () => Promise.reject(new TypeError('Failed to fetch')),
+      'Kunde inte nå servern. Kontrollera att backend körs.',
+    ],
+  ])('shows the error for %s', async (_case, query, message) => {
+    stubFetch(query);
+    render(<App />);
+
+    submitForm();
+
+    expect((await screen.findByRole('alert')).textContent).toBe(message);
+    expect(screen.getByRole('button', { name: 'Skapa utkast' })).toBeDefined();
+  });
+
+  it('shows an error event from the stream', async () => {
+    const stream = controlledStream();
+    stubFetch(() => Promise.resolve(stream.response));
+    render(<App />);
+    submitForm();
+
+    await act(async () => {
+      stream.send({ type: 'start', flow: 'main', steps: MAIN_STEPS });
+      stream.send({ type: 'error', flow: 'main', message: 'LLM call failed' });
+      stream.end();
+    });
+
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'Fel i huvudflödet: LLM call failed',
+    );
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('shows that the answer broke off when the stream ends early', async () => {
+    const stream = controlledStream();
+    stubFetch(() => Promise.resolve(stream.response));
+    render(<App />);
+    submitForm();
+
+    await act(async () => {
+      stream.send({ type: 'start', flow: 'main', steps: ['search', 'rerank'] });
+      stream.step({ step: 'search', candidates: 3, fallback: 0, searchMs: 1 });
+      stream.end();
+    });
+
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'Svaret från servern avbröts innan frågan var klar.',
+    );
+    expect(screen.getByText('3 kandidater')).toBeDefined();
+  });
+
+  it('says the reference RAG is being prepared between the main flow and its start', async () => {
+    const stream = controlledStream();
+    stubFetch(() => Promise.resolve(stream.response));
+    render(<App />);
+    submitForm({ reference: true });
+
+    await act(async () => {
+      stream.send({ type: 'start', flow: 'main', steps: MAIN_STEPS });
+      stream.send({ type: 'result', flow: 'main', result: RESULT });
+    });
+
+    expect(await screen.findByText('Förbereder referens-RAG…')).toBeDefined();
   });
 });

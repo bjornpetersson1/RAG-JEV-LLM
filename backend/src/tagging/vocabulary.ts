@@ -26,6 +26,14 @@ export function isTemplate(value: string): value is Template {
   return isOneOf(TEMPLATES, value);
 }
 
+/** The template id, or an error naming the valid ones. */
+export function assertTemplate(value: string): Template {
+  if (!isTemplate(value)) {
+    throw new Error(`Unknown template "${value}": expected ${TEMPLATES.join(' or ')}`);
+  }
+  return value;
+}
+
 /** The tags per area, areas in order of first appearance. */
 export function groupByArea<T extends { area: string }>(tags: readonly T[]): Map<string, T[]> {
   const areas = new Map<string, T[]>();
