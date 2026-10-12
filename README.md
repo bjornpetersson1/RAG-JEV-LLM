@@ -425,7 +425,7 @@ The body is `{ "template": "employment" | "nda", "instruction"?: string, "refere
 - `{ "type": "error", "flow", "message" }` when a flow fails, which ends the stream. An example is the reference RAG before `npm run index:embed`.
 - `{ "type": "done" }` after the last flow.
 
-The server builds the main flow at startup on the existing database, sharing the server's tag index. It builds the reference RAG the first time a query asks for it, and the two flows share one load of the embedder and vectors. Without a database, the server still starts, without this route, and logs a warning; it never creates or migrates the database. If the main flow cannot be built, e.g. with `RETRIEVER=bge` before `npm run index:embed`, the server exits with the reason. If the client goes away, e.g. a closed tab, the query stops before its next step, and the server takes new queries once the current step is done.
+The server builds the main flow at startup on the existing database, sharing the server's tag index. It builds the reference RAG the first time a query asks for it, and the two flows share one load of the embedder and vectors. Without a database, or with migrations pending, the server still starts, without this route, and logs a warning naming the command to run; it never creates or migrates the database. If the main flow cannot be built, e.g. with `RETRIEVER=bge` before `npm run index:embed`, the server exits with the reason. If the client goes away, e.g. a closed tab, the query stops before its next step, and the server takes new queries once the current step is done.
 
 ## LLM configuration
 

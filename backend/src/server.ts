@@ -1,9 +1,7 @@
-import { existsSync } from 'node:fs';
 import { registerQueryRoute } from './api/query-route.js';
-import { createQueryFlows } from './api/setup.js';
+import { createQueryFlows, openQueryDatabase } from './api/setup.js';
 import { buildApp } from './app.js';
 import { resolveDatabasePath } from './db/config.js';
-import { openDatabase } from './db/database.js';
 import { loadEmbedderConfig } from './embedding/factory.js';
 import { describeError } from './errors.js';
 import { loadContextLimits } from './generation/config.js';
@@ -29,20 +27,17 @@ try {
 }
 
 /**
- * Builds the query flows on the existing database, sharing the server's tag index, and registers
- * `POST /query`. Without a database the server still starts, without the route; it never creates
- * or migrates the database. A flow that cannot be built, e.g. `RETRIEVER=bge` before
- * `npm run index:embed`, stops the server.
+ * Builds the query flows on the existing, migrated database, sharing the server's tag index, and
+ * registers `POST /query`. Without one the server still starts, without the route, and warns. A
+ * flow that cannot be built, e.g. `RETRIEVER=bge` before `npm run index:embed`, stops the server.
  */
 function registerQueryFlows(databasePath: string): void {
-  if (!existsSync(databasePath)) {
-    app.log.warn(
-      { databasePath },
-      'No database, so POST /query is not available; run `npm run db:migrate` and the data commands',
-    );
+  const opened = openQueryDatabase(databasePath);
+  if ('unavailable' in opened) {
+    app.log.warn({ databasePath }, `POST /query is not available: ${opened.unavailable}`);
     return;
   }
-  const db = openDatabase(databasePath);
+  const { db } = opened;
   app.addHook('onClose', async () => db.close());
   // Every call and search logs at info level; the server log shows only problems.
   const flows = createQueryFlows(db, process.env, createConsoleLogger({ quiet: true }), {

@@ -4,7 +4,7 @@
 - **Labels:** `E7 UI and measurement`
 - **Phase:** 5. UI and measurement
 - **Depends on:** E1-1 (#1), E6-2 (#20), E4-4 (#14); uses E5-4 (#18) for the reference option
-- **Status:** Implemented — all acceptance criteria verified (npm ci, lint, format:check, typecheck, 823 tests (800 backend, 23 frontend) and build exit 0; `npm run dev` with fake LLM roles and the real BGE reranker: both form paths, with and without the reference RAG, run end to end in headless Chrome)
+- **Status:** Implemented — all acceptance criteria verified (npm ci, lint, format:check, typecheck, 826 tests (803 backend, 23 frontend) and build exit 0; `npm run dev` with fake LLM roles and the real BGE reranker: both form paths, with and without the reference RAG, run end to end in headless Chrome)
 
 ## Summary
 
@@ -83,6 +83,7 @@ The React UI gets a form: a required contract type (employment agreement or NDA)
   - **The server never creates or migrates the database**: without one it starts without `POST /query` and warns. The flows share the server's tag index, so it is built once and disposed on close. The flows' own startup check replaces `checkRetrieverReady`, which is removed with its tests (`createQueryFlows` failing on missing embeddings is tested instead).
   - **The UI says the reference RAG is being prepared** between the main flow's result and the reference RAG's start, while the server loads the embedder and vectors.
   - **The stream reader is released** however reading ends, and a line that is not JSON is reported as an invalid answer, not as a broken-off one.
+- **PR review fix**: **a database with pending migrations is treated like a missing one** (`openQueryDatabase`): the server starts without `POST /query` and warns naming `npm run db:migrate`, instead of stopping on a missing table. Checked by starting the server without a database (404 on `POST /query`, 200 on `/health`, no file created).
 - **Not changed (code review)**: **recording the Swedish UI strings as an exception in `CLAUDE.md`**. The exception is the owner's decision in this spec; changing `CLAUDE.md` is left to the owner.
 - **Skipped clean-code suggestions**:
   - **Moving the default instructions into the prompt files**: `runQuery` would then read a prompt file before translation; two sentences in code are simpler.

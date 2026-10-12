@@ -2,7 +2,10 @@
 // reference RAG is built on its first use, so a server without embeddings still answers the main
 // flow and reports the missing `npm run index:embed` only when the reference RAG is asked for.
 
+import { existsSync } from 'node:fs';
 import type { DatabaseSync } from 'node:sqlite';
+import { openDatabase } from '../db/database.js';
+import { migrationLabel, pendingMigrations } from '../db/migrations.js';
 import type { Env } from '../env.js';
 import type { QueryFlowDependencies } from '../generation/query-flow.js';
 import { createQueryFlow } from '../generation/setup.js';
@@ -49,5 +52,22 @@ export function createQueryFlows(
   return {
     main: () => main,
     reference: () => (reference ??= createReferenceFlow(db, env, logger, {}, loadResources())),
+  };
+}
+
+/**
+ * The database the query flows run on, or why there is none: it is missing, or migrations are
+ * pending. It is never created or migrated here; the server then starts without `POST /query`.
+ */
+export function openQueryDatabase(path: string): { db: DatabaseSync } | { unavailable: string } {
+  if (!existsSync(path)) {
+    return { unavailable: 'there is no database; run `npm run db:migrate` and the data commands' };
+  }
+  const db = openDatabase(path);
+  const pending = pendingMigrations(db);
+  if (pending.length === 0) return { db };
+  db.close();
+  return {
+    unavailable: `migrations are pending (${pending.map(migrationLabel).join(', ')}); run \`npm run db:migrate\``,
   };
 }
