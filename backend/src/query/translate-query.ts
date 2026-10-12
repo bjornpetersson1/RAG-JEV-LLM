@@ -1,7 +1,7 @@
 import type { LlmUsage } from '../llm/client.js';
 import type { QueryTranslator, Tag, TranslatedTag } from '../llm/types.js';
 import { elapsedMs } from '../http.js';
-import { isTemplate, TEMPLATES, type Template } from '../tagging/vocabulary.js';
+import { assertTemplate, type Template } from '../tagging/vocabulary.js';
 
 export interface QueryInput {
   /** The lawyer's free text; may be empty when a template is chosen. */
@@ -62,10 +62,7 @@ function presetsOf(
   template: string,
   presets: Record<Template, readonly string[]>,
 ): readonly string[] {
-  if (!isTemplate(template)) {
-    throw new Error(`Unknown template "${template}": expected ${TEMPLATES.join(' or ')}`);
-  }
-  return presets[template];
+  return presets[assertTemplate(template)];
 }
 
 /** The query's tags as vocabulary slugs, e.g. for a search that needs no scores or timings. */

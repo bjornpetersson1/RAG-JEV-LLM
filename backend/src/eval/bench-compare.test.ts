@@ -54,6 +54,7 @@ function fakeFlow(
         flow: name,
         tags: [],
         candidates: fake.ids.length,
+        fallback: 0,
         approved: fake.ids.map(chunk),
         ...(reranked && { judging: { relevant: 0, cacheHits: 0, judgeCalls: 0, unknown: 0 } }),
         draft: references

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Chunk } from '../llm/types.js';
 import { REPO_ROOT } from '../repo-root.js';
-import { isTemplate, TEMPLATES, type Template } from '../tagging/vocabulary.js';
+import { assertTemplate, type Template } from '../tagging/vocabulary.js';
 
 export const PROMPTS_DIR = join(REPO_ROOT, 'prompts');
 
@@ -55,13 +55,11 @@ const loaded = new Map<string, PromptTemplate>();
 
 /** Loads and validates the prompt template for a template id; each file is read once. */
 export function loadPromptTemplate(id: string, dir = PROMPTS_DIR): PromptTemplate {
-  if (!isTemplate(id)) {
-    throw new Error(`Unknown template "${id}": expected one of ${TEMPLATES.join(', ')}`);
-  }
+  const templateId = assertTemplate(id);
   const path = join(dir, `${id}.md`);
   let template = loaded.get(path);
   if (!template) {
-    template = { id, ...parsePromptTemplate(readFileSync(path, 'utf8'), path) };
+    template = { id: templateId, ...parsePromptTemplate(readFileSync(path, 'utf8'), path) };
     loaded.set(path, template);
   }
   return template;

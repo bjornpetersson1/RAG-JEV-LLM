@@ -10,6 +10,7 @@ import type { Chunk, LlmRoles } from '../llm/types.js';
 import { createCandidateSearch, type CandidateSearch } from '../search/candidate-search.js';
 import { loadSearchConfig, tagIndexBuilder } from '../search/config.js';
 import { loadTagIndex } from '../search/load-index.js';
+import type { TagIndex } from '../search/tag-index.js';
 import { VOCABULARY_PATH } from '../tagging/paths.js';
 import { loadVocabulary } from '../tagging/vocabulary.js';
 import { loadQueryTranslatorConfig } from './config.js';
@@ -32,6 +33,8 @@ export function createQueryServices(
   logger: LlmLogger,
   llmConfig: LlmConfig = loadLlmConfig(env),
   roles: LlmRoles = createLlmRoles(llmConfig, { logger }),
+  /** The server's tag index, so it is built once; by default built here. */
+  tagIndex?: TagIndex,
 ): QueryServices {
   const vocabulary = loadVocabulary(VOCABULARY_PATH);
   const translatorConfig = loadQueryTranslatorConfig(env);
@@ -40,14 +43,12 @@ export function createQueryServices(
     logger,
   });
   const searchConfig = loadSearchConfig(env);
-  const tagIndex = loadTagIndex(
-    resolveDatabasePath(env.DATABASE_PATH),
-    tagIndexBuilder(searchConfig),
-    logger,
-  );
+  const index =
+    tagIndex ??
+    loadTagIndex(resolveDatabasePath(env.DATABASE_PATH), tagIndexBuilder(searchConfig), logger);
   return {
     translation: { translator, vocabulary: vocabulary.tags, presets: vocabulary.presets },
-    candidateSearch: createCandidateSearch({ db, tagIndex, config: searchConfig, logger }),
+    candidateSearch: createCandidateSearch({ db, tagIndex: index, config: searchConfig, logger }),
     loadChunks: createChunkLoader(db),
     translatorLabel:
       translatorConfig.impl === 'jev' ? 'jev' : roleLabel(llmConfig, 'queryTranslator'),
