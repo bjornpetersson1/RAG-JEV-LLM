@@ -2,7 +2,8 @@ import { parseArgs } from 'node:util';
 import { isOneOf } from '../env.js';
 import { RETRIEVERS, type RetrieverName } from '../retrieval/config.js';
 
-export interface CompareArgs {
+/** What `run --reranker` compares. */
+export interface RunArgs {
   rerankers: string[];
   /** Absent: the configured `RETRIEVER`. */
   retrievers?: RetrieverName[];
@@ -15,7 +16,7 @@ export interface CompareArgs {
 export function parseRunArgs(
   args: string[],
   rerankerNames: readonly string[],
-): CompareArgs | undefined {
+): RunArgs | undefined {
   const { values, positionals } = parseArgs({
     args,
     options: { reranker: { type: 'string' }, retriever: { type: 'string' } },

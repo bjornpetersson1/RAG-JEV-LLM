@@ -4,10 +4,10 @@
 
 import { readShare, type Env } from '../env.js';
 import { elapsedMs } from '../http.js';
+import { isRelevant } from '../judge/factory.js';
 import { NO_USAGE, type LlmLogger } from '../llm/client.js';
 import { describeError } from '../errors.js';
 import { spellOutLawAbbreviations } from '../legal/law-names.js';
-import { judgedText } from '../llm/judge-question.js';
 import type { Chunk } from '../llm/types.js';
 import { BGE_RERANKER_MAX_TOKENS, BGE_RERANKER_MODEL } from '../models/catalog.js';
 import { loadLocalModelConfig, type LocalModelConfig } from '../models/config.js';
@@ -67,7 +67,7 @@ export function createBgeReranker(
   const scoreAll = oneAtATime(async (instruction: string, chunks: readonly Chunk[]) => {
     const score = await scorer();
     const query = spellOutLawAbbreviations(instruction);
-    const passages = chunks.map(modelText);
+    const passages = chunks.map(passageText);
     // A batch is padded to its longest pair, so pairs of similar length go together.
     const byLength = passages
       .map((_, i) => i)
@@ -118,7 +118,7 @@ export function createBgeReranker(
             : [{ chunk, score, reranker: NAME, model: BGE_RERANKER_MODEL }];
         }),
       );
-      const relevant = scored.filter(({ score }) => score >= config.threshold);
+      const relevant = scored.filter(({ score }) => isRelevant(score, config.threshold));
       return {
         ranked: relevant.slice(0, topK),
         scored,
@@ -133,13 +133,6 @@ export function createBgeReranker(
       };
     },
   };
-}
-
-/** The heading path and text when the chunk has a heading path, else its source and text. */
-function modelText(chunk: Chunk): string {
-  return chunk.context
-    ? passageText({ context: chunk.context, text: chunk.text })
-    : judgedText(chunk);
 }
 
 /** A logit as a probability from 0 to 1. */

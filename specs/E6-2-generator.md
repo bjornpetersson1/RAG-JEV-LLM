@@ -8,7 +8,7 @@
 
 ## Summary
 
-The `Generator` role drafts an employment agreement or NDA from the lawyer's instruction and the approved chunks, using the E6-1 templates, and returns the draft with its cited sources mapped from the inline `[K:<chunk-id>]` citations. A `query` CLI runs the whole flow — query translation → candidate search → JEV judging → draft — in the terminal and prints the draft, its sources and the time per step (the phase 4 milestone).
+The `Generator` role drafts an employment agreement or NDA from the lawyer's instruction and the approved chunks, using the E6-1 templates, and returns the draft with its cited sources mapped from the inline `[K:<chunk-id>]` citations. A `query` CLI runs the whole flow — query translation → candidate search → JEV judging → draft — in the terminal and prints the draft, its sources and the time per step (the phase 4 milestone). (**superseded by E8-1/E8-4**: translation → retrieval (`RETRIEVER`) → rerank (`RERANKER`) → draft)
 
 ## Goals
 
@@ -16,7 +16,7 @@ The `Generator` role drafts an employment agreement or NDA from the lawyer's ins
 - Context assembly: the approved chunks ordered by judge score (highest first), each with id and source reference, capped by a maximum number of chunks and a maximum number of context characters, both configurable.
 - Citation parsing: every `[K:<chunk-id>]` in the draft is found and mapped to the chunk's source reference.
 - A generation result with: the draft text; the used sources (chunk id, source reference, text) in order of first citation; the submitted-but-unused chunks; the approved chunks left out by the context limits; timing; token usage.
-- A query flow that chains the existing steps (E4-4 translation, E4-1/E4-3 candidate search, E5-2 `judgeAll`) with generation, reusable by the UI (E7-1) and with the generation step reusable by the reference RAG (E5-4).
+- A query flow that chains the existing steps (E4-4 translation, E4-1/E4-3 candidate search, E5-2 `judgeAll`) with generation, reusable by the UI (E7-1) and with the generation step reusable by the reference RAG (E5-4). (**superseded by E8-1**: the configured `Reranker` instead of `judgeAll`)
 - A `query` CLI: `npm run query -- "<instruction>" --template employment|nda [--max-chunks <n>] [--max-context-chars <n>]`.
 - When the context limits leave approved chunks out, the result says so (which limit, how many chunks) and the CLI tells the user, with the command to run again with a larger context.
 - Example drafts for both templates made with a real LLM and saved in `prompts/examples/` (moved here from E6-1).
@@ -74,7 +74,7 @@ The `Generator` role drafts an employment agreement or NDA from the lawyer's ins
 - **Invalid citations are left in the text** (default): E6-2 only keeps valid ones in the source list; E6-3 flags the rest.
 - **Disclaimer enforced in code** (default): if the model omits the template's disclaimer line, it is appended to the draft, so every draft carries it.
 - **Demo runs on `claude-code`** (default, owner rule from E5-3): real LLM runs go through the subscription, never the paid API; the run is checked to not pass an API key to `claude`. Without a JEV key, `jev-with-fallback` judges with the LLM, as in E5-3; the examples say which judge answered.
-- **Candidate mode `tags+fts`** (default): the search's default mode and the one the UI will use; the CLI does not add a mode flag.
+- **Candidate mode `tags+fts`** (default): the search's default mode and the one the UI will use; the CLI does not add a mode flag. (**superseded by E8-4**: the flow uses the `RETRIEVER` candidate source; `tags`, the default, is `tags+fts`)
 - **Exit code 0 when nothing is approved** (default): it is a valid outcome, not an error.
 - **Code in `backend/src/generation/`** (default), next to the E6-1 template loader.
 - **Generator role output is the text and usage** (implementation): `Draft` is `{ text, usage }` and `GenerateInput` gained optional `parties`; the LLM generator renders the E6-1 template and asks only for `text`. The fake generator writes a Markdown list citing every chunk as `[K:<id>]`, and its answer function now returns the text.
@@ -85,7 +85,7 @@ The `Generator` role drafts an employment agreement or NDA from the lawyer's ins
 - **Example check** (manual, AC1): `prompts/examples/employment.md` has a `##` heading for all ten employment sections, `prompts/examples/nda.md` for all seven NDA sections; both use the templates' fictional default parties and `[…]` placeholders for missing details; the CLI reported 0 citations outside the submitted chunks in both (9 of 16 and 18 of 20 submitted chunks cited). The NDA run also shows the context-limit notice (25 approved, 20 submitted).
 - **No approved chunk fits the limits** (code review): `generateDraft` does not call the generator when nothing fits the character budget; the result has no `text`, and the CLI says so and prints the limit notice with the rerun command instead of failing on the empty context.
 - **The disclaimer must end the draft** (code review): it is appended unless the draft ends with it (emphasis ignored), not merely when it appears somewhere.
-- **LLM roles built once for the flow** (code review): `createQueryFlow` builds the roles once and passes them to the query services and the generator; `createJudging` still builds its own judge from the same `llmConfig`, which keeps the judge and its cache key tied to one config (E5-2).
+- **LLM roles built once for the flow** (code review): `createQueryFlow` builds the roles once and passes them to the query services and the generator; `createJudging` still builds its own judge from the same `llmConfig`, which keeps the judge and its cache key tied to one config (E5-2). (**superseded by E8-1**: the flow builds its reranker with `createReranker`)
 - **Shared shapes** (code review): `ContextReport` reuses `ContextSelection`'s fields, `QueryRequest` is `DraftRequest` without the chunks, and `roleLabel` moved next to `roleModel` in `llm/config.ts`. The limit notice uses the singular for one chunk.
 - **Generator keeps its domain input** (code review finding declined): the review suggested that `generateDraft` render the template and pass `{ system, prompt }` to the role, so `llm/` would not import `generation/templates.ts`. The role keeps the spec's input (template id, instruction, chunks, parties), like the other roles whose prompts are built inside `llm/roles.ts`; the fake generator needs the chunks to cite them, and E5-4 calls `generateDraft`, not the role. The second template load is a cache hit (`loadPromptTemplate` keeps each file).
 - **Token line includes cache traffic** (PR review): input is shown as normally billed tokens plus cache writes and reads (`in 2 + cache 41230`), since with the Claude Code provider most of the input can be cache traffic and the billed count alone understates the prompt. The saved examples predate this and show the billed count only. The README gives the exact command for a run on the subscription.

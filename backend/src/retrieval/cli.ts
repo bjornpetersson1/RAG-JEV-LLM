@@ -3,10 +3,11 @@
 import { withDatabase } from '../db/with-database.js';
 import { createEmbedder } from '../embedding/factory.js';
 import { describeError } from '../errors.js';
+import { elapsedMs } from '../http.js';
 import { createConsoleLogger } from '../llm/console-logger.js';
 import { loadLlmConfig } from '../llm/config.js';
 import { createQueryServices } from '../query/services.js';
-import { translateQuery } from '../query/translate-query.js';
+import { translateToSlugs } from '../query/translate-query.js';
 import { createReranker } from '../rerank/factory.js';
 import { indexEmbeddings } from './index-embeddings.js';
 import { formatRetrieveResult, parseRetrieveArgs, retrieve, RETRIEVE_USAGE } from './retrieve.js';
@@ -37,7 +38,7 @@ async function embed(): Promise<number> {
     const { embedded, upToDate } = await indexEmbeddings(db, embedder, identity, (done, total) =>
       console.log(`  ${done} / ${total} chunks embedded`),
     );
-    const minutes = ((performance.now() - started) / 60_000).toFixed(1);
+    const minutes = (elapsedMs(started) / 60_000).toFixed(1);
     console.log(`Embedded ${embedded} chunks in ${minutes} min; ${upToDate} were up to date.`);
     return 0;
   });
@@ -61,10 +62,7 @@ async function retrieveCommand(args: string[]): Promise<number> {
     const { reranker, topK } = createReranker(env, { db, llmConfig, logger });
     const result = await retrieve(parsed.question, parsed.topK ?? topK, {
       retriever: createConfiguredRetriever(db, env, candidateSearch),
-      async translate(question) {
-        const { tags } = await translateQuery({ instruction: question }, translation);
-        return tags.map((tag) => tag.slug);
-      },
+      translate: (question) => translateToSlugs({ instruction: question }, translation),
       loadChunks,
       reranker,
     });

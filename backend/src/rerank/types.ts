@@ -2,6 +2,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import type { Env } from '../env.js';
 import type { LlmLogger, LlmUsage } from '../llm/client.js';
 import type { LlmConfig } from '../llm/config.js';
+import type { ModelDtype } from '../models/config.js';
 import type { Chunk, JudgeScore } from '../llm/types.js';
 
 /** A chunk with its relevance score; the same shape whichever reranker produced it. */
@@ -44,7 +45,7 @@ export interface Reranker {
   readonly name: string;
   readonly model: string;
   /** The precision a local model runs in, e.g. `int8`; absent for a remote reranker. */
-  readonly dtype?: string;
+  readonly dtype?: ModelDtype;
   rerank(query: string, chunks: readonly Chunk[], topK: number): Promise<RerankResult>;
 }
 

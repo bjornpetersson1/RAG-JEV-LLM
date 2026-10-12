@@ -13,7 +13,7 @@ export function createFakeEmbedder(vectorFor: (text: string) => number[] = lette
   const embedder: Embedder = {
     name: 'fake',
     model: 'fake-embedder',
-    dtype: 'int8',
+    dtype: 'int8' as const,
     async embed(texts) {
       embedded.push(...texts);
       return texts.map((text) => ({ dense: unitLength(Float32Array.from(vectorFor(text))) }));

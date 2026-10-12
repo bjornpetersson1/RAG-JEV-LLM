@@ -17,7 +17,7 @@ import { createEvalSetup, createSearchSetup } from './setup.js';
 import { RERANKERS } from '../rerank/factory.js';
 import { loadRetrievalConfig } from '../retrieval/config.js';
 import { compareRerankers } from './compare.js';
-import { parseRunArgs, type CompareArgs } from './compare-args.js';
+import { parseRunArgs, type RunArgs } from './compare-args.js';
 import { appendToReport, comparisonTable } from './compare-report.js';
 import { createCompareSetup } from './compare-setup.js';
 
@@ -103,7 +103,7 @@ function runEval(): Promise<number> {
  * `run --reranker …`: the retrievers and rerankers compared on the evaluation set (E8-5), printed
  * and appended to `eval/report-<date>.md`.
  */
-function runComparison({ rerankers, retrievers }: CompareArgs): Promise<number> {
+function runComparison({ rerankers, retrievers }: RunArgs): Promise<number> {
   const queries = readEvalQueries(EVAL_QUERIES_PATH);
   return withDatabase(async (db) => {
     const resolved = resolveEvalQueries(queries, db);

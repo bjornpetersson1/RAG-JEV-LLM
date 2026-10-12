@@ -64,7 +64,7 @@ An SQLite FTS5 index over the chunks, kept in sync by triggers, and a `Candidate
 - **External-content FTS5 with triggers** (default): no duplicate copy of the text; the E2-4 writer already leaves unchanged chunks untouched, so re-chunking reindexes only what changed.
 - **OR of terms, ranked by bm25** (default): AND across all instruction words would rarely match; bm25 puts chunks with more and rarer terms first.
 - **Mode `tags` too** (default): the evaluation (E5-3) can compare tag-only, full-text-only and combined without extra work.
-- **Mode is a call option, not an `.env` setting** (default): the evaluation switches modes per run; the query flow uses `tags+fts`.
+- **Mode is a call option, not an `.env` setting** (default): the evaluation switches modes per run; the query flow uses `tags+fts`. (**superseded by E8-4**: the query flow uses `RETRIEVER`; `tags`, the default, is `tags+fts`)
 - **Tag candidates come from E4-1's ranked search with `limit = MAX_CANDIDATES`** (default), so the tag hits keep their ranking and the fill-up only appends.
 - **Stop words** (default): a short fixed list of common Swedish function words (e.g. "och", "att", "som", "en", "ett", "för", "med", "på", "av", "i", "är", "det", "den", "till", "om"), kept in code.
 

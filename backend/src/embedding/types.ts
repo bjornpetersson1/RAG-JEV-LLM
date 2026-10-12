@@ -1,4 +1,5 @@
 import type { Env } from '../env.js';
+import type { ModelDtype } from '../models/config.js';
 
 /** A text's embedding: a unit-length dense vector and, if the model gives them, lexical weights. */
 export interface Embedding {
@@ -15,7 +16,7 @@ export interface Embedder {
   readonly name: string;
   readonly model: string;
   /** The precision the model runs in, e.g. `int8`; stored vectors are keyed by model and this. */
-  readonly dtype: string;
+  readonly dtype: ModelDtype;
   /** One embedding per text, in order; batching happens inside. */
   embed(texts: readonly string[], kind: EmbedKind): Promise<Embedding[]>;
 }

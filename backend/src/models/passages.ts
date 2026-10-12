@@ -1,17 +1,27 @@
 import type { DatabaseSync } from 'node:sqlite';
+import type { Chunk } from '../llm/types.js';
 
 /** The instruction the model benchmarks score chunks against, so their tables can be compared. */
 export const BENCH_INSTRUCTION =
   'Anställningsavtal för en säljare med sex månaders provanställning och konkurrensklausul';
-import type { Chunk } from '../llm/types.js';
 
 /**
  * What a local model reads for a chunk: its heading path (law or case title, chapter, section),
  * then its text. Unlike the judge's `judgedText` (source reference and text), the heading path
- * names the law in words, which the query's spelled-out abbreviations match.
+ * names the law in words, which the query's spelled-out abbreviations match. A chunk without a
+ * heading path is read as the judge reads it.
  */
-export function passageText({ context, text }: { context: string; text: string }): string {
-  return `${context}\n${text}`;
+export function passageText({
+  context,
+  text,
+  source,
+}: {
+  context?: string;
+  text: string;
+  source?: string;
+}): string {
+  if (context) return `${context}\n${text}`;
+  return source ? `${source}\n\n${text}` : text;
 }
 
 type PassageRow = { context: string; text: string };

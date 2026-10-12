@@ -24,7 +24,7 @@ export const JUDGE_MODES = ['tags+jev', 'tags+llm'] as const;
 export type JudgeMode = (typeof JUDGE_MODES)[number];
 
 /** Which reranker a judge mode used, for the report. */
-export type JudgeIdentity = Pick<Reranker, 'name' | 'model'>;
+export type RerankerIdentity = Pick<Reranker, 'name' | 'model'>;
 
 /** What a search needs from a query; the relevant chunks are not involved. */
 export type QueryText = Pick<EvalQuery, 'instruction' | 'template'>;
@@ -42,7 +42,7 @@ export interface EvalDependencies extends SearchDependencies {
   /** Reranks the chunks with the reranker of `mode`, keeping every relevant one (cache on). */
   judge(mode: JudgeMode, instruction: string, chunks: readonly Chunk[]): Promise<RerankResult>;
   /** The judge each judge mode was configured with, for the report. */
-  judges: Record<JudgeMode, JudgeIdentity>;
+  judges: Record<JudgeMode, RerankerIdentity>;
   /** Called after each query, for progress output. */
   onQuery?(outcome: QueryOutcome, index: number, total: number): void;
   onFailure?(failure: FailedQuery, index: number, total: number): void;
@@ -77,7 +77,7 @@ export interface EvalResult {
   modes: Record<EvalMode, ModeScores>;
   sweeps: Record<JudgeMode, SweepRow[]>;
   recommended: Record<JudgeMode, SweepRow>;
-  judges: Record<JudgeMode, JudgeIdentity>;
+  judges: Record<JudgeMode, RerankerIdentity>;
   /** Judgements per judge over the whole run. */
   answeredBy: Record<JudgeMode, AnsweredBy>;
 }
@@ -150,7 +150,7 @@ async function evaluateQuery(query: ResolvedQuery, deps: EvalDependencies): Prom
   };
 }
 
-function sameJudge(judges: Record<JudgeMode, JudgeIdentity>): boolean {
+function sameJudge(judges: Record<JudgeMode, RerankerIdentity>): boolean {
   const [jev, llm] = [judges['tags+jev'], judges['tags+llm']];
   return jev.name === llm.name && jev.model === llm.model;
 }
