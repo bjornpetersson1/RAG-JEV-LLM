@@ -160,6 +160,31 @@ Migration `0005_chunks_fts` adds an SQLite FTS5 index over each chunk's text, co
 
 Candidate search (`createCandidateSearch`; the query flow in E5/E6 will call it, no HTTP route uses it yet) takes the tag index's ranked hits. With fewer than `MIN_TAG_CANDIDATES` (default 10), full-text hits not already found are appended, up to `MAX_CANDIDATES` (default 30). Each candidate records whether it came from `tag` or `fts`, and every search logs whether the fallback ran and how many candidates it added. The modes `fts` (full text only) and `tags` (tags only) are baselines for the evaluation.
 
+## Hybrid retrieval
+
+`RETRIEVER` picks where the reranker's candidates come from (E8-4):
+
+- `tags` (default): tag search with the full-text fallback, as above, up to `MAX_CANDIDATES`.
+- `bge`: bge-m3 hybrid search. Chunks of a provision the instruction names come first (see below). The instruction is embedded (law abbreviations spelled out, see [Local models](#local-models)) and compared with every chunk's vector by cosine similarity (the dense half). SQLite FTS5 ranks the chunks by BM25 for the instruction's words and numbers, with law abbreviations replaced by their SFS number so `7 § LAS` matches `SFS 1982:80 7 §` (the lexical half). The two rankings are fused by reciprocal rank fusion and the best `RETRIEVE_CANDIDATES` (default 40) go on. The query is not translated into tags.
+- `both`: the tag ranking fused with the two halves of `bge` the same way.
+
+Each ranking adds `weight / (RRF_K + rank)` to a chunk's score; `RRF_K` (default 60) and `RRF_WEIGHT_DENSE` / `RRF_WEIGHT_LEXICAL` / `RRF_WEIGHT_TAGS` (0–1, default 1) tune the fusion.
+
+```bash
+npm run index:embed                                         # embed every new or changed chunk
+npm run retrieve -- "konkurrensklausul efter anställningens slut" [--top-k 8]
+```
+
+`index:embed` embeds each chunk's heading path and text with the configured embedder and stores the vector in SQLite (`chunk_embeddings`), keyed by the model, precision (`EMBEDDER_DTYPE`) and a hash of the text. A second run embeds nothing; a changed chunk, model or precision is embedded again. Neither the server nor `retrieve` nor `query` ever embeds chunks: with `RETRIEVER=bge` or `both` they fail with a message to run `npm run index:embed` when any chunk's vector is missing or stale. Embedding all chunks takes 25–45 minutes on the demo machine.
+
+`retrieve` prints the reranked top `RERANK_TOP_K` (or `--top-k`) chunks with their source, rerank score and place in the retriever's list, and the time for query translation, embedding the question, retrieval, reranking and in total. The first question in a process also loads bge-m3 (about 4 s), which counts as embedding time; the first rerank likewise loads the reranker. `npm run query` uses the same retriever before drafting.
+
+### Vector storage
+
+The vectors live in SQLite as BLOBs (`chunk_embeddings`) and are loaded into one contiguous `Float32Array` when the retriever is built; a search compares the query with every chunk (brute-force cosine similarity on unit vectors). Measured on the demo machine with the whole corpus: 2,116 chunks × 1,024 dimensions = 8.7 MB in memory, 0.4 s to load (including checking every chunk's hash), and 4.8 ms per full scan (median of 100, p90 5.8 ms). Embedding the question takes far longer (about 1–5 s). A vector database or `sqlite-vec` would only pay off at a corpus hundreds of times larger, and would add a native extension; brute force needs nothing.
+
+A chunk the instruction names by provision, e.g. "7 § LAS" or "2 kap. 9 § DL" (found as the post-check finds references), is always a candidate, ahead of the fused ranking. Neither half ranks an exact section reliably: other sections of the same law share its words, and its section number is a common token.
+
 ## Query translation
 
 A lawyer's instruction becomes vocabulary tags for the search (`translateQuery`; the query flow in E5/E6 will call it, the server so far only validates the settings). `QUERY_TRANSLATOR_IMPL` chooses how:

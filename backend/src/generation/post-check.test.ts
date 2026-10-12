@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { findFreeTextReferences } from '../legal/references.js';
 import type { Chunk } from '../llm/types.js';
-import { checkDraft, findFreeTextReferences } from './post-check.js';
+import { checkDraft } from './post-check.js';
 
 function chunk(id: string, source?: string): Chunk {
   return { id, text: 'text', source };

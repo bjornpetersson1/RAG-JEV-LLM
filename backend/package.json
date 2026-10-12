@@ -17,6 +17,8 @@
     "index:vocabulary": "tsx --env-file-if-exists=../.env src/tagging/cli.ts vocabulary",
     "index:tag": "tsx --env-file-if-exists=../.env src/tagging/cli.ts tag",
     "index:report": "tsx --env-file-if-exists=../.env src/tagging/cli.ts report",
+    "index:embed": "tsx --env-file-if-exists=../.env src/retrieval/cli.ts embed",
+    "retrieve": "tsx --env-file-if-exists=../.env src/retrieval/cli.ts retrieve",
     "bench:index": "tsx --expose-gc --env-file-if-exists=../.env src/search/bench.ts",
     "jev:probe": "tsx --env-file-if-exists=../.env src/judge/probe.ts",
     "models:bench": "tsx --env-file-if-exists=../.env src/models/bench.ts",

@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createEvalDatabase } from '../eval/test-helpers.js';
 import { NO_USAGE } from '../llm/client.js';
 import { createFakeGenerator } from '../llm/fakes.js';
+import { indexEmbeddings } from '../retrieval/index-embeddings.js';
+import { createFakeEmbedder } from '../retrieval/test-helpers.js';
 import type { Chunk } from '../llm/types.js';
 import { fakeRerankResult } from '../rerank/test-helpers.js';
 import { runQuery, type QueryFlowDependencies } from './query-flow.js';
@@ -21,7 +23,7 @@ function fakeFlow(scores: Record<string, number>) {
     async translate() {
       return { tags: [{ slug: 'uppsagning', origin: 'translated' }], usage: USAGE, elapsedMs: 12 };
     },
-    search: () => ({
+    search: async () => ({
       candidates: ['1', '2', '3'].map((id) => ({ chunkId: Number(id), origin: 'tag' as const })),
       tagCandidates: 3,
       fallbackUsed: false,
@@ -91,23 +93,19 @@ describe('createQueryFlow', () => {
     database = undefined;
   });
 
+  const ENV = {
+    LLM_PROVIDER: 'fake',
+    QUERY_TRANSLATOR_IMPL: 'llm',
+    RERANKER: 'llm',
+    JUDGE_CACHE: 'off',
+  };
+  const logger = { info() {}, warn() {}, error() {} };
+
   it('runs the whole chain from .env with fake roles and a test database', async () => {
     database = createEvalDatabase();
-    const env = {
-      DATABASE_PATH: database.path,
-      LLM_PROVIDER: 'fake',
-      QUERY_TRANSLATOR_IMPL: 'llm',
-      RERANKER: 'llm',
-      JUDGE_CACHE: 'off',
-    };
-    const flow = createQueryFlow(
-      database.db,
-      env,
-      { info() {}, warn() {}, error() {} },
-      {
-        maxChunks: 1,
-      },
-    );
+    const flow = createQueryFlow(database.db, { ...ENV, DATABASE_PATH: database.path }, logger, {
+      maxChunks: 1,
+    });
 
     const result = await runQuery(
       { instruction: 'Uppsägning ska vara sakligt grundad', template: 'employment' },
@@ -120,5 +118,47 @@ describe('createQueryFlow', () => {
     expect(result.draft?.context.limits).toEqual({ maxChunks: 1, maxContextChars: 60_000 });
     expect(result.draft?.text).toContain('inte juridisk rådgivning');
     expect(result.draft?.check).toMatchObject({ flags: [], sourceAccuracy: 1 });
+  });
+
+  it.each([
+    ['tags', true],
+    ['bge', false],
+    ['both', true],
+  ])('works with RETRIEVER=%s (query translated: %s)', async (retriever, translated) => {
+    database = createEvalDatabase();
+    const { embedder } = createFakeEmbedder();
+    await indexEmbeddings(database.db, embedder, { model: embedder.model, dtype: 'int8' });
+
+    const flow = createQueryFlow(
+      database.db,
+      { ...ENV, DATABASE_PATH: database.path, RETRIEVER: retriever },
+      logger,
+      { maxChunks: 1 },
+      embedder,
+    );
+    const result = await runQuery(
+      { instruction: 'Uppsägning ska vara sakligt grundad', template: 'employment' },
+      flow,
+    );
+
+    expect(flow.translate !== undefined).toBe(translated);
+    expect(result.tags.length > 0).toBe(translated);
+    if (!translated) expect(result.timings.translationMs).toBe(0);
+    expect(result.candidates).toBeGreaterThan(0);
+    expect(result.draft?.text).toContain('inte juridisk rådgivning');
+  });
+
+  it('fails for bge, naming index:embed, before any chunk is embedded', () => {
+    database = createEvalDatabase();
+
+    expect(() =>
+      createQueryFlow(
+        database!.db,
+        { ...ENV, DATABASE_PATH: database!.path, RETRIEVER: 'bge' },
+        logger,
+        {},
+        createFakeEmbedder().embedder,
+      ),
+    ).toThrow('run `npm run index:embed`');
   });
 });

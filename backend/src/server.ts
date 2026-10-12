@@ -6,6 +6,7 @@ import { loadLlmConfig } from './llm/config.js';
 import { resolvePort } from './port.js';
 import { loadQueryTranslatorConfig } from './query/config.js';
 import { loadRerankerConfig } from './rerank/factory.js';
+import { checkRetrieverReady } from './retrieval/setup.js';
 import { loadTagIndex } from './search/load-index.js';
 import { loadSearchConfig, tagIndexBuilder } from './search/config.js';
 import type { BuildTagIndex } from './search/tag-index.js';
@@ -29,16 +30,19 @@ function readStartupConfig(): {
 } {
   try {
     const port = resolvePort(process.env.PORT);
-    // Fail fast on invalid LLM, query translator, reranker, embedder and generator settings; later
-    // issues build the roles from them.
+    // Fail fast on invalid LLM, query translator, reranker, embedder, retriever and generator
+    // settings; later issues build the roles from them.
     loadLlmConfig(process.env);
     loadQueryTranslatorConfig(process.env);
     loadRerankerConfig(process.env);
     loadEmbedderConfig(process.env);
     loadContextLimits(process.env);
+    const databasePath = resolveDatabasePath(process.env.DATABASE_PATH);
+    // RETRIEVER=bge|both needs every chunk embedded; the server never embeds them itself.
+    checkRetrieverReady(databasePath, process.env);
     return {
       port,
-      databasePath: resolveDatabasePath(process.env.DATABASE_PATH),
+      databasePath,
       buildTagIndex: tagIndexBuilder(loadSearchConfig(process.env)),
     };
   } catch (error) {
