@@ -28,6 +28,8 @@
     "index:report": "npm run index:report -w backend",
     "bench:index": "npm run bench:index -w backend",
     "jev:probe": "npm run jev:probe -w backend",
+    "models:bench": "npm run models:bench -w backend --",
+    "embed:smoke": "npm run embed:smoke -w backend",
     "eval:label": "npm run eval:label -w backend --",
     "eval:run": "npm run eval:run -w backend",
     "query": "npm run query -w backend --"
