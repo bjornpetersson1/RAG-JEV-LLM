@@ -47,8 +47,7 @@ The React UI gets a form: a required contract type (employment agreement or NDA)
 
 ## Tasks
 
-- [ ] `runQuery` reports each step through an optional callback (translation, retrieval, rerank, generation) without changing its result.
-- [ ] The reference flow (E5-4) reports its steps the same way.
+- [ ] `runQuery` reports each step through an optional callback (translation, retrieval, rerank, generation) without changing its result; the reference flow (E5-4) runs through `runQuery` too, so it reports its steps the same way.
 - [ ] Server: build the query flow and the reference flow at startup; `POST /query` (served at `/api/query` through the Vite proxy) with request validation, NDJSON streaming, a one-at-a-time guard and error events.
 - [ ] Default instruction per template when the free text is empty.
 - [ ] Frontend: form, streaming client, step state, result sections, error display; Swedish texts.
@@ -65,6 +64,8 @@ The React UI gets a form: a required contract type (employment agreement or NDA)
 - **One query at a time, 409 otherwise** (default): the flow is CPU-bound on the demo machine, and two runs would distort each other's timings.
 - **The flows are built at startup, the models load on the first query** (default): as `npm run query` does today; the first query's embedding time includes the model load, as the README already says for `retrieve`.
 - **The endpoint lives in E7-1** (owner, E5-4): one place for the API, with the reference flow as an option.
+
+- **Builds on E5-4 as merged** (spec update before implementing): the reference RAG is a set of query-flow steps that `runQuery` runs (`createReferenceFlow`), so one step callback in `runQuery` covers both flows. `QueryResult` leaves out steps that did not run (`judging`, `translationMs`, `embeddingMs`, `judgingMs`) and lists the `approved` chunks; the stream's events follow that shape. The candidate's origin (`tag`, `fts`, `dense`, …) gives the fallback count.
 
 ## Open Questions
 
