@@ -24,7 +24,7 @@ describe('indexEmbeddings', () => {
     expect(embedded).toHaveLength(3);
   });
 
-  it('embeds the heading path and text, shortest first', async () => {
+  it('embeds the heading path and text, or the source and text without one, shortest first', async () => {
     database = createEvalDatabase();
     database.db.exec("UPDATE chunks SET context = 'LAS › 7 §' WHERE id = 11");
     const { embedder, embedded } = createFakeEmbedder();
@@ -32,9 +32,9 @@ describe('indexEmbeddings', () => {
     await indexEmbeddings(database.db, embedder, FAKE_IDENTITY);
 
     expect(embedded).toEqual([
-      '\nKonkurrensklausulen är oskälig.',
-      '\nUppsägningstiden är minst en månad.',
       'LAS › 7 §\nUppsägning ska vara sakligt grundad.',
+      'SFS 1982:80 11 §\n\nUppsägningstiden är minst en månad.',
+      'AD 2015 nr 8, Domskäl, del 1/5\n\nKonkurrensklausulen är oskälig.',
     ]);
   });
 
@@ -49,7 +49,7 @@ describe('indexEmbeddings', () => {
 
     expect(changed.embedded).toBe(1);
     expect(fp32.embedded).toBe(3);
-    expect(embedded.slice(3, 4)).toEqual(['\nNy text.']);
+    expect(embedded.slice(3, 4)).toEqual(['SFS 1982:80 11 §\n\nNy text.']);
   });
 
   it('reports progress per stored round', async () => {

@@ -15,7 +15,7 @@ The `Judge` interface gets its real implementations: a JEV judge that sends a ca
 - `JevJudge` on top of E4-4's JEV client (`backend/src/jev/client.ts`).
 - The real Swedish prompt for the LLM judge (replacing E1-2's placeholder).
 - `FallbackJudge`: JEV first, the LLM on any JEV error, each fallback logged.
-- `JUDGE_IMPL`, `JUDGE_THRESHOLD` and `JUDGE_TIMEOUT_MS` in `.env`, validated at startup.
+- `JUDGE_IMPL`, `JUDGE_THRESHOLD` and `JUDGE_TIMEOUT_MS` in `.env`, validated at startup. (**superseded by E8-1**: `RERANKER=jev|llm|bge|qwen3` replaces `JUDGE_IMPL`, which is rejected at startup)
 - A probe script that measures JEV latency and limits once a key exists, and README documentation of what has been observed.
 
 ## Non-goals
@@ -43,8 +43,8 @@ The `Judge` interface gets its real implementations: a JEV judge that sends a ca
    - With `JUDGE_IMPL=jev`, a JEV error is thrown; with `JUDGE_IMPL=llm`, JEV is never called.
    - `JUDGE_TIMEOUT_MS` (default 10000) is the JEV timeout for judging; a test shows a JEV call slower than it falling back.
 4. **The implementation is chosen in configuration.**
-   - `JUDGE_IMPL` is `jev` | `llm` | `jev-with-fallback`, default `jev-with-fallback`.
-   - With the default and no `JEV_API_KEY`, startup succeeds, a warning says JEV is not configured, and the LLM judge is used. `JUDGE_IMPL=jev` without `JEV_API_KEY` fails at startup with a clear message. An unknown value fails.
+   - `JUDGE_IMPL` is `jev` | `llm` | `jev-with-fallback`, default `jev-with-fallback`. (**superseded by E8-1**: `RERANKER`, default `bge` since E8-3; `jev` is JEV with the LLM fallback)
+   - With the default and no `JEV_API_KEY`, startup succeeds, a warning says JEV is not configured, and the LLM judge is used. `JUDGE_IMPL=jev` without `JEV_API_KEY` fails at startup with a clear message. An unknown value fails. (**superseded by E8-1**: `RERANKER=jev` without `JEV_API_KEY` is a startup error; there is no silent switch to the LLM)
    - The LLM judge uses the E1-2 judge provider and model (`LLM_JUDGE_*`).
    - Tests show the factory building each case from env values alone; `.env.example` documents every new key.
 5. **Observed JEV limits are documented in the README.**
@@ -68,7 +68,7 @@ The `Judge` interface gets its real implementations: a JEV judge that sends a ca
 
 - **Noul question with the instruction, not the tags** (owner): "Är texten relevant för följande uppdrag: <instruktion>?", as in the requirements and the issue. The `Judge` interface keeps `judge(instruction, chunk)`.
 - **State is source reference + chunk text** (owner): gives JEV the law or case the text comes from at little cost.
-- **Default `jev-with-fallback`, warn and use the LLM without a key** (owner): the target setup is the default, and the app still runs before a JEV key exists. An explicit `JUDGE_IMPL=jev` without a key is a startup error.
+- **Default `jev-with-fallback`, warn and use the LLM without a key** (owner): the target setup is the default, and the app still runs before a JEV key exists. An explicit `JUDGE_IMPL=jev` without a key is a startup error. (**superseded by E8-1**: a missing key with `RERANKER=jev` is now an error)
 - **Fallback on every JEV error except a cancellation** (owner), no retries against JEV: one judgement must not wait for JEV twice.
 - **No truncation** (owner): chunks are at most `CHUNK_MAX_CHARS` (2000 by default, E2-4); if JEV rejects a state as too large, that is a JEV error and the fallback takes over.
 - **Limits documented as not measured** (owner): there is no `JEV_API_KEY`; the probe script is ready, and the README states the gap. The JEV request shape is still only verified with a fake `fetch` (as in E4-4).

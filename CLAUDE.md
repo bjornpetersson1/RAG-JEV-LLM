@@ -1,6 +1,6 @@
 # Legal RAG POC (RAG-JEV-LLM)
 
-Proof of concept: tag-based search + the JEV judge model find relevant Swedish laws and rulings, and an LLM drafts employment agreements and NDAs from them. The requirements live in `Constitution/Requirements-and-goal.md`; every piece of work is a GitHub issue (#1–#24) on the project board "Legal RAG POC" (https://github.com/users/bjornpetersson1/projects/4).
+Proof of concept: tag search or local bge-m3 hybrid retrieval, then a reranker (local BGE by default; JEV or an LLM optional), find relevant Swedish laws and rulings, and an LLM drafts employment agreements and NDAs from them. The requirements live in `Constitution/Requirements-and-goal.md`; every piece of work is a GitHub issue on the project board "Legal RAG POC" (https://github.com/users/bjornpetersson1/projects/4).
 
 ## Language
 
@@ -59,5 +59,5 @@ npm run lint && npm run format:check && npm run typecheck && npm test && npm run
 ## Constraints from the requirements
 
 - Everything except LLM/JEV calls runs locally. SQLite for storage, no hosted services.
-- One interface per LLM role (Tagger, QueryTranslator, Judge, Generator); provider and model come from `.env`.
+- One interface per LLM role (Tagger, QueryTranslator, Judge, Generator); provider and model come from `.env`. Relevance goes through one `Reranker` interface (`RERANKER`) and embeddings through one `Embedder` interface (`EMBEDDER`), each chosen in `.env`.
 - API keys only in `.env` (git-ignored); document every key in `.env.example`.

@@ -67,3 +67,12 @@ function presetsOf(
   }
   return presets[template];
 }
+
+/** The query's tags as vocabulary slugs, e.g. for a search that needs no scores or timings. */
+export async function translateToSlugs(
+  query: QueryInput,
+  context: TranslationContext,
+): Promise<string[]> {
+  const { tags } = await translateQuery(query, context);
+  return tags.map((tag) => tag.slug);
+}

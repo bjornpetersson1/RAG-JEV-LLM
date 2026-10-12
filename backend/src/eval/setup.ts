@@ -5,9 +5,9 @@ import type { DatabaseSync } from 'node:sqlite';
 import type { Env } from '../env.js';
 import { hasJevKey } from '../jev/config.js';
 import type { LlmLogger } from '../llm/client.js';
-import { loadLlmConfig, roleLabel } from '../llm/config.js';
+import { loadLlmConfig, roleLabel, type LlmConfig } from '../llm/config.js';
 import { createQueryServices } from '../query/services.js';
-import { translateQuery } from '../query/translate-query.js';
+import { translateToSlugs } from '../query/translate-query.js';
 import type { CandidateSearch } from '../search/candidate-search.js';
 import { createReranker } from '../rerank/factory.js';
 import type { Reranker } from '../rerank/types.js';
@@ -45,10 +45,7 @@ export function createSearchSetup(
       'query translator': translatorLabel,
       'LLM judge': roleLabel(llmConfig, 'judge'),
     },
-    async translate(query) {
-      const { tags } = await translateQuery(query, translation);
-      return tags.map((tag) => tag.slug);
-    },
+    translate: (query) => translateToSlugs(query, translation),
     search(query, tags, mode) {
       const { candidates } = candidateSearch.search({ instruction: query.instruction, tags, mode });
       return candidates.map((candidate) => String(candidate.chunkId));
@@ -64,12 +61,8 @@ export function createSearchSetup(
  */
 export function createEvalSetup(db: DatabaseSync, env: Env, logger: LlmLogger): EvalSetup {
   const llmConfig = loadLlmConfig(env);
-  // Eval keeps every relevant chunk, so RERANK_TOP_K is not read.
-  const build = (name: 'jev' | 'llm'): Reranker =>
-    createReranker(
-      { ...env, RERANKER: name, RERANK_TOP_K: undefined, JUDGE_CACHE: 'on' },
-      { db, llmConfig, logger },
-    ).reranker;
+  const build = (name: 'jev' | 'llm') =>
+    createEvalReranker(name, 'on', { env, db, llmConfig, logger });
   const llm = build('llm');
   // Without a JEV key, tags+jev is judged by the LLM, as in the first evaluation, and the report
   // says so.
@@ -84,4 +77,21 @@ export function createEvalSetup(db: DatabaseSync, env: Env, logger: LlmLogger): 
     },
     judges: byJudgeMode((mode) => ({ name: rerankers[mode].name, model: rerankers[mode].model })),
   };
+}
+
+/** A reranker as the evaluation uses it: every relevant chunk kept, so `RERANK_TOP_K` is not read. */
+export function createEvalReranker(
+  name: string,
+  cache: 'on' | 'off',
+  {
+    env,
+    db,
+    llmConfig,
+    logger,
+  }: { env: Env; db: DatabaseSync; llmConfig: LlmConfig; logger: LlmLogger },
+): Reranker {
+  return createReranker(
+    { ...env, RERANKER: name, RERANK_TOP_K: undefined, JUDGE_CACHE: cache },
+    { db, llmConfig, logger },
+  ).reranker;
 }

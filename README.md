@@ -1,6 +1,6 @@
 # RAG-JEV-LLM
 
-Legal RAG proof of concept: tag-based search and the JEV judge model find relevant Swedish laws and rulings, and an LLM drafts employment agreements and NDAs from them.
+Legal RAG proof of concept: tag search or local bge-m3 hybrid retrieval, followed by a reranker (local BGE by default, JEV or an LLM optional), find relevant Swedish laws and rulings, and an LLM drafts employment agreements and NDAs from them.
 
 ## Prerequisites
 
@@ -158,7 +158,7 @@ The benchmark generates the same seeded data every run (3–8 tags per chunk out
 
 Migration `0005_chunks_fts` adds an SQLite FTS5 index over each chunk's text, context and source reference, kept in step with `chunks` by triggers. Its tokenizer folds case but keeps å, ä and ö apart from a and o. The full-text query takes the words of the instruction and the chosen tags' labels, and drops common Swedish stop words and words shorter than 3 characters. Numbers must match exactly. Every other word becomes a prefix term, so inflected forms match: a word of 6 letters or more is first cut by up to 3 letters, keeping at least 5 (`uppsägningen` → `uppsägnin*`). The terms are joined with OR and ranked by bm25.
 
-Candidate search (`createCandidateSearch`; the query flow in E5/E6 will call it, no HTTP route uses it yet) takes the tag index's ranked hits. With fewer than `MIN_TAG_CANDIDATES` (default 10), full-text hits not already found are appended, up to `MAX_CANDIDATES` (default 30). Each candidate records whether it came from `tag` or `fts`, and every search logs whether the fallback ran and how many candidates it added. The modes `fts` (full text only) and `tags` (tags only) are baselines for the evaluation.
+Candidate search (`createCandidateSearch`; the query flow and `eval:run` use it through `RETRIEVER=tags` or `both`; no HTTP route uses it yet) takes the tag index's ranked hits. With fewer than `MIN_TAG_CANDIDATES` (default 10), full-text hits not already found are appended, up to `MAX_CANDIDATES` (default 30). Each candidate records whether it came from `tag` or `fts`, and every search logs whether the fallback ran and how many candidates it added. The modes `fts` (full text only) and `tags` (tags only) are baselines for the evaluation.
 
 ## Hybrid retrieval
 
@@ -187,7 +187,7 @@ A chunk the instruction names by provision, e.g. "7 § LAS" or "2 kap. 9 § DL" 
 
 ## Query translation
 
-A lawyer's instruction becomes vocabulary tags for the search (`translateQuery`; the query flow in E5/E6 will call it, the server so far only validates the settings). `QUERY_TRANSLATOR_IMPL` chooses how:
+A lawyer's instruction becomes vocabulary tags for the search (`translateQuery`; the query flow calls it when the retriever uses tags, `tags` or `both`, and skips it for `RETRIEVER=bge`). `QUERY_TRANSLATOR_IMPL` chooses how:
 
 - `llm` (default): the query translator's LLM, with the whole vocabulary in a cached Swedish system prompt. It returns at most 8 slugs, and unknown or repeated ones are dropped.
 - `jev`: TypeSafe's JEV model, with the instruction as the state.
@@ -212,7 +212,7 @@ The relevance step sits behind one `Reranker` interface (`backend/src/rerank/`).
 
 The `jev` and `llm` rerankers ask the same question about the same text: the chunk's source reference and text, "Är texten relevant för följande uppdrag: <instruktion>?". A chunk is relevant when its score reaches `JUDGE_THRESHOLD` (default 0.5).
 
-An `Embedder` interface (`backend/src/embedding/`, `EMBEDDER=bge`) gives the local bge-m3 embeddings (see [Local models](#local-models)); E8-4 builds the vector index on it.
+An `Embedder` interface (`backend/src/embedding/`, `EMBEDDER=bge`) gives the local bge-m3 embeddings (see [Local models](#local-models)); `npm run index:embed` and `RETRIEVER=bge`/`both` use it (see [Hybrid retrieval](#hybrid-retrieval)).
 
 JEV gets `JUDGE_TIMEOUT_MS` (default 10000) per judgement and is not retried. Chunks are sent whole; one that JEV refuses as too large falls back like any other JEV error.
 
@@ -342,7 +342,7 @@ The generator drafts contracts from the Swedish prompt templates in [`prompts/`]
 
 ## Query and draft
 
-`npm run query` runs the whole query flow in the terminal: query translation, candidate search (`tags+fts`), reranking and the draft.
+`npm run query` runs the whole query flow in the terminal: query translation (skipped for `RETRIEVER=bge`), retrieval with the configured `RETRIEVER` (`tags` is tag search with the full-text fallback), reranking and the draft.
 
 ```bash
 npm run query -- "Anställningsavtal för en säljare med sex månaders provanställning" --template employment
@@ -358,7 +358,7 @@ npm run query -- "<instruction>" --template nda --max-chunks 30 --max-context-ch
 - the post-check (E6-3): the source accuracy (the share of `[K:]` citations and free-text legal references such as "7 § LAS" or "AD 2019 nr 35" that match a chunk sent to the generator) and every flagged reference with its position in the draft;
 - the time in ms and the tokens for each step.
 
-The reranker keeps at most `RERANK_TOP_K` (default 8) approved chunks. They go to the generator best first, up to `GENERATOR_MAX_CHUNKS` (default 20) and `GENERATOR_MAX_CONTEXT_CHARS` (default 60 000). When the limits leave chunks out, the output says how many and prints the same command with `--max-chunks` and `--max-context-chars` large enough to include them all. Running it again repeats the whole flow. Judge scores that are cached (from JEV with `RERANKER=jev`, or from the LLM with `RERANKER=llm`) are reused, but LLM answers standing in for a failed JEV call are not cached, and an LLM query translator may pick other tags, so the rerun can find somewhat different chunks. When the judge approves nothing, or no approved chunk fits the limits, no draft is written.
+The reranker keeps at most `RERANK_TOP_K` (default 8) approved chunks. They go to the generator best first, up to `GENERATOR_MAX_CHUNKS` (default 20) and `GENERATOR_MAX_CONTEXT_CHARS` (default 60 000). When the limits leave chunks out, the output says how many and prints the same command with `--max-chunks` and `--max-context-chars` large enough to include them all. Running it again repeats the whole flow. Judge scores that are cached (from JEV with `RERANKER=jev`, or from the LLM with `RERANKER=llm`) are reused, but LLM answers standing in for a failed JEV call are not cached, and an LLM query translator may pick other tags, so the rerun can find somewhat different chunks. When the reranker approves nothing, or no approved chunk fits the limits, no draft is written.
 
 Example drafts for both templates, made with the Claude Code provider, are in [`prompts/examples/`](prompts/examples/). To run on the subscription instead of the paid API, use the settings they were made with (`RERANKER=llm`, called `JUDGE_IMPL=llm` then, reuses the evaluation's cached LLM scores while there is no JEV key):
 

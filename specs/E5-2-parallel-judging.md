@@ -32,7 +32,7 @@
    - With the cache on, a second `judgeAll` with the same instruction and chunks makes zero judge calls and reports every chunk as a cache hit with the same scores; a test counts calls on a fake judge (and on a fake JEV `fetch`).
    - The instruction is normalized before keying (trimmed, lower-cased, whitespace collapsed); a test shows " Anställningsavtal för säljare" and "anställningsavtal för säljare" sharing entries.
    - A different judge implementation or model, or a different chunk, misses the cache.
-   - Only scores from the configured judge are cached: a result that came from the LLM fallback under `jev-with-fallback` is not stored, so the next run asks JEV again (tested).
+   - Only scores from the configured judge are cached: a result that came from the LLM fallback under `jev-with-fallback` is not stored, so the next run asks JEV again (tested). (**superseded by E8-1**: `jev-with-fallback` is now `RERANKER=jev`)
    - Only the score is stored; `relevant` is computed at read against the current `JUDGE_THRESHOLD`, so changing the threshold does not invalidate the cache (tested).
 2. **Concurrency never exceeds the configured limit (tested).**
    - `JUDGE_CONCURRENCY` (positive integer, default 8) caps the judge calls in flight. A test with a fake judge that records the peak number of concurrent calls over e.g. 30 chunks and a limit of 3 sees a peak of exactly 3.

@@ -53,7 +53,7 @@ A measured spike decides how `BAAI/bge-m3` and `BAAI/bge-reranker-v2-m3` run loc
 - [x] ~~If transformers.js fails or is unusable: Python sidecar~~ — not needed: transformers.js runs both models (see Decisions).
 - [x] `models:bench` script and the measurements; README "Local models" section and #66 comment.
 - [x] Licence check and README list.
-- [x] Model cache in `data/models/` (configurable with `MODEL_CACHE_DIR`), downloaded on first use.
+- [x] Model cache in `data/models/` (configurable with `MODEL_CACHE_DIR`), downloaded on first use. (**superseded by E8-3**: the default is `data/models.nosync`)
 - [x] `BgeEmbedder` (dense, normalised; sparse if available; `query`/`passage`; internal batching); registered in E8-1's factory.
 - [x] Settings: `EMBEDDER_DTYPE` (`int8` default, or `fp32`), `EMBEDDER_BATCH_SIZE` (default 8), `MODEL_CACHE_DIR`; documented in `.env.example`.
 - [x] `embed:smoke` script.
@@ -64,7 +64,7 @@ A measured spike decides how `BAAI/bge-m3` and `BAAI/bge-reranker-v2-m3` run loc
 - **Both models in fp32 and int8 are downloaded and measured** (owner): the owner frees disk space first (4.8 GB free when the spec was written; all four variants are about 5.6 GB). If space still runs out during the spike, the epic stops and reports instead of dropping a variant.
 - **A Python sidecar is acceptable as the fallback** (owner): a venv on the system Python 3.9 with pip (`uv` is not installed), FastAPI and FlagEmbedding, started by one npm script. It is only built if transformers.js fails or its performance is unusable; "unusable" is decided from the measurements and stated in the decision.
 - **New dependency `@huggingface/transformers`** (owner): it brings `onnxruntime-node`; there is no built-in way to run ONNX models in Node.
-- **Model cache `data/models/`** (default): already git-ignored through `/data/`, next to the database; `MODEL_CACHE_DIR` overrides it.
+- **Model cache `data/models/`** (default): already git-ignored through `/data/`, next to the database; `MODEL_CACHE_DIR` overrides it. (**superseded by E8-3**: the default is `data/models.nosync`, which iCloud Drive does not sync)
 - **`EMBEDDER_DTYPE` default `int8`** (default): two fp32 models need about 4.4 GB of 8 GB RAM; the owner accepted int8 unless E8-5 shows a noticeable loss in recall.
 - **Prefixes and max length** (default): bge-m3 needs no query instruction prefix; texts longer than the model's maximum (8,192 tokens) are truncated inside the embedder.
 - **The reranker model is only smoke-tested here** (default): it loads and scores pairs in the spike's measurements, so E8-3 builds on the same runtime without a second spike.

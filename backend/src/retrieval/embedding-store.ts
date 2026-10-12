@@ -114,13 +114,16 @@ export function assertEmbeddingsReady(db: DatabaseSync, identity: EmbeddingIdent
 }
 
 function embeddingInputs(db: DatabaseSync): EmbeddingInput[] {
-  const rows = db.prepare('SELECT id, context, text FROM chunks ORDER BY id').all() as unknown as {
+  const rows = db
+    .prepare('SELECT id, context, text, source_ref FROM chunks ORDER BY id')
+    .all() as unknown as {
     id: number;
     context: string;
     text: string;
+    source_ref: string;
   }[];
-  return rows.map(({ id, context, text }) => {
-    const embedded = passageText({ context, text });
+  return rows.map(({ id, context, text, source_ref }) => {
+    const embedded = passageText({ context, text, source: source_ref });
     return { chunkId: id, text: embedded, textHash: sha256(embedded) };
   });
 }

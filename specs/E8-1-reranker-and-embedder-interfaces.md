@@ -16,7 +16,7 @@ The relevance step moves behind one `Reranker` interface, chosen in `.env` with 
 - An `Embedder` interface for queries and passages, with a dense vector and an optional sparse part.
 - One factory reading `RERANKER` and `EMBEDDER`; no other code branches on the implementation.
 - `JevReranker` and `LlmReranker` on top of the existing JEV client, JEV judge, fallback judge, LLM judge and `judgeAll` (concurrency, timeouts, cache).
-- Placeholders `BgeReranker`, `Qwen3Reranker` and `BgeEmbedder` that are registered and throw "not implemented".
+- Placeholders `BgeReranker`, `Qwen3Reranker` and `BgeEmbedder` that are registered and throw "not implemented". (**superseded by E8-2/E8-3**: `BgeEmbedder` and `BgeReranker` are implemented; only `qwen3` is a placeholder)
 - The query flow and `eval:run` call the `Reranker` instead of the judge.
 - `RERANKER` and `RERANK_TOP_K` documented in `.env.example`, replacing `JUDGE_IMPL`.
 
@@ -57,11 +57,11 @@ The relevance step moves behind one `Reranker` interface, chosen in `.env` with 
 ## Tasks
 
 - [x] `Reranker`, `RerankResult`, `ScoredChunk`, `Embedder` and `Embedding` types.
-- [x] Reranker config: `RERANKER` (default `llm`), `RERANK_TOP_K` (default 8), the `JUDGE_IMPL` error, the JEV settings for `jev`.
+- [x] Reranker config: `RERANKER` (default `llm`), `RERANK_TOP_K` (default 8), the `JUDGE_IMPL` error, the JEV settings for `jev`. (**superseded by E8-3**: the default is `bge`)
 - [x] Embedder config: `EMBEDDER` (`bge`, the only value).
 - [x] Registry and factory for rerankers and embedders.
 - [x] `JevReranker` (JEV judge with LLM fallback per call, through `judgeAll`) and `LlmReranker` (LLM judge, through `judgeAll`).
-- [x] Placeholders: `BgeReranker`, `Qwen3Reranker`, `BgeEmbedder`.
+- [x] Placeholders: `BgeReranker`, `Qwen3Reranker`, `BgeEmbedder`. (**superseded by E8-2/E8-3**: only `qwen3` remains a placeholder)
 - [x] Query flow, its setup and `npm run query` call the reranker; server startup validates the reranker config.
 - [x] `eval:run` calls the reranker for its judge modes.
 - [x] `.env.example` and README updated.

@@ -7,12 +7,12 @@ import { elapsedMs } from '../http.js';
 import type { Env } from '../env.js';
 import type { LlmLogger } from '../llm/client.js';
 import { loadLlmConfig, type LlmConfig } from '../llm/config.js';
-import { createReranker } from '../rerank/factory.js';
+import { loadSampleChunks } from '../models/passages.js';
 import { loadRetrievalConfig, type RetrieverName } from '../retrieval/config.js';
 import { createRetriever } from '../retrieval/retriever.js';
 import { loadRetrievalResources, type RetrievalResources } from '../retrieval/setup.js';
 import type { CompareDependencies, ComparedReranker, ComparedRetriever } from './compare.js';
-import { createSearchSetup } from './setup.js';
+import { createEvalReranker, createSearchSetup } from './setup.js';
 
 export function createCompareSetup(
   db: DatabaseSync,
@@ -67,7 +67,7 @@ export function createCompareSetup(
     // Loads the embedder and every local reranker (those with a dtype) on one chunk, so no row's
     // first query pays for a model load. A failure here shows up again in the run itself.
     async warmUp() {
-      const chunks = search.loadChunks(firstChunkId(db));
+      const chunks = loadSampleChunks(db, 1);
       if (loaded) await loaded.embedder.embed(['uppvärmning'], 'query').catch(() => {});
       for (const reranker of compared) {
         if ('cached' in reranker && reranker.cached.dtype) {
@@ -81,12 +81,6 @@ export function createCompareSetup(
   };
 }
 
-function firstChunkId(db: DatabaseSync): string[] {
-  const row = db.prepare('SELECT id FROM chunks ORDER BY id LIMIT 1').get() as
-    { id: number } | undefined;
-  return row ? [String(row.id)] : [];
-}
-
 /** The reranker with its cache on (and, when asked for, off), or why it cannot be built. */
 function buildReranker(
   name: string,
@@ -95,12 +89,8 @@ function buildReranker(
   logger: LlmLogger,
   llmConfig: LlmConfig,
 ): ComparedReranker {
-  // Every relevant candidate is kept, so RERANK_TOP_K is not read.
   const build = (cache: 'on' | 'off') =>
-    createReranker(
-      { ...env, RERANKER: name, RERANK_TOP_K: undefined, JUDGE_CACHE: cache },
-      { db, llmConfig, logger },
-    ).reranker;
+    createEvalReranker(name, cache, { env, db, llmConfig, logger });
   try {
     return { name, cached: build('on'), uncached: () => build('off') };
   } catch (error) {

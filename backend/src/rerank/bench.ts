@@ -2,12 +2,10 @@
 // Reranks 30 and 50 real chunks against a Swedish instruction, 5 runs each, and prints the median
 // per size and the model load time separately. Run once per precision.
 
-import { parseArgs } from 'node:util';
 import { withDatabase } from '../db/with-database.js';
-import { isOneOf } from '../env.js';
 import { describeError } from '../errors.js';
 import { elapsedMs } from '../http.js';
-import { MODEL_DTYPES } from '../models/config.js';
+import { formatSeconds, parseDtypeArg } from '../models/bench-args.js';
 import { SILENT_LOGGER } from '../llm/client.js';
 import { BENCH_INSTRUCTION, loadSampleChunks } from '../models/passages.js';
 import { mean, percentile } from '../stats.js';
@@ -17,11 +15,7 @@ const SIZES = [30, 50];
 const RUNS = 5;
 
 try {
-  const { values } = parseArgs({ options: { dtype: { type: 'string', default: 'int8' } } });
-  const { dtype } = values;
-  if (!isOneOf(MODEL_DTYPES, dtype)) {
-    throw new Error(`--dtype must be ${MODEL_DTYPES.join(' or ')}`);
-  }
+  const dtype = parseDtypeArg();
   const config = { ...loadBgeRerankerConfig(process.env), dtype };
   const largest = Math.max(...SIZES);
   const chunks = await withDatabase((db) => loadSampleChunks(db, largest));
@@ -47,18 +41,16 @@ try {
       times.sort((a, b) => a - b),
       0.5,
     );
-    console.log(`| ${dtype} | ${size} | ${seconds(median)} | ${seconds(median / size)} |`);
+    console.log(
+      `| ${dtype} | ${size} | ${formatSeconds(median, 2)} | ${formatSeconds(median / size, 2)} |`,
+    );
   }
   const averageChars = Math.round(mean(chunks.map((chunk) => chunk.text.length)));
   console.log(
-    `\nModel load (and one pair): ${seconds(loadMs)}. Chunks: ${chunks.length} spread over the corpus, ` +
+    `\nModel load (and one pair): ${formatSeconds(loadMs, 2)}. Chunks: ${chunks.length} spread over the corpus, ` +
       `${averageChars} characters on average. Batch size ${config.batchSize}.`,
   );
 } catch (error) {
   console.error(describeError(error));
   process.exitCode = 1;
-}
-
-function seconds(ms: number): string {
-  return `${(ms / 1000).toFixed(2)} s`;
 }
