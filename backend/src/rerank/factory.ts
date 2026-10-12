@@ -12,8 +12,8 @@ export const RERANKERS: Readonly<Record<string, RerankerEntry>> = {
   qwen3: qwen3Reranker,
 };
 
-// `llm` until E8-3 implements `bge`.
-const DEFAULT_RERANKER = 'llm';
+// Local and free; `jev` or `llm` are chosen in .env.
+const DEFAULT_RERANKER = 'bge';
 const DEFAULT_RERANK_TOP_K = 8;
 
 export interface RerankerConfig {

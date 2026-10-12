@@ -6,7 +6,8 @@ import { REPO_ROOT } from '../repo-root.js';
 export const MODEL_DTYPES = ['int8', 'fp32'] as const;
 export type ModelDtype = (typeof MODEL_DTYPES)[number];
 
-const DEFAULT_MODEL_CACHE_DIR = 'data/models';
+// `.nosync`: iCloud Drive does not sync a folder with this suffix, should the repo be in one.
+const DEFAULT_MODEL_CACHE_DIR = 'data/models.nosync';
 
 /** Absolute model cache directory from `MODEL_CACHE_DIR`; relative values resolve from the repo root. */
 export function resolveModelCacheDir(env: Env): string {

@@ -4,7 +4,7 @@
 - **Labels:** `E8 Local retrieval and rerank`
 - **Phase:** E8 Local retrieval and rerank
 - **Depends on:** E8-1 (#65), E8-2 (#66)
-- **Status:** Approved
+- **Status:** Implemented — all acceptance criteria verified (npm ci, lint, format:check, typecheck, 689 tests (685 backend, 4 frontend) and build exit 0; `npm run query` with the default `RERANKER=bge` and the real model; `npm run bench:rerank` measured on the demo machine)
 
 ## Summary
 
@@ -46,11 +46,11 @@
 
 ## Tasks
 
-- [ ] `BgeReranker`: pairs of (instruction, context + text), batched, sigmoid on the logit, threshold then top-K as in E8-1, truncation at 1,024 tokens with a log line.
-- [ ] Settings: `RERANKER_DTYPE` (`int8` default, `fp32`), `RERANK_THRESHOLD_BGE` (default 0), and a batch size if the runtime needs one; documented in `.env.example`.
-- [ ] Register it in E8-1's factory; change the `RERANKER` default to `bge`.
-- [ ] `bench:rerank` script and README latency table.
-- [ ] Tests with a fake model; contract test.
+- [x] `BgeReranker`: pairs of (instruction, context + text), batched, sigmoid on the logit, threshold then top-K as in E8-1, truncation at 1,024 tokens with a log line.
+- [x] Settings: `RERANKER_DTYPE` (`int8` default, `fp32`), `RERANK_THRESHOLD_BGE` (default 0), and a batch size if the runtime needs one; documented in `.env.example`.
+- [x] Register it in E8-1's factory; change the `RERANKER` default to `bge`.
+- [x] `bench:rerank` script and README latency table.
+- [x] Tests with a fake model; contract test.
 
 ## Decisions
 
@@ -65,6 +65,32 @@
   - E8-2's measurements: scoring takes 0.7–1.2 s per pair on the demo machine, so reranking 30 candidates takes roughly 20–40 s. `bench:rerank` measures it properly.
   - E8-2's code review: transformers.js 3.8 truncates a pair at `max_length` without a pair-aware strategy. `BgeReranker` therefore truncates the passage itself so the pair fits 1,024 tokens, and logs it.
   - E8-1's `RerankResult` (`ranked`, `scored`, `stats` with `relevant`) and `bestFirst` are used as they are; BGE needs no cache, so `calls` is the number of chunks scored and `cacheHits` 0.
+- **Model cache moved to `data/models.nosync`** (owner, settled while implementing): the repo is in `~/Documents`, which iCloud Drive syncs, and uploading the 5.9 GB model cache loaded the CPU enough to distort the measurements. iCloud does not sync a folder ending in `.nosync`, so the default `MODEL_CACHE_DIR` changes (E8-2's code, `.env.example` and README) and the existing cache was renamed. `node_modules` is still synced.
+- **Benchmark sample** (settled while implementing): 50 chunks spread evenly over the corpus by id (1,020 characters on average, as the spec assumes), not the first 50 (654 characters, mostly short law sections).
+- **Measured latency** (criterion 2): int8 29.2 s for 30 chunks and 54.6 s for 50, fp32 41.7 s and 79.2 s (medians of 5, pairs batched by length), load 4.2 s / 9.7 s. Before length batching: int8 35.9 s and 64.6 s. Reranking is the slowest step of the query flow on the demo machine; E8-5 weighs it against recall.
+- **Pair fitting lives in the runtime** (settled while implementing): `loadCrossEncoder` cuts the passage itself so the pair fits, and reports per pair whether it did; `BgeReranker` logs each cut chunk.
+- **Clean code**:
+  - **Pairs of similar length share a batch**: a batch is padded to its longest pair, so `BgeReranker` sorts the pairs by length before batching and puts the scores back in input order.
+  - **One rerank at a time** (`oneAtATime`): each rerank uses every core, so two at once would only slow both down. This is the concurrency limit the spec places inside the implementation.
+  - **Shared helpers in `models/runtime.ts`**: `lazyRetry` (load once, retry after a failed load) for the embedder and the reranker; the pair separators are read from the tokenizer instead of assumed, and each query is counted once per call.
+  - **`BGE_RERANKER_MAX_TOKENS` lives in `models/catalog.ts`** next to the model, so `models:bench` does not import the reranker.
+- **Skipped clean-code suggestions**:
+  - **Always `passageText`, dropping the `judgedText` fallback**: a chunk built without a heading path (tests, or an empty `context`) would get a leading newline; the fallback keeps such a chunk readable.
+  - **One corpus sampler for both benches**: E8-2's README table was measured on the first 100 chunks by id; changing `models:bench`'s sample would make that table stale.
+  - **Keeping the cache default at `data/models`**: the owner chose `data/models.nosync` as the default.
+  - **A shared bench argument parser, a shared silent logger, a shared ranking helper with the test fake**: small enough to leave.
+  - **Not making `bge` the default until E8-5 has measured it**: the spec requires the default; E8-5 weighs the 35–50 s rerank time against recall.
+- **Code review fixes**:
+  - **The instruction gets its law abbreviations spelled out**, as for the embedder, since the heading paths name the laws in words.
+  - **A failed batch leaves its chunks unknown** (logged), and the rest of the rerank stands; `stats.unknown` counts them. A failed model load still fails the rerank with its error, since nothing could be scored.
+  - **A very long instruction is cut to half the pair** (512 tokens), so the passage keeps room; the cut is logged as "Pair cut to fit the reranker".
+  - **The bench sample is spread exactly** (every n-th chunk by position, computed in TypeScript), and the bench fails when the database has fewer chunks than it needs.
+  - **The contract test compares exactly** for `jev`, `llm` and the fake; only `bge`, whose scores pass through a sigmoid of the fake logit, uses `closeTo`.
+  - **One silent logger** (`SILENT_LOGGER`, `llm/client.ts`) and **one bench instruction** (`BENCH_INSTRUCTION`) shared by `jev:probe`, `models:bench` and `bench:rerank`.
+- **Not changed (code review)**:
+  - **No timeout on the rerank queue**: an ONNX call cannot be cancelled, so a timeout could only stop waiting, not free the CPU; the demo has one user.
+  - **No fallback for an old `data/models` cache**: the owner chose the new default, and the only existing cache was renamed.
+  - **Each passage is tokenized twice** (once to fit, once in the batch): milliseconds against about a second of inference per pair.
 
 ## Open Questions
 

@@ -25,8 +25,8 @@ function deps() {
 }
 
 describe('loadRerankerConfig', () => {
-  it('defaults to the LLM reranker keeping 8 chunks', () => {
-    expect(loadRerankerConfig({})).toEqual({ name: 'llm', topK: 8 });
+  it('defaults to the BGE reranker keeping 8 chunks', () => {
+    expect(loadRerankerConfig({})).toEqual({ name: 'bge', topK: 8 });
   });
 
   it.each(['bge', 'jev', 'llm', 'qwen3'])('accepts RERANKER=%s', (name) => {
@@ -64,7 +64,7 @@ describe('createReranker', () => {
     expect(topK).toBe(8);
   });
 
-  it.each(['bge', 'qwen3'])('builds the %s placeholder, which throws when used', async (name) => {
+  it.each(['qwen3'])('builds the %s placeholder, which throws when used', async (name) => {
     const { reranker } = createReranker({ RERANKER: name }, deps());
 
     await expect(reranker.rerank('x', [{ id: '1', text: 'a' }], 8)).rejects.toThrow(

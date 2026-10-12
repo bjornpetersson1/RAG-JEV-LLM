@@ -29,6 +29,9 @@ export const NO_USAGE: LlmUsage = Object.freeze({
 });
 
 /** The token counts of `usages` added up. */
+/** A logger that drops everything, for scripts that print their own output. */
+export const SILENT_LOGGER: LlmLogger = { info() {}, warn() {}, error() {} };
+
 export function sumUsage(usages: readonly LlmUsage[]): LlmUsage {
   return usages.reduce(
     (total, usage) => ({

@@ -20,6 +20,7 @@
     "bench:index": "tsx --expose-gc --env-file-if-exists=../.env src/search/bench.ts",
     "jev:probe": "tsx --env-file-if-exists=../.env src/judge/probe.ts",
     "models:bench": "tsx --env-file-if-exists=../.env src/models/bench.ts",
+    "bench:rerank": "tsx --env-file-if-exists=../.env src/rerank/bench.ts",
     "embed:smoke": "tsx --env-file-if-exists=../.env src/embedding/smoke.ts",
     "eval:label": "tsx --env-file-if-exists=../.env src/eval/cli.ts label",
     "eval:run": "tsx --env-file-if-exists=../.env src/eval/cli.ts run",

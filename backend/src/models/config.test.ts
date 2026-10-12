@@ -4,11 +4,11 @@ import { REPO_ROOT } from '../repo-root.js';
 import { loadLocalModelConfig } from './config.js';
 
 describe('loadLocalModelConfig', () => {
-  it('defaults to int8, batches of 8 and data/models in the repo', () => {
+  it('defaults to int8, batches of 8 and data/models.nosync in the repo', () => {
     expect(loadLocalModelConfig({}, 'EMBEDDER')).toEqual({
       dtype: 'int8',
       batchSize: 8,
-      cacheDir: join(REPO_ROOT, 'data/models'),
+      cacheDir: join(REPO_ROOT, 'data/models.nosync'),
     });
   });
 
