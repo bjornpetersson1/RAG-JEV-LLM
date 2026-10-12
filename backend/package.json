@@ -19,11 +19,14 @@
     "index:report": "tsx --env-file-if-exists=../.env src/tagging/cli.ts report",
     "bench:index": "tsx --expose-gc --env-file-if-exists=../.env src/search/bench.ts",
     "jev:probe": "tsx --env-file-if-exists=../.env src/judge/probe.ts",
+    "models:bench": "tsx --env-file-if-exists=../.env src/models/bench.ts",
+    "embed:smoke": "tsx --env-file-if-exists=../.env src/embedding/smoke.ts",
     "eval:label": "tsx --env-file-if-exists=../.env src/eval/cli.ts label",
     "eval:run": "tsx --env-file-if-exists=../.env src/eval/cli.ts run",
     "query": "tsx --env-file-if-exists=../.env src/generation/cli.ts"
   },
   "dependencies": {
+    "@huggingface/transformers": "^3.8.1",
     "fastify": "^5.12.5",
     "roaring-wasm": "^1.1.0",
     "yaml": "^2.9.1"

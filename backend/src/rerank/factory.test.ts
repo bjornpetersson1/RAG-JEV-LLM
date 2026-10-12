@@ -55,7 +55,7 @@ describe('createReranker', () => {
   it.each([
     [{ RERANKER: 'jev', ...JEV_KEY }, 'jev', 'jev-latest'],
     [{ RERANKER: 'llm' }, 'llm', 'fake'],
-    [{ RERANKER: 'bge' }, 'bge', 'BAAI/bge-reranker-v2-m3'],
+    [{ RERANKER: 'bge' }, 'bge', 'onnx-community/bge-reranker-v2-m3-ONNX'],
     [{ RERANKER: 'qwen3' }, 'qwen3', 'Qwen3-Reranker'],
   ])('builds %o from .env alone', (env, name, model) => {
     const { reranker, topK } = createReranker(env, deps());

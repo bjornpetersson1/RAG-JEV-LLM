@@ -6,20 +6,19 @@ describe('loadEmbedderConfig', () => {
     expect(loadEmbedderConfig({})).toBe('bge');
   });
 
-  it('rejects an unknown embedder', () => {
-    expect(() => loadEmbedderConfig({ EMBEDDER: 'ada' })).toThrow(
-      'Invalid EMBEDDER "ada": expected bge',
-    );
+  it.each([
+    [{ EMBEDDER: 'ada' }, 'Invalid EMBEDDER "ada": expected bge'],
+    [{ EMBEDDER_DTYPE: 'fp16' }, 'Invalid EMBEDDER_DTYPE "fp16"'],
+  ])('rejects %o', (env, message) => {
+    expect(() => loadEmbedderConfig(env)).toThrow(message);
   });
 });
 
 describe('createEmbedder', () => {
-  it('builds the bge placeholder, which throws when used', async () => {
-    const embedder = createEmbedder({ EMBEDDER: 'bge' });
-
-    expect(embedder).toMatchObject({ name: 'bge', model: 'BAAI/bge-m3' });
-    await expect(embedder.embed(['7 § LAS'], 'query')).rejects.toThrow(
-      'EMBEDDER=bge is not implemented yet',
-    );
+  it('builds the bge embedder without loading the model', () => {
+    expect(createEmbedder({ EMBEDDER: 'bge' })).toMatchObject({
+      name: 'bge',
+      model: 'Xenova/bge-m3',
+    });
   });
 });

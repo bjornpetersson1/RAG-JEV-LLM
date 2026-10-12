@@ -187,7 +187,7 @@ The relevance step sits behind one `Reranker` interface (`backend/src/rerank/`).
 
 The `jev` and `llm` rerankers ask the same question about the same text: the chunk's source reference and text, "Är texten relevant för följande uppdrag: <instruktion>?". A chunk is relevant when its score reaches `JUDGE_THRESHOLD` (default 0.5).
 
-An `Embedder` interface (`backend/src/embedding/`, `EMBEDDER=bge`) is in place for the local bge-m3 embeddings of E8-2 and E8-4.
+An `Embedder` interface (`backend/src/embedding/`, `EMBEDDER=bge`) gives the local bge-m3 embeddings (see [Local models](#local-models)); E8-4 builds the vector index on it.
 
 JEV gets `JUDGE_TIMEOUT_MS` (default 10000) per judgement and is not retried. Chunks are sent whole; one that JEV refuses as too large falls back like any other JEV error.
 
@@ -209,6 +209,48 @@ The result has each chunk's status (`judged`, `cached` or `unknown`), score, rel
 TypeSafe does not document JEV's maximum state size, pricing or rate limits. `npm run jev:probe` measures them against the real API with the judge's timeout `JUDGE_TIMEOUT_MS` (needs `JEV_API_KEY`; the calls are billed): latency over 10 sequential calls, the largest state accepted (doubling from 1,000 characters) and how a burst of 20 concurrent calls is answered.
 
 **Observed so far: nothing.** The project has no JEV key yet, so the limits are not measured, and JEV's request shape is only checked against the documentation with faked responses. Run the probe once a key exists and record the results here.
+
+## Local models
+
+bge-m3 (embeddings) and bge-reranker-v2-m3 (reranking) run locally, in Node, through [transformers.js](https://github.com/huggingface/transformers.js) 3.x on onnxruntime-node, on the CPU. They are downloaded from Hugging Face on first use into `MODEL_CACHE_DIR` (default `data/models`, git-ignored): about 0.6 GB per model in int8 and 2.3 GB in fp32. `EMBEDDER_DTYPE` picks the precision (`int8` by default).
+
+```bash
+npm run embed:smoke                   # "7 § LAS" must be nearer LAS 7 § than Dataskyddslagen 1 kap. 7 §
+npm run models:bench -- --dtype int8  # load and run times, peak memory (once per precision)
+```
+
+### Runtime decision (E8-2)
+
+Measured on the demo machine (MacBook Pro, Intel Core i5-8257U, 4 cores, 8 GB RAM, no GPU), with `npm run models:bench`: load time from the local cache, 100 real chunks (about 1,000 characters each) embedded in batches of 8, 100 (instruction, chunk) pairs scored in batches of 8 with at most 1,024 tokens, and the process's peak resident memory with both models loaded (`maxRSS`).
+
+| dtype | bge-m3 load | embed 100 chunks | reranker load | score 100 pairs | peak RSS |
+| ----- | ----------- | ---------------- | ------------- | --------------- | -------- |
+| int8  | 3.7 s       | 73.1 s           | 4.1 s         | 74.5 s          | 1.84 GB  |
+| fp32  | 8.1 s       | 100.2 s          | 9.6 s         | 116.2 s         | 2.37 GB  |
+
+Run-to-run variation on this laptop is large: earlier runs, with other work on the machine, took 117–125 s (int8) and 114–120 s (fp32) to embed the same 100 chunks.
+
+**Decision: transformers.js in Node, no Python sidecar.**
+
+- Both models load and run in TypeScript. A sidecar would run the same models on the same four cores, so it could not remove the cost their size sets (below); it would only add a second runtime.
+- The time is set by the models' size: each has about 568M parameters, so a chunk of a few hundred tokens takes 0.7–1.2 s on this CPU. int8 is up to about a quarter faster than fp32 here and a quarter of the download, and is the default; E8-5 decides between them on recall.
+- Embedding all ~2,100 chunks once (E8-4) takes roughly 25–45 minutes; reranking 30 candidates takes roughly 20–40 seconds per query.
+- Peak memory stays under 2.4 GB with both models loaded, even in fp32, which leaves room on the 8 GB machine.
+- transformers.js **3.x**, not 4.x: 4.x requires onnxruntime-node 1.30, which ships no Intel macOS binary; 3.x uses 1.21, which does.
+- `npm audit` reports 6 advisories through transformers.js 3.x (2 high in `sharp`, its image library; 4 moderate in `global-agent`/`sprintf-js`, used only by onnxruntime-node's install script, which npm does not run here). The project processes no images and never runs that script, so none of the vulnerable code is reached. The only fix is transformers.js 4.x; move to it when the demo machine is Apple Silicon or ONNX Runtime ships an Intel macOS binary again.
+
+**Sparse output is not available.** The ONNX export gives bge-m3's dense vectors only; its sparse (lexical) weights come from a separate `sparse_linear.pt` head that is not part of any ONNX repackaging. E8-4 therefore uses SQLite FTS5 BM25 as the lexical half of hybrid search.
+
+**Law abbreviations.** bge-m3 does not know Swedish law abbreviations: "7 § LAS" came out nearer Dataskyddslagen 1 kap. 7 § (cosine 0.485) than LAS 7 § (0.478), in int8 and fp32 alike. The embedder therefore spells out known abbreviations in queries (E6-3's table: "7 § LAS" → "7 § LAS (Lag (1982:80) om anställningsskydd)"), after which LAS 7 § wins clearly (0.578 against 0.474).
+
+### Licences
+
+Checked on the Hugging Face model cards on 2026-10-11:
+
+| Model              | Repository used                                                                                                                                                                                    | Licence                                                                                            |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| bge-m3             | [`Xenova/bge-m3`](https://huggingface.co/Xenova/bge-m3) (ONNX), from [`BAAI/bge-m3`](https://huggingface.co/BAAI/bge-m3)                                                                           | MIT (both)                                                                                         |
+| bge-reranker-v2-m3 | [`onnx-community/bge-reranker-v2-m3-ONNX`](https://huggingface.co/onnx-community/bge-reranker-v2-m3-ONNX) (ONNX), from [`BAAI/bge-reranker-v2-m3`](https://huggingface.co/BAAI/bge-reranker-v2-m3) | Apache-2.0 (BAAI); the ONNX repackaging states no licence of its own and inherits the base model's |
 
 ## Evaluation
 
