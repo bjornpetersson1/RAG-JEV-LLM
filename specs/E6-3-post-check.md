@@ -17,7 +17,7 @@ A post-check of every generated draft: it finds the `[K:<chunk-id>]` citations a
   - statute provisions: `7 §`, `33 d §`, `2 kap. 9 §`, optionally with `st.` / `första stycket`, followed by a law abbreviation (`LAS`) or `lagen (1982:80)` / `(1982:80)`;
   - whole statutes: `SFS 1982:80`, `lagen (1982:80)`, or a known abbreviation alone;
   - cases: `AD 2019 nr 35`, `NJA 2015 s. 123`.
-- A small table of abbreviations for the imported laws (e.g. `LAS` → `SFS 1982:80`, `MBL` → `SFS 1976:580`, `SemL` → `SFS 1977:480`, `ATL` → `SFS 1982:673`, `DL` → `SFS 2008:567`, `AvtL` → `SFS 1915:218`).
+- A small table of abbreviations for the imported laws (e.g. `LAS` → `SFS 1982:80`, `MBL` → `SFS 1976:580`, `SemL` → `SFS 1977:480`, `ATL` → `SFS 1982:673`, `DL` → `SFS 2008:567`, `AvtL` → `SFS 1915:218`). (**moved by E8-2** to `legal/law-names.ts`, shared with the embedder)
 - Output per run: the list of flagged references (kind, the matched text, start and end offsets in the draft, reason) and source accuracy, plus the counts behind it.
 - The `query` CLI prints the flagged references and the source accuracy.
 
@@ -61,7 +61,7 @@ A post-check of every generated draft: it finds the `[K:<chunk-id>]` citations a
 - **Matching ignores paragraph (`st.`) and split suffixes** (default): a chunk's source reference may carry `st. 2`, headings or `del 1/2`; a free-text reference matches on document, chapter and section, so "7 § LAS" is valid against `SFS 1982:80 7 § st. 2`.
 - **A section without a chapter matches any chapter** (default): "9 § DL" is valid against `SFS 2008:567 2 kap. 9 §`, since drafts often leave the chapter out.
 - **Offsets in UTF-16 code units** (default): what JavaScript string indices use, so the UI can slice the text directly.
-- **Code in `backend/src/generation/`** (default), next to the generator.
+- **Code in `backend/src/generation/`** (default), next to the generator. (**superseded by E8-4**: reference parsing is in `legal/references.ts`, shared with hybrid retrieval; `generation/post-check.ts` keeps the flagging and source accuracy)
 - **Builds on what E6-2 delivered** (spec update after E6-2 merged): `[K:]` citations come from E6-1's `findCitations`, whose offsets are those of the bracket group, so every id in a group `[K:12, K:40]` is flagged with the group's offsets. The post-check runs inside `generateDraft` against its submitted chunks and is part of `GenerationResult`; when no chunk fit the limits there is no text and no post-check. E6-2's interim `outsideCitations` list is replaced by the citation flags, and the CLI's "Citations outside the submitted chunks" line by the post-check output.
 
 - **Law names count like abbreviations** (implementation): the table holds the abbreviations and the common names of the imported laws (`LAS`/`anställningsskyddslagen`, `AvtL`/`avtalslagen`, `FHL`/`företagshemlighetslagen`, `SemL`/`semesterlagen`, `DL`/`diskrimineringslagen`, `ATL`/`arbetstidslagen`, `MBL`/`medbestämmandelagen`, `FLL`/`föräldraledighetslagen`), and names are matched with a lower- or upper-case first letter. A name or abbreviation alone is a whole-statute reference, as the spec says for abbreviations; drafts usually write "enligt semesterlagen" rather than an SFS number. The laws without a common short name (SFS 2018:218, 2002:293, 2012:854) are found only by SFS number or `lagen (…)`.

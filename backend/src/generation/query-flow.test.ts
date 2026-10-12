@@ -1,10 +1,14 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createEvalDatabase } from '../eval/test-helpers.js';
-import type { ChunkJudgement, JudgeAllResult } from '../judge/judge-all.js';
-import { NO_USAGE } from '../llm/client.js';
+import { NO_USAGE, SILENT_LOGGER } from '../llm/client.js';
+import { loadLlmConfig } from '../llm/config.js';
 import { createFakeGenerator } from '../llm/fakes.js';
+import { createReranker } from '../rerank/factory.js';
+import { indexEmbeddings } from '../retrieval/index-embeddings.js';
+import { createFakeEmbedder } from '../retrieval/test-helpers.js';
 import type { Chunk } from '../llm/types.js';
-import { runQuery, rankByScore, type QueryFlowDependencies } from './query-flow.js';
+import { fakeRerankResult } from '../rerank/test-helpers.js';
+import { runQuery, type QueryFlowDependencies } from './query-flow.js';
 import { createQueryFlow } from './setup.js';
 
 const USAGE = { inputTokens: 7, outputTokens: 3, cacheWriteTokens: 0, cacheReadTokens: 0 };
@@ -15,39 +19,13 @@ const CHUNKS: Record<string, Chunk> = {
   '3': { id: '3', text: 'Tre', source: 'SFS 1982:80 3 §' },
 };
 
-/** Judges the given scores; a chunk without a score ends `unknown`. */
-function judged(chunks: readonly Chunk[], scores: Record<string, number>): JudgeAllResult {
-  const judgements = chunks.map((chunk): ChunkJudgement => {
-    const score = scores[chunk.id];
-    return score === undefined
-      ? { chunkId: chunk.id, status: 'unknown', reason: 'timeout', elapsedMs: 1 }
-      : {
-          chunkId: chunk.id,
-          status: 'judged',
-          score,
-          relevant: score >= 0.5,
-          judgedBy: 'llm',
-          elapsedMs: 1,
-        };
-  });
-  return {
-    judgements,
-    relevant: chunks.filter((chunk) => (scores[chunk.id] ?? 0) >= 0.5),
-    elapsedMs: 40,
-    cacheHits: 1,
-    judgeCalls: 2,
-    unknown: judgements.filter((j) => j.status === 'unknown').length,
-    usage: USAGE,
-  };
-}
-
 function fakeFlow(scores: Record<string, number>) {
   const calls = { judged: [] as string[], generated: [] as string[][] };
   const deps: QueryFlowDependencies = {
     async translate() {
       return { tags: [{ slug: 'uppsagning', origin: 'translated' }], usage: USAGE, elapsedMs: 12 };
     },
-    search: () => ({
+    search: async () => ({
       candidates: ['1', '2', '3'].map((id) => ({ chunkId: Number(id), origin: 'tag' as const })),
       tagCandidates: 3,
       fallbackUsed: false,
@@ -55,9 +33,11 @@ function fakeFlow(scores: Record<string, number>) {
       ftsQuery: null,
     }),
     loadChunks: (ids) => ids.map((id) => CHUNKS[id]),
-    async judge(_instruction, chunks) {
+    async rerank(_instruction, chunks) {
       calls.judged.push(...chunks.map((c) => c.id));
-      return judged(chunks, scores);
+      return fakeRerankResult(chunks, scores, {
+        stats: { calls: 2, cacheHits: 1, usage: USAGE, elapsedMs: 40 },
+      });
     },
     generator: createFakeGenerator((input) => {
       calls.generated.push(input.chunks.map((c) => c.id));
@@ -78,7 +58,13 @@ describe('runQuery', () => {
     expect(calls.generated).toEqual([['2', '1']]);
     expect(result.tags).toEqual(['uppsagning']);
     expect(result.candidates).toBe(3);
-    expect(result.judging).toEqual({ approved: 2, cacheHits: 1, judgeCalls: 2, unknown: 0 });
+    expect(result.judging).toEqual({
+      approved: 2,
+      relevant: 2,
+      cacheHits: 1,
+      judgeCalls: 2,
+      unknown: 0,
+    });
     expect(result.draft?.used.map((c) => c.id)).toEqual(['2', '1']);
     expect(result.draft?.check).toMatchObject({ flags: [], references: 2, sourceAccuracy: 1 });
     expect(result.timings).toMatchObject({ translationMs: 12, judgingMs: 40 });
@@ -101,13 +87,39 @@ describe('runQuery', () => {
   });
 });
 
-describe('rankByScore', () => {
-  it('orders the relevant chunks by descending score, ties in candidate order', () => {
-    const chunks = Object.values(CHUNKS);
+describe('switching the reranker to JEV', () => {
+  let database: ReturnType<typeof createEvalDatabase> | undefined;
 
-    const ranked = rankByScore(judged(chunks, { '1': 0.7, '2': 0.9, '3': 0.7 }));
+  afterEach(() => {
+    database?.remove();
+    database = undefined;
+  });
 
-    expect(ranked.map((c) => c.id)).toEqual(['2', '1', '3']);
+  it('takes only RERANKER=jev and JEV_API_KEY, with no other change to the query flow', async () => {
+    database = createEvalDatabase();
+    const jevCalls: string[] = [];
+    const fakeJev = (async (url: string | URL | Request) => {
+      jevCalls.push(String(url));
+      return Response.json({ answers: { relevant: { type: 'noul', noul: 0.9 } }, usage: {} });
+    }) as typeof globalThis.fetch;
+    const env = { RERANKER: 'jev', JEV_API_KEY: 'k', JUDGE_CACHE: 'off' };
+    const { reranker, topK } = createReranker(env, {
+      db: database.db,
+      llmConfig: loadLlmConfig({ LLM_PROVIDER: 'fake' }),
+      logger: SILENT_LOGGER,
+      fetch: fakeJev,
+    });
+    const { deps } = fakeFlow({});
+
+    const result = await runQuery(
+      { instruction: 'Säljare', template: 'employment' },
+      { ...deps, rerank: (instruction, chunks) => reranker.rerank(instruction, chunks, topK) },
+    );
+
+    expect(reranker.name).toBe('jev');
+    expect(jevCalls).toEqual(Array(3).fill('https://api.typesafe.ai/v1/systemone'));
+    expect(result.judging).toMatchObject({ approved: 3, judgeCalls: 3 });
+    expect(result.draft?.used).toHaveLength(3);
   });
 });
 
@@ -119,23 +131,19 @@ describe('createQueryFlow', () => {
     database = undefined;
   });
 
+  const ENV = {
+    LLM_PROVIDER: 'fake',
+    QUERY_TRANSLATOR_IMPL: 'llm',
+    RERANKER: 'llm',
+    JUDGE_CACHE: 'off',
+  };
+  const logger = SILENT_LOGGER;
+
   it('runs the whole chain from .env with fake roles and a test database', async () => {
     database = createEvalDatabase();
-    const env = {
-      DATABASE_PATH: database.path,
-      LLM_PROVIDER: 'fake',
-      QUERY_TRANSLATOR_IMPL: 'llm',
-      JUDGE_IMPL: 'llm',
-      JUDGE_CACHE: 'off',
-    };
-    const flow = createQueryFlow(
-      database.db,
-      env,
-      { info() {}, warn() {}, error() {} },
-      {
-        maxChunks: 1,
-      },
-    );
+    const flow = createQueryFlow(database.db, { ...ENV, DATABASE_PATH: database.path }, logger, {
+      maxChunks: 1,
+    });
 
     const result = await runQuery(
       { instruction: 'Uppsägning ska vara sakligt grundad', template: 'employment' },
@@ -148,5 +156,47 @@ describe('createQueryFlow', () => {
     expect(result.draft?.context.limits).toEqual({ maxChunks: 1, maxContextChars: 60_000 });
     expect(result.draft?.text).toContain('inte juridisk rådgivning');
     expect(result.draft?.check).toMatchObject({ flags: [], sourceAccuracy: 1 });
+  });
+
+  it.each([
+    ['tags', true],
+    ['bge', false],
+    ['both', true],
+  ])('works with RETRIEVER=%s (query translated: %s)', async (retriever, translated) => {
+    database = createEvalDatabase();
+    const { embedder } = createFakeEmbedder();
+    await indexEmbeddings(database.db, embedder, { model: embedder.model, dtype: 'int8' });
+
+    const flow = createQueryFlow(
+      database.db,
+      { ...ENV, DATABASE_PATH: database.path, RETRIEVER: retriever },
+      logger,
+      { maxChunks: 1 },
+      embedder,
+    );
+    const result = await runQuery(
+      { instruction: 'Uppsägning ska vara sakligt grundad', template: 'employment' },
+      flow,
+    );
+
+    expect(flow.translate !== undefined).toBe(translated);
+    expect(result.tags.length > 0).toBe(translated);
+    if (!translated) expect(result.timings.translationMs).toBe(0);
+    expect(result.candidates).toBeGreaterThan(0);
+    expect(result.draft?.text).toContain('inte juridisk rådgivning');
+  });
+
+  it('fails for bge, naming index:embed, before any chunk is embedded', () => {
+    database = createEvalDatabase();
+
+    expect(() =>
+      createQueryFlow(
+        database!.db,
+        { ...ENV, DATABASE_PATH: database!.path, RETRIEVER: 'bge' },
+        logger,
+        {},
+        createFakeEmbedder().embedder,
+      ),
+    ).toThrow('run `npm run index:embed`');
   });
 });

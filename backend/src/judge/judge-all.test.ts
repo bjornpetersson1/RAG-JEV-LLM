@@ -92,7 +92,7 @@ describe('judgeAll', () => {
       const fake = createFakeFetch(() =>
         Response.json({ answers: { relevant: { type: 'noul', noul: 0.8 } }, usage: {} }),
       );
-      const judging = createJudging(loadJudgeConfig({ JEV_API_KEY: 'k' }), {
+      const judging = createJudging(loadJudgeConfig({ JEV_API_KEY: 'k' }, 'jev'), {
         llmConfig: loadLlmConfig({ LLM_PROVIDER: 'fake' }),
         logger,
         fetch: fake.fetch,

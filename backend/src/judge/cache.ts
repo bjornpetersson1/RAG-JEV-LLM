@@ -1,9 +1,8 @@
-import { createHash } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import { inTransaction, preparedOnce } from '../db/database.js';
 import { judgedText, relevanceQuestion } from '../llm/judge-question.js';
 import type { Chunk } from '../llm/types.js';
-import { collapseWhitespace } from '../text.js';
+import { collapseWhitespace, sha256 } from '../text.js';
 import type { PrimaryJudge } from './factory.js';
 
 export interface JudgeCache {
@@ -76,8 +75,4 @@ interface CacheRow {
   chunk_id: string;
   text_hash: string;
   score: number;
-}
-
-function sha256(text: string): string {
-  return createHash('sha256').update(text).digest('hex');
 }

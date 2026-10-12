@@ -21,11 +21,11 @@ const DRAFT: GenerationResult = {
   usage: { ...NO_USAGE, inputTokens: 5000, outputTokens: 1200 },
 };
 
-function result(draft?: GenerationResult): QueryResult {
+function result(draft?: GenerationResult, relevant = draft ? 2 : 0): QueryResult {
   return {
     tags: ['anstallningsavtal', 'provanstallning'],
     candidates: 30,
-    judging: { approved: draft ? 2 : 0, cacheHits: 4, judgeCalls: 26, unknown: 0 },
+    judging: { approved: draft ? 2 : 0, relevant, cacheHits: 4, judgeCalls: 26, unknown: 0 },
     draft,
     timings: {
       translationMs: 800,
@@ -49,6 +49,12 @@ function result(draft?: GenerationResult): QueryResult {
 }
 
 describe('formatQueryResult', () => {
+  it('says how many relevant chunks RERANK_TOP_K left out', () => {
+    expect(formatQueryResult(REQUEST, result(DRAFT, 15))).toContain(
+      'approved: 2 (the best of 15 relevant; raise RERANK_TOP_K to keep more)',
+    );
+  });
+
   it('prints tags, counts, the draft, its sources and the time and tokens per step', () => {
     expect(formatQueryResult(REQUEST, result(DRAFT))).toBe(
       [

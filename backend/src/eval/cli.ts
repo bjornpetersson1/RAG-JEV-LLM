@@ -6,7 +6,7 @@ import { withDatabase } from '../db/with-database.js';
 import { parsePositiveInteger } from '../env.js';
 import { describeError } from '../errors.js';
 import { createConsoleLogger } from '../llm/console-logger.js';
-import { writeMarkdownReport } from '../reports.js';
+import { localDate, writeMarkdownReport } from '../reports.js';
 import { REPO_ROOT } from '../repo-root.js';
 import { REPORTS_DIR } from '../tagging/paths.js';
 import { formatCandidates, labelCandidates } from './label.js';
@@ -14,10 +14,17 @@ import { readEvalQueries, resolveEvalQueries } from './queries.js';
 import { formatAsMarkdown, formatForTerminal } from './report.js';
 import { runEvaluation, type QueryOutcome } from './run.js';
 import { createEvalSetup, createSearchSetup } from './setup.js';
+import { RERANKERS } from '../rerank/factory.js';
+import { loadRetrievalConfig } from '../retrieval/config.js';
+import { compareRerankers } from './compare.js';
+import { parseRunArgs, type RunArgs } from './compare-args.js';
+import { appendToReport, comparisonTable } from './compare-report.js';
+import { createCompareSetup } from './compare-setup.js';
 
 const EVAL_QUERIES_PATH = join(REPO_ROOT, 'eval', 'queries.yaml');
 const DEFAULT_TEXT_CHARS = 300;
-const USAGE = 'Usage: eval <label <query id> [--chars <n>] | run>';
+const USAGE =
+  'Usage: eval <label <query id> [--chars <n>] | run [--reranker <names> [--retriever <names>]]>';
 
 // Every call and search logs at info level; only problems are worth showing during a long run.
 const problemLogger = createConsoleLogger({ quiet: true });
@@ -31,7 +38,10 @@ try {
 
 async function run(args: string[]): Promise<number> {
   const [command, ...rest] = args;
-  if (command === 'run' && rest.length === 0) return runEval();
+  if (command === 'run') {
+    const compare = parseRunArgs(rest, Object.keys(RERANKERS));
+    return compare ? runComparison(compare) : runEval();
+  }
   if (command === 'label') {
     const label = parseLabelArgs(rest);
     if (label) return runLabel(label.queryId, label.textChars);
@@ -86,6 +96,31 @@ function runEval(): Promise<number> {
     );
     console.log(`\n${formatForTerminal(result)}\n\nReport: ${path}`);
     return result.failed.length === 0 ? 0 : 1;
+  });
+}
+
+/**
+ * `run --reranker …`: the retrievers and rerankers compared on the evaluation set (E8-5), printed
+ * and appended to `eval/report-<date>.md`.
+ */
+function runComparison({ rerankers, retrievers }: RunArgs): Promise<number> {
+  const queries = readEvalQueries(EVAL_QUERIES_PATH);
+  return withDatabase(async (db) => {
+    const resolved = resolveEvalQueries(queries, db);
+    const setup = createCompareSetup(db, process.env, problemLogger, {
+      rerankers,
+      retrievers: retrievers ?? [loadRetrievalConfig(process.env).retriever],
+    });
+    const rows = await compareRerankers(resolved, {
+      ...setup,
+      onQuery: (query, index, total) => console.log(`[${index + 1}/${total}] ${query.id}`),
+      onFailure: (step, query, error) => console.error(`${query.id}: ${step} failed: ${error}`),
+    });
+    const date = localDate();
+    const path = join(REPO_ROOT, 'eval', `report-${date}.md`);
+    appendToReport(path, rows, date);
+    console.log(`\n${comparisonTable(rows, date)}\n\nAppended to ${path}`);
+    return rows.some((row) => row.failed) ? 1 : 0;
   });
 }
 

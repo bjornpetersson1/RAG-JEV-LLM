@@ -7,6 +7,7 @@ import { describeError } from '../errors.js';
 import { elapsedMs } from '../http.js';
 import { createJevClient, JevError, type JevClient } from '../jev/client.js';
 import { loadJevConfig } from '../jev/config.js';
+import { SILENT_LOGGER } from '../llm/client.js';
 import { relevanceQuestion } from '../llm/judge-question.js';
 import { percentile } from '../stats.js';
 import { loadJudgeTimeoutMs } from './config.js';
@@ -26,12 +27,10 @@ const QUESTIONS = {
   },
 };
 
-const silentLogger = { info() {}, warn() {}, error() {} };
-
 try {
   const env = process.env;
   const config = loadJevConfig(env, 'jev:probe calls JEV', loadJudgeTimeoutMs(env));
-  const client = createJevClient({ ...config, role: 'judge', logger: silentLogger });
+  const client = createJevClient({ ...config, role: 'judge', logger: SILENT_LOGGER });
   console.log(
     `Probing ${config.baseUrl} with model ${config.model}, timeout ${config.timeoutMs} ms`,
   );

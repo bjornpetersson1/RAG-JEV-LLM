@@ -7,7 +7,7 @@ import type { JudgeConfig } from './config.js';
 import { createFallbackJudge } from './fallback-judge.js';
 import { createJevJudge } from './jev-judge.js';
 
-/** The judge whose scores are cached: JEV for `jev` and `jev-with-fallback`, else the LLM. */
+/** The judge whose scores are cached: JEV for `jev` (not its LLM fallback), else the LLM. */
 export interface PrimaryJudge {
   impl: 'jev' | 'llm';
   model: string;
@@ -79,5 +79,5 @@ function scoringJudge(
 ): ScoringJudge {
   if (config.impl === 'llm') return llmJudge;
   const jevJudge = createJevJudge(createJevClient({ ...config.jev, role: 'judge', logger, fetch }));
-  return config.impl === 'jev' ? jevJudge : createFallbackJudge(jevJudge, llmJudge, logger);
+  return createFallbackJudge(jevJudge, llmJudge, logger);
 }

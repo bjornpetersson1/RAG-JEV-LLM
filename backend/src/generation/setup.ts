@@ -1,15 +1,15 @@
 // Builds the query flow's steps from `.env` and the database: the configured query translator,
-// candidate search (`tags+fts`), judge (E5-2's `judgeAll`) and generator.
+// retriever (`RETRIEVER`, E8-4), reranker (`RERANKER`, E8-1) and generator.
 
 import type { DatabaseSync } from 'node:sqlite';
-import { loadJudgeConfig, loadJudgingConfig } from '../judge/config.js';
-import { createJudging } from '../judge/factory.js';
-import { judgeAll } from '../judge/judge-all.js';
+import type { Embedder } from '../embedding/types.js';
 import type { LlmLogger } from '../llm/client.js';
 import { loadLlmConfig } from '../llm/config.js';
 import { createLlmRoles } from '../llm/factory.js';
 import { createQueryServices } from '../query/services.js';
 import { translateQuery } from '../query/translate-query.js';
+import { createReranker } from '../rerank/factory.js';
+import { createConfiguredRetriever } from '../retrieval/setup.js';
 import { loadContextLimits, type ContextLimits } from './config.js';
 import type { QueryFlowDependencies } from './query-flow.js';
 
@@ -18,11 +18,11 @@ export function createQueryFlow(
   env: Record<string, string | undefined>,
   logger: LlmLogger,
   limits: Partial<ContextLimits> = {},
+  /** A fake embedder in tests; by default `EMBEDDER`. */
+  embedder?: Embedder,
 ): QueryFlowDependencies {
   const llmConfig = loadLlmConfig(env);
-  const judgingConfig = loadJudgingConfig(env);
-  // createJudging builds its own LLM judge from llmConfig, so the judge and its cache key agree.
-  const judging = createJudging(loadJudgeConfig(env), { llmConfig, logger });
+  const { reranker, topK } = createReranker(env, { db, llmConfig, logger });
   const roles = createLlmRoles(llmConfig, { logger });
   const { translation, candidateSearch, loadChunks } = createQueryServices(
     db,
@@ -31,12 +31,12 @@ export function createQueryFlow(
     llmConfig,
     roles,
   );
+  const retriever = createConfiguredRetriever(db, env, candidateSearch, embedder);
   return {
-    translate: (query) => translateQuery(query, translation),
-    search: (instruction, tags) => candidateSearch.search({ instruction, tags, mode: 'tags+fts' }),
+    ...(retriever.usesTags && { translate: (query) => translateQuery(query, translation) }),
+    search: (instruction, tags) => retriever.retrieve(instruction, tags),
     loadChunks,
-    judge: (instruction, chunks) =>
-      judgeAll(instruction, chunks, { judging, config: judgingConfig, db, logger }),
+    rerank: (instruction, chunks) => reranker.rerank(instruction, chunks, topK),
     generator: roles.generator,
     limits: { ...loadContextLimits(env), ...limits },
   };

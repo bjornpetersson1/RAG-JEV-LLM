@@ -1,3 +1,6 @@
+/** Settings as read from `.env` (`process.env` or a test's object). */
+export type Env = Record<string, string | undefined>;
+
 /** `value` as a positive integer, or undefined unless it is plain digits above zero. */
 export function parsePositiveInteger(value: string): number | undefined {
   // Only plain digits: Number() would also accept "2e3", "0x7D0" or "2000.0".

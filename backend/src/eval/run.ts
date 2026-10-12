@@ -1,9 +1,8 @@
 // Runs the evaluation set through each search mode (E5-3). The real searches, translator and judges
 // are passed in, so the same code runs against the database or against fakes in tests.
 
-import type { PrimaryJudge } from '../judge/factory.js';
-import type { JudgeAllResult } from '../judge/judge-all.js';
 import type { Chunk, JudgeScore } from '../llm/types.js';
+import type { RerankResult, Reranker } from '../rerank/types.js';
 import { describeError } from '../errors.js';
 import { sum } from '../stats.js';
 import {
@@ -24,6 +23,9 @@ export type EvalMode = (typeof EVAL_MODES)[number];
 export const JUDGE_MODES = ['tags+jev', 'tags+llm'] as const;
 export type JudgeMode = (typeof JUDGE_MODES)[number];
 
+/** Which reranker a judge mode used, for the report. */
+export type RerankerIdentity = Pick<Reranker, 'name' | 'model'>;
+
 /** What a search needs from a query; the relevant chunks are not involved. */
 export type QueryText = Pick<EvalQuery, 'instruction' | 'template'>;
 
@@ -37,10 +39,10 @@ export interface SearchDependencies {
 }
 
 export interface EvalDependencies extends SearchDependencies {
-  /** Judges the chunks with the judge of `mode` (E5-2's `judgeAll`, cache on). */
-  judge(mode: JudgeMode, instruction: string, chunks: readonly Chunk[]): Promise<JudgeAllResult>;
+  /** Reranks the chunks with the reranker of `mode`, keeping every relevant one (cache on). */
+  judge(mode: JudgeMode, instruction: string, chunks: readonly Chunk[]): Promise<RerankResult>;
   /** The judge each judge mode was configured with, for the report. */
-  judges: Record<JudgeMode, PrimaryJudge>;
+  judges: Record<JudgeMode, RerankerIdentity>;
   /** Called after each query, for progress output. */
   onQuery?(outcome: QueryOutcome, index: number, total: number): void;
   onFailure?(failure: FailedQuery, index: number, total: number): void;
@@ -75,7 +77,7 @@ export interface EvalResult {
   modes: Record<EvalMode, ModeScores>;
   sweeps: Record<JudgeMode, SweepRow[]>;
   recommended: Record<JudgeMode, SweepRow>;
-  judges: Record<JudgeMode, PrimaryJudge>;
+  judges: Record<JudgeMode, RerankerIdentity>;
   /** Judgements per judge over the whole run. */
   answeredBy: Record<JudgeMode, AnsweredBy>;
 }
@@ -124,7 +126,7 @@ async function evaluateQuery(query: ResolvedQuery, deps: EvalDependencies): Prom
   const chunks = deps.loadChunks(tagCandidates);
   // Without a JEV key both modes have the same judge; it is asked once, so the rows agree exactly.
   const jevJudged = await deps.judge('tags+jev', query.instruction, chunks);
-  const judged: Record<JudgeMode, JudgeAllResult> = {
+  const judged: Record<JudgeMode, RerankResult> = {
     'tags+jev': jevJudged,
     'tags+llm': sameJudge(deps.judges)
       ? jevJudged
@@ -132,32 +134,30 @@ async function evaluateQuery(query: ResolvedQuery, deps: EvalDependencies): Prom
   };
   const returned: Record<EvalMode, string[]> = {
     tags: tagCandidates,
-    ...byJudgeMode((mode) => judged[mode].relevant.map((chunk) => chunk.id)),
+    ...byJudgeMode((mode) => judged[mode].ranked.map(({ chunk }) => chunk.id)),
     fts: deps.search(query, tags, 'fts'),
   };
-  const answered = (mode: JudgeMode) =>
-    judged[mode].judgements.flatMap((judgement) =>
-      judgement.status === 'unknown' ? [] : [judgement],
-    );
   return {
     query,
     tags,
     returned,
     relevance: byEvalMode((mode) => precisionRecall(returned[mode], query.relevantIds)),
-    scores: byJudgeMode((mode) => answered(mode).map(({ chunkId, score }) => ({ chunkId, score }))),
-    answeredBy: byJudgeMode((mode) => countByJudge(answered(mode))),
-    unknown: byJudgeMode((mode) => judged[mode].unknown),
+    scores: byJudgeMode((mode) =>
+      judged[mode].scored.map(({ chunk, score }) => ({ chunkId: chunk.id, score })),
+    ),
+    answeredBy: byJudgeMode((mode) => countByJudge(judged[mode].scored)),
+    unknown: byJudgeMode((mode) => judged[mode].stats.unknown),
   };
 }
 
-function sameJudge(judges: Record<JudgeMode, PrimaryJudge>): boolean {
+function sameJudge(judges: Record<JudgeMode, RerankerIdentity>): boolean {
   const [jev, llm] = [judges['tags+jev'], judges['tags+llm']];
-  return jev.impl === llm.impl && jev.model === llm.model;
+  return jev.name === llm.name && jev.model === llm.model;
 }
 
-function countByJudge(judgements: readonly { judgedBy: JudgeScore['judgedBy'] }[]): AnsweredBy {
+function countByJudge(scored: readonly { answeredBy?: JudgeScore['judgedBy'] }[]): AnsweredBy {
   const counts: AnsweredBy = { jev: 0, llm: 0 };
-  for (const { judgedBy } of judgements) counts[judgedBy] += 1;
+  for (const { answeredBy } of scored) if (answeredBy) counts[answeredBy] += 1;
   return counts;
 }
 

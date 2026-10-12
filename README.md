@@ -1,6 +1,6 @@
 # RAG-JEV-LLM
 
-Legal RAG proof of concept: tag-based search and the JEV judge model find relevant Swedish laws and rulings, and an LLM drafts employment agreements and NDAs from them.
+Legal RAG proof of concept: tag search or local bge-m3 hybrid retrieval, followed by a reranker (local BGE by default, JEV or an LLM optional), find relevant Swedish laws and rulings, and an LLM drafts employment agreements and NDAs from them.
 
 ## Prerequisites
 
@@ -158,11 +158,36 @@ The benchmark generates the same seeded data every run (3–8 tags per chunk out
 
 Migration `0005_chunks_fts` adds an SQLite FTS5 index over each chunk's text, context and source reference, kept in step with `chunks` by triggers. Its tokenizer folds case but keeps å, ä and ö apart from a and o. The full-text query takes the words of the instruction and the chosen tags' labels, and drops common Swedish stop words and words shorter than 3 characters. Numbers must match exactly. Every other word becomes a prefix term, so inflected forms match: a word of 6 letters or more is first cut by up to 3 letters, keeping at least 5 (`uppsägningen` → `uppsägnin*`). The terms are joined with OR and ranked by bm25.
 
-Candidate search (`createCandidateSearch`; the query flow in E5/E6 will call it, no HTTP route uses it yet) takes the tag index's ranked hits. With fewer than `MIN_TAG_CANDIDATES` (default 10), full-text hits not already found are appended, up to `MAX_CANDIDATES` (default 30). Each candidate records whether it came from `tag` or `fts`, and every search logs whether the fallback ran and how many candidates it added. The modes `fts` (full text only) and `tags` (tags only) are baselines for the evaluation.
+Candidate search (`createCandidateSearch`; the query flow and `eval:run` use it through `RETRIEVER=tags` or `both`; no HTTP route uses it yet) takes the tag index's ranked hits. With fewer than `MIN_TAG_CANDIDATES` (default 10), full-text hits not already found are appended, up to `MAX_CANDIDATES` (default 30). Each candidate records whether it came from `tag` or `fts`, and every search logs whether the fallback ran and how many candidates it added. The modes `fts` (full text only) and `tags` (tags only) are baselines for the evaluation.
+
+## Hybrid retrieval
+
+`RETRIEVER` picks where the reranker's candidates come from (E8-4):
+
+- `tags` (default): tag search with the full-text fallback, as above, up to `MAX_CANDIDATES`.
+- `bge`: bge-m3 hybrid search. Chunks of a provision the instruction names come first (see below). The instruction is embedded (law abbreviations spelled out, see [Local models](#local-models)) and compared with every chunk's vector by cosine similarity (the dense half). SQLite FTS5 ranks the chunks by BM25 for the instruction's words and numbers, with law abbreviations replaced by their SFS number so `7 § LAS` matches `SFS 1982:80 7 §` (the lexical half). The two rankings are fused by reciprocal rank fusion and the best `RETRIEVE_CANDIDATES` (default 40) go on. The query is not translated into tags.
+- `both`: the tag ranking fused with the two halves of `bge` the same way.
+
+Each ranking adds `weight / (RRF_K + rank)` to a chunk's score; `RRF_K` (default 60) and `RRF_WEIGHT_DENSE` / `RRF_WEIGHT_LEXICAL` / `RRF_WEIGHT_TAGS` (0–1, default 1) tune the fusion.
+
+```bash
+npm run index:embed                                         # embed every new or changed chunk
+npm run retrieve -- "konkurrensklausul efter anställningens slut" [--top-k 8]
+```
+
+`index:embed` embeds each chunk's heading path and text with the configured embedder and stores the vector in SQLite (`chunk_embeddings`), keyed by the model, precision (`EMBEDDER_DTYPE`) and a hash of the text. A second run embeds nothing; a changed chunk, model or precision is embedded again. Neither the server nor `retrieve` nor `query` ever embeds chunks: with `RETRIEVER=bge` or `both` they fail with a message to run `npm run index:embed` when any chunk's vector is missing or stale. Embedding all chunks takes 25–45 minutes on the demo machine.
+
+`retrieve` prints the reranked top `RERANK_TOP_K` (or `--top-k`) chunks with their source, rerank score and place in the retriever's list, and the time for query translation, embedding the question, retrieval, reranking and in total. The first question in a process also loads bge-m3 (about 4 s), which counts as embedding time; the first rerank likewise loads the reranker. `npm run query` uses the same retriever before drafting.
+
+### Vector storage
+
+The vectors live in SQLite as BLOBs (`chunk_embeddings`) and are loaded into one contiguous `Float32Array` when the retriever is built; a search compares the query with every chunk (brute-force cosine similarity on unit vectors). Measured on the demo machine with the whole corpus: 2,116 chunks × 1,024 dimensions = 8.7 MB in memory, 0.4 s to load (including checking every chunk's hash), and 4.8 ms per full scan (median of 100, p90 5.8 ms). Embedding the question takes far longer (about 1–5 s). A vector database or `sqlite-vec` would only pay off at a corpus hundreds of times larger, and would add a native extension; brute force needs nothing.
+
+A chunk the instruction names by provision, e.g. "7 § LAS" or "2 kap. 9 § DL" (found as the post-check finds references), is always a candidate, ahead of the fused ranking. Neither half ranks an exact section reliably: other sections of the same law share its words, and its section number is a common token.
 
 ## Query translation
 
-A lawyer's instruction becomes vocabulary tags for the search (`translateQuery`; the query flow in E5/E6 will call it, the server so far only validates the settings). `QUERY_TRANSLATOR_IMPL` chooses how:
+A lawyer's instruction becomes vocabulary tags for the search (`translateQuery`; the query flow calls it when the retriever uses tags, `tags` or `both`, and skips it for `RETRIEVER=bge`). `QUERY_TRANSLATOR_IMPL` chooses how:
 
 - `llm` (default): the query translator's LLM, with the whole vocabulary in a cached Swedish system prompt. It returns at most 8 slugs, and unknown or repeated ones are dropped.
 - `jev`: TypeSafe's JEV model, with the instruction as the state.
@@ -174,23 +199,30 @@ A lawyer's instruction becomes vocabulary tags for the search (`translateQuery`;
 
 Choosing a template (`employment` or `nda`) adds its preset tags from `sources/tags.json`. A template without free text uses only its presets and calls no translator. With free text, the presets come first, followed by up to 8 translated tags that are not presets. Without free text and without a template, the result is no tags. Every translation reports the time it took and, when the translator gives it, the tokens it used.
 
-## Judging
+## Reranking
 
-A judge decides whether a candidate chunk is relevant to the lawyer's instruction (`createJudge`; the query flow in E5/E6 will call it, the server so far only validates the settings). Both judges answer the same question about the same text: the chunk's source reference and text, asked "Är texten relevant för följande uppdrag: <instruktion>?". Each returns a score from 0 to 1, whether it reaches `JUDGE_THRESHOLD` (default 0.5), which judge answered, and the tokens used. `JUDGE_IMPL` chooses how:
+The relevance step sits behind one `Reranker` interface (`backend/src/rerank/`). `RERANKER` in `.env` picks the implementation, and nothing else in the code branches on it:
 
-- `jev-with-fallback` (default): JEV, with the chunk as the state and the question as one Noul question. When JEV fails (timeout, network or HTTP error, malformed answer), the judge's LLM answers instead, and a warning names the chunk and the cause. Without `JEV_API_KEY` the server logs a warning at startup and judges with the LLM.
-- `jev`: JEV only; an error is thrown. Needs `JEV_API_KEY`.
+- `bge` (default): the local cross-encoder bge-reranker-v2-m3 (see [Local models](#local-models)). It scores each chunk's heading path and text against the instruction and turns the logit into a score with a sigmoid. Pairs over 1,024 tokens are cut at the end of the chunk, with a warning. Its scores are not calibrated like JEV's or the LLM's, so it has its own threshold, `RERANK_THRESHOLD_BGE` (default 0: only `RERANK_TOP_K` cuts); `RERANKER_DTYPE` (`int8` default, or `fp32`) and `RERANKER_BATCH_SIZE` (default 8) tune it. Nothing is cached.
 - `llm`: the judge's LLM (`LLM_JUDGE_PROVIDER`/`LLM_JUDGE_MODEL`), asked for the probability that the answer is yes.
+- `jev`: JEV, with the chunk as the state and the question as one Noul question. When a JEV call fails (timeout, network or HTTP error, malformed answer), the judge's LLM answers that chunk instead, and a warning names the chunk and the cause. Needs `JEV_API_KEY`; without it the server refuses to start.
+- `qwen3`: a placeholder for a later experiment.
+
+`JUDGE_IMPL` was replaced by `RERANKER`; a `.env` that still sets it fails at startup. A reranker scores every candidate, drops those below the threshold and unknown chunks, and returns the best `RERANK_TOP_K` (default 8), best first. Every reranker returns the same shape: the chunk, a score from 0 to 1, the reranker and its model. Adding one is a new file with a `RerankerEntry` and one entry in `RERANKERS` (`backend/src/rerank/factory.ts`).
+
+The `jev` and `llm` rerankers ask the same question about the same text: the chunk's source reference and text, "Är texten relevant för följande uppdrag: <instruktion>?". A chunk is relevant when its score reaches `JUDGE_THRESHOLD` (default 0.5).
+
+An `Embedder` interface (`backend/src/embedding/`, `EMBEDDER=bge`) gives the local bge-m3 embeddings (see [Local models](#local-models)); `npm run index:embed` and `RETRIEVER=bge`/`both` use it (see [Hybrid retrieval](#hybrid-retrieval)).
 
 JEV gets `JUDGE_TIMEOUT_MS` (default 10000) per judgement and is not retried. Chunks are sent whole; one that JEV refuses as too large falls back like any other JEV error.
 
 ### Parallel judging and the judge cache
 
-`judgeAll(instruction, chunks, deps, { cache })` judges a query's candidate chunks with the judge from `createJudging` (the judge, its cache identity and the threshold, from one config) in parallel, at most `JUDGE_CONCURRENCY` (default 8) calls at a time. A chunk whose judgement fails, or takes longer than `JUDGE_CHUNK_TIMEOUT_MS` (default 30000, fallback included), is `unknown`: it counts as not relevant, and a warning names it. When `JUDGE_TOTAL_TIMEOUT_MS` (default 60000) is reached, calls in flight are cancelled, every chunk not yet judged is `unknown`, and the judgements finished so far are returned.
+The `jev` and `llm` rerankers judge through `judgeAll(instruction, chunks, deps, { cache })`. It judges a query's candidate chunks with the judge from `createJudging` (the judge, its cache identity and the threshold, from one config) in parallel, at most `JUDGE_CONCURRENCY` (default 8) calls at a time. A chunk whose judgement fails, or takes longer than `JUDGE_CHUNK_TIMEOUT_MS` (default 30000, fallback included), is `unknown`: it counts as not relevant, and a warning names it. When `JUDGE_TOTAL_TIMEOUT_MS` (default 60000) is reached, calls in flight are cancelled, every chunk not yet judged is `unknown`, and the judgements finished so far are returned.
 
-Scores are cached in the `judge_cache` table:
+Scores of the `jev` and `llm` rerankers are cached in the `judge_cache` table:
 
-- The key is the question asked about the instruction (trimmed, lower-cased, whitespace collapsed), the judge (JEV for `jev` and `jev-with-fallback`, else the LLM), its model and the chunk. A chunk whose text has changed is judged again.
+- The key is the question asked about the instruction (trimmed, lower-cased, whitespace collapsed), the judge (JEV for `jev`, else the LLM), its model and the chunk. A chunk whose text has changed is judged again.
 - Only the primary judge's scores are stored, so an LLM fallback answer is asked for again next time.
 - Relevance is decided against the current `JUDGE_THRESHOLD` when the score is read, so changing the threshold needs no new calls.
 - `JUDGE_CACHE=off`, or `{ cache: false }` per call, skips the cache entirely, e.g. for timing measurements. Deleting the table's rows clears it.
@@ -202,6 +234,59 @@ The result has each chunk's status (`judged`, `cached` or `unknown`), score, rel
 TypeSafe does not document JEV's maximum state size, pricing or rate limits. `npm run jev:probe` measures them against the real API with the judge's timeout `JUDGE_TIMEOUT_MS` (needs `JEV_API_KEY`; the calls are billed): latency over 10 sequential calls, the largest state accepted (doubling from 1,000 characters) and how a burst of 20 concurrent calls is answered.
 
 **Observed so far: nothing.** The project has no JEV key yet, so the limits are not measured, and JEV's request shape is only checked against the documentation with faked responses. Run the probe once a key exists and record the results here.
+
+## Local models
+
+bge-m3 (embeddings) and bge-reranker-v2-m3 (reranking) run locally, in Node, through [transformers.js](https://github.com/huggingface/transformers.js) 3.x on onnxruntime-node, on the CPU. They are downloaded from Hugging Face on first use into `MODEL_CACHE_DIR` (default `data/models.nosync`, git-ignored; the `.nosync` suffix keeps iCloud Drive from uploading the models when the repo is in a synced folder such as `~/Documents`): about 0.6 GB per model in int8 and 2.3 GB in fp32. `EMBEDDER_DTYPE` picks the precision (`int8` by default).
+
+```bash
+npm run embed:smoke                   # "7 § LAS" must be nearer LAS 7 § than Dataskyddslagen 1 kap. 7 §
+npm run models:bench -- --dtype int8  # load and run times, peak memory (once per precision)
+```
+
+### Runtime decision (E8-2)
+
+Measured on the demo machine (MacBook Pro, Intel Core i5-8257U, 4 cores, 8 GB RAM, no GPU), with `npm run models:bench`: load time from the local cache, 100 real chunks (about 1,000 characters each) embedded in batches of 8, 100 (instruction, chunk) pairs scored in batches of 8 with at most 1,024 tokens, and the process's peak resident memory with both models loaded (`maxRSS`).
+
+| dtype | bge-m3 load | embed 100 chunks | reranker load | score 100 pairs | peak RSS |
+| ----- | ----------- | ---------------- | ------------- | --------------- | -------- |
+| int8  | 3.7 s       | 73.1 s           | 4.1 s         | 74.5 s          | 1.84 GB  |
+| fp32  | 8.1 s       | 100.2 s          | 9.6 s         | 116.2 s         | 2.37 GB  |
+
+Run-to-run variation on this laptop is large: earlier runs, with other work on the machine, took 117–125 s (int8) and 114–120 s (fp32) to embed the same 100 chunks.
+
+**Decision: transformers.js in Node, no Python sidecar.**
+
+- Both models load and run in TypeScript. A sidecar would run the same models on the same four cores, so it could not remove the cost their size sets (below); it would only add a second runtime.
+- The time is set by the models' size: each has about 568M parameters, so a chunk of a few hundred tokens takes 0.7–1.2 s on this CPU. int8 is up to about a quarter faster than fp32 here and a quarter of the download, and is the default; E8-5 decides between them on recall.
+- Embedding all ~2,100 chunks once (E8-4) takes roughly 25–45 minutes; reranking 30 candidates takes roughly 20–40 seconds per query.
+- Peak memory stays under 2.4 GB with both models loaded, even in fp32, which leaves room on the 8 GB machine.
+- transformers.js **3.x**, not 4.x: 4.x requires onnxruntime-node 1.30, which ships no Intel macOS binary; 3.x uses 1.21, which does.
+- `npm audit` reports 6 advisories through transformers.js 3.x (2 high in `sharp`, its image library; 4 moderate in `global-agent`/`sprintf-js`, used only by onnxruntime-node's install script, which npm does not run here). The project processes no images and never runs that script, so none of the vulnerable code is reached. The only fix is transformers.js 4.x; move to it when the demo machine is Apple Silicon or ONNX Runtime ships an Intel macOS binary again.
+
+**Sparse output is not available.** The ONNX export gives bge-m3's dense vectors only; its sparse (lexical) weights come from a separate `sparse_linear.pt` head that is not part of any ONNX repackaging. E8-4 therefore uses SQLite FTS5 BM25 as the lexical half of hybrid search.
+
+**Law abbreviations.** bge-m3 does not know Swedish law abbreviations: "7 § LAS" came out nearer Dataskyddslagen 1 kap. 7 § (cosine 0.485) than LAS 7 § (0.478), in int8 and fp32 alike. The embedder therefore spells out known abbreviations in queries (E6-3's table: "7 § LAS" → "7 § LAS (Lag (1982:80) om anställningsskydd)"), after which LAS 7 § wins clearly (0.578 against 0.474).
+
+### Rerank latency (E8-3)
+
+`npm run bench:rerank -- --dtype int8|fp32` reranks 30 and 50 real chunks (spread over the corpus, 1,033 characters on average) against a Swedish instruction on the demo machine, 5 runs each, in batches of 8 pairs of similar length:
+
+| dtype | 30 chunks (median of 5) | 50 chunks (median of 5) | model load |
+| ----- | ----------------------- | ----------------------- | ---------- |
+| int8  | 29.2 s                  | 54.6 s                  | 4.2 s      |
+| fp32  | 41.7 s                  | 79.2 s                  | 9.7 s      |
+
+Measured with a 1-minute load average of 3.9 at the start (iCloud Drive was still syncing); the model load includes scoring one pair. Batching pairs of similar length made this about 15–20 % faster than batching in candidate order (35.9 s and 64.6 s in int8). int8 is about 30 % faster than fp32 here. At about 1 s per chunk, reranking 30 candidates takes about half a minute per query on this laptop.
+
+### Licences
+
+Checked on the Hugging Face model cards on 2026-10-11:
+
+| Model              | Repository used                                                                                                                                                                                    | Licence                                                                                            |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| bge-m3             | [`Xenova/bge-m3`](https://huggingface.co/Xenova/bge-m3) (ONNX), from [`BAAI/bge-m3`](https://huggingface.co/BAAI/bge-m3)                                                                           | MIT (both)                                                                                         |
+| bge-reranker-v2-m3 | [`onnx-community/bge-reranker-v2-m3-ONNX`](https://huggingface.co/onnx-community/bge-reranker-v2-m3-ONNX) (ONNX), from [`BAAI/bge-reranker-v2-m3`](https://huggingface.co/BAAI/bge-reranker-v2-m3) | Apache-2.0 (BAAI); the ONNX repackaging states no licence of its own and inherits the base model's |
 
 ## Evaluation
 
@@ -215,13 +300,13 @@ npm run eval:run                              # precision, recall and the thresh
 `eval:run` runs every query through four modes and prints precision and recall (macro averages over the queries):
 
 - `tags`: tag-search candidates (E4-1);
-- `tags+jev`: those candidates as approved by the judge with `JUDGE_IMPL=jev-with-fallback`;
-- `tags+llm`: the same, with `JUDGE_IMPL=llm`;
+- `tags+jev`: those candidates as approved by the `jev` reranker;
+- `tags+llm`: the same, with the `llm` reranker;
 - `fts`: full-text candidates only (E4-3).
 
-For each judge mode, thresholds from 0.1 to 0.9 are applied to the judge's scores, and the threshold with the highest F1 is recommended. The judge cache is on, so the sweep and repeated runs cost no new calls. The full report, with one row per query, goes to `reports/eval-<timestamp>.md`.
+Here a reranker keeps every relevant candidate, not only `RERANK_TOP_K`, so the numbers stay comparable with the first run. For each judge mode, thresholds from 0.1 to 0.9 are applied to the judge's scores, and the threshold with the highest F1 is recommended. The judge cache is on, so the sweep and repeated runs cost no new calls. The full report, with one row per query, goes to `reports/eval-<timestamp>.md`.
 
-Without `JEV_API_KEY`, `tags+jev` is answered by the LLM, and the report says so. To run without the paid API, use the Claude Code provider. It starts the `claude` CLI without `ANTHROPIC_API_KEY`, so the calls go to your subscription even when `.env` has a key. A `claude` call takes several seconds, so give the judge more time than the defaults, which are sized for JEV and the API:
+Without `JEV_API_KEY`, `tags+jev` is answered by the `llm` reranker, and the report says so. To run without the paid API, use the Claude Code provider. It starts the `claude` CLI without `ANTHROPIC_API_KEY`, so the calls go to your subscription even when `.env` has a key. A `claude` call takes several seconds, so give the judge more time than the defaults, which are sized for JEV and the API:
 
 ```bash
 LLM_PROVIDER=claude-code LLM_MODEL=claude-haiku-5-5 LLM_TIMEOUT_MS=120000 \
@@ -230,13 +315,34 @@ LLM_PROVIDER=claude-code LLM_MODEL=claude-haiku-5-5 LLM_TIMEOUT_MS=120000 \
 
 The first run's report is kept in `eval/report-2026-10-11.md`. A query that fails, e.g. because the CLI keeps failing, is listed in the report and left out of the averages, and the command exits non-zero.
 
+### Comparing retrievers and rerankers
+
+```bash
+npm run eval:run -- --reranker bge,llm [--retriever tags,bge,both]
+```
+
+With `--reranker`, `eval:run` compares rerankers instead (E8-5). Every query goes through each retriever (`--retriever`, default the configured `RETRIEVER`; `fts` is always added as a baseline), and each candidate list through each reranker, which keeps every relevant candidate. One row per retriever and reranker gives recall@5/@8/@10 and recall over all candidates, before rerank (the retriever's own order, reranker `none`) and after it, precision@5/@10 after rerank, and the median and p90 latency per query of the rerank and of retrieval. The table is printed and appended to the table in that day's `eval/report-<date>.md`; every report has the same columns, so rows from different days, e.g. JEV once credits exist, can be put side by side. The command exits non-zero when queries failed.
+
+- `tags` here is E5-3's tag search without the full-text fallback; `bge` and `both` need `npm run index:embed`.
+- A reranker that cannot run is a skipped row with the reason, e.g. `jev` without `JEV_API_KEY` or `qwen3` (not implemented); the others still run.
+- The local models are loaded before anything is timed. A reranker whose scores came from the judge cache takes its latency from the queries without cache hits, or, with fewer than 5 of those, from a cache-off pass over the first 5 queries; its row says which.
+- BGE in int8 and fp32 are two runs: `RERANKER_DTYPE=int8` and `RERANKER_DTYPE=fp32`.
+
+### Switch reranker in three steps
+
+1. Set `RERANKER=` in `.env`: `bge` (local, default), `llm`, `jev` or `qwen3` (not implemented yet).
+2. Fill in what it needs: `JEV_API_KEY` for `jev`; the judge's LLM settings for `llm`; nothing for `bge`, whose model downloads into `MODEL_CACHE_DIR` on first use (`RERANKER_DTYPE` picks int8 or fp32).
+3. Verify with `npm run retrieve -- "<question>"` (one question, the reranked chunks and their scores) or `npm run eval:run -- --reranker <name>` (the evaluation set).
+
+Nothing else changes: the query flow and `eval:run` only know the `Reranker` interface.
+
 ## Prompt templates
 
 The generator drafts contracts from the Swedish prompt templates in [`prompts/`](prompts/): `employment.md` (employment agreement) and `nda.md` (NDA), one per template id. Each template fixes the required contract sections, the inline citation format `[K:<chunk-id>]`, the `[lön]`-style placeholders for details the instruction does not give, the fictional default parties and the not-legal-advice disclaimer. [`prompts/README.md`](prompts/README.md) documents the file structure, the slots and the citation format.
 
 ## Query and draft
 
-`npm run query` runs the whole query flow in the terminal: query translation, candidate search (`tags+fts`), judging and the draft.
+`npm run query` runs the whole query flow in the terminal: query translation (skipped for `RETRIEVER=bge`), retrieval with the configured `RETRIEVER` (`tags` is tag search with the full-text fallback), reranking and the draft.
 
 ```bash
 npm run query -- "Anställningsavtal för en säljare med sex månaders provanställning" --template employment
@@ -252,13 +358,13 @@ npm run query -- "<instruction>" --template nda --max-chunks 30 --max-context-ch
 - the post-check (E6-3): the source accuracy (the share of `[K:]` citations and free-text legal references such as "7 § LAS" or "AD 2019 nr 35" that match a chunk sent to the generator) and every flagged reference with its position in the draft;
 - the time in ms and the tokens for each step.
 
-The approved chunks go to the generator best first, up to `GENERATOR_MAX_CHUNKS` (default 20) and `GENERATOR_MAX_CONTEXT_CHARS` (default 60 000). When the limits leave chunks out, the output says how many and prints the same command with `--max-chunks` and `--max-context-chars` large enough to include them all. Running it again repeats the whole flow. Judge scores that are cached (from JEV, or from the LLM with `JUDGE_IMPL=llm`) are reused, but LLM fallback answers under `jev-with-fallback` are not cached, and an LLM query translator may pick other tags, so the rerun can find somewhat different chunks. When the judge approves nothing, or no approved chunk fits the limits, no draft is written.
+The reranker keeps at most `RERANK_TOP_K` (default 8) approved chunks. They go to the generator best first, up to `GENERATOR_MAX_CHUNKS` (default 20) and `GENERATOR_MAX_CONTEXT_CHARS` (default 60 000). When the limits leave chunks out, the output says how many and prints the same command with `--max-chunks` and `--max-context-chars` large enough to include them all. Running it again repeats the whole flow. Judge scores that are cached (from JEV with `RERANKER=jev`, or from the LLM with `RERANKER=llm`) are reused, but LLM answers standing in for a failed JEV call are not cached, and an LLM query translator may pick other tags, so the rerun can find somewhat different chunks. When the reranker approves nothing, or no approved chunk fits the limits, no draft is written.
 
-Example drafts for both templates, made with the Claude Code provider, are in [`prompts/examples/`](prompts/examples/). To run on the subscription instead of the paid API, use the settings they were made with (`JUDGE_IMPL=llm` reuses the evaluation's cached LLM scores while there is no JEV key):
+Example drafts for both templates, made with the Claude Code provider, are in [`prompts/examples/`](prompts/examples/). To run on the subscription instead of the paid API, use the settings they were made with (`RERANKER=llm`, called `JUDGE_IMPL=llm` then, reuses the evaluation's cached LLM scores while there is no JEV key):
 
 ```bash
 LLM_PROVIDER=claude-code LLM_MODEL=claude-haiku-5-5 LLM_GENERATOR_MODEL=claude-sonnet-5-5 \
-  JUDGE_IMPL=llm JUDGE_CHUNK_TIMEOUT_MS=150000 JUDGE_TOTAL_TIMEOUT_MS=900000 \
+  RERANKER=llm JUDGE_CHUNK_TIMEOUT_MS=150000 JUDGE_TOTAL_TIMEOUT_MS=900000 \
   npm run query -- "Sekretessavtal för en konsult som får tillgång till kunddata och affärsplaner." --template nda
 ```
 

@@ -75,7 +75,7 @@ export function formatAsMarkdown(result: EvalResult, context: ReportContext): st
         `| ${escapeCell(query.id)} | ${query.kind} | ${query.template ?? '–'} | ${tags.length} | ${query.relevantIds.size} | ` +
         EVAL_MODES.map(
           (mode) =>
-            `${format(relevance[mode].precision)} / ${format(relevance[mode].recall)} (${returned[mode].length})`,
+            `${formatScore(relevance[mode].precision)} / ${formatScore(relevance[mode].recall)} (${returned[mode].length})`,
         ).join(' | ') +
         ' |',
     ),
@@ -94,10 +94,10 @@ function failureLines({ failed }: EvalResult): string[] {
 
 /** Which judge was configured and which actually answered, e.g. when the LLM stood in for JEV. */
 function judgeNote(result: EvalResult, mode: JudgeMode): string {
-  const { impl, model } = result.judges[mode];
+  const { name, model } = result.judges[mode];
   const { jev, llm } = result.answeredBy[mode];
-  const configured = `configured judge ${impl} (${model})`;
-  if (mode === 'tags+jev' && impl === 'llm') {
+  const configured = `configured judge ${name} (${model})`;
+  if (mode === 'tags+jev' && name === 'llm') {
     return `${configured}: no JEV_API_KEY, so the LLM answered all ${llm} judgements instead of JEV`;
   }
   return `${configured}; answered by JEV ${jev}, by the LLM ${llm}`;
@@ -109,15 +109,15 @@ function mark(result: EvalResult, mode: JudgeMode, row: SweepRow): string {
 
 function scoreColumns(scores: ModeScores): string {
   return [scores.precision, scores.recall, scores.f1]
-    .map((value) => format(value).padEnd(10))
+    .map((value) => formatScore(value).padEnd(10))
     .join(' ')
     .trimEnd();
 }
 
 function scoreCells(scores: ModeScores): string {
-  return [scores.precision, scores.recall, scores.f1].map(format).join(' | ');
+  return [scores.precision, scores.recall, scores.f1].map(formatScore).join(' | ');
 }
 
-function format(value: number): string {
+export function formatScore(value: number): string {
   return value.toFixed(3);
 }
