@@ -26,6 +26,7 @@
     "embed:smoke": "tsx --env-file-if-exists=../.env src/embedding/smoke.ts",
     "eval:label": "tsx --env-file-if-exists=../.env src/eval/cli.ts label",
     "eval:run": "tsx --env-file-if-exists=../.env src/eval/cli.ts run",
+    "bench:compare": "tsx --env-file-if-exists=../.env src/eval/cli.ts bench",
     "query": "tsx --env-file-if-exists=../.env src/generation/cli.ts"
   },
   "dependencies": {

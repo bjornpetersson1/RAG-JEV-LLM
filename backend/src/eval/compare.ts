@@ -5,7 +5,7 @@
 import { describeError } from '../errors.js';
 import type { Chunk } from '../llm/types.js';
 import type { Reranker } from '../rerank/types.js';
-import { mean, percentile } from '../stats.js';
+import { latencyOf, mean, type Latency } from '../stats.js';
 import { precisionAt, recallAt } from './metrics.js';
 import type { ResolvedQuery } from './queries.js';
 
@@ -46,11 +46,6 @@ export interface CompareDependencies {
   onQuery?(query: ResolvedQuery, index: number, total: number): void;
   /** A step that failed for one query, e.g. a translation; the run goes on without it. */
   onFailure?(step: string, query: ResolvedQuery, error: string): void;
-}
-
-export interface Latency {
-  median: number;
-  p90: number;
 }
 
 /** Recall at 5, 8, 10 and the whole list. */
@@ -315,12 +310,6 @@ function recallOver(lists: readonly QueryList[]): RecallAt {
     '10': at(() => 10),
     candidates: at((ids) => ids.length),
   };
-}
-
-function latencyOf(times: readonly number[]): Latency {
-  if (times.length === 0) return { median: 0, p90: 0 };
-  const sorted = [...times].sort((a, b) => a - b);
-  return { median: percentile(sorted, 0.5), p90: percentile(sorted, 0.9) };
 }
 
 function rowKey(retriever: string, reranker: string): string {

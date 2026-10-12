@@ -70,7 +70,7 @@ export async function retrieve(
     }),
     timings: {
       translationMs,
-      embedMs,
+      embedMs: embedMs ?? 0,
       retrievalMs: searchMs,
       rerankMs: stats.elapsedMs,
       totalMs: elapsedMs(started),

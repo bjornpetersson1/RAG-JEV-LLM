@@ -1,4 +1,5 @@
-// `npm run eval:label -- <query id> [--chars <n>]` and `npm run eval:run` (E5-3).
+// `npm run eval:label -- <query id> [--chars <n>]`, `npm run eval:run` (E5-3) and
+// `npm run bench:compare` (E5-4).
 
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -20,11 +21,17 @@ import { compareRerankers } from './compare.js';
 import { parseRunArgs, type RunArgs } from './compare-args.js';
 import { appendToReport, comparisonTable } from './compare-report.js';
 import { createCompareSetup } from './compare-setup.js';
+import { benchCompare } from './bench-compare.js';
+import { parseBenchArgs, type BenchArgs } from './bench-compare-args.js';
+import { appendBenchToReport, benchTable } from './bench-compare-report.js';
+import { createBenchSetup } from './bench-compare-setup.js';
+import { formatSeconds } from '../models/bench-args.js';
 
 const EVAL_QUERIES_PATH = join(REPO_ROOT, 'eval', 'queries.yaml');
 const DEFAULT_TEXT_CHARS = 300;
 const USAGE =
-  'Usage: eval <label <query id> [--chars <n>] | run [--reranker <names> [--retriever <names>]]>';
+  'Usage: eval <label <query id> [--chars <n>] | run [--reranker <names> [--retriever <names>]] | ' +
+  'bench [--runs <n>] [--limit <n>] [--no-draft]>';
 
 // Every call and search logs at info level; only problems are worth showing during a long run.
 const problemLogger = createConsoleLogger({ quiet: true });
@@ -42,6 +49,7 @@ async function run(args: string[]): Promise<number> {
     const compare = parseRunArgs(rest, Object.keys(RERANKERS));
     return compare ? runComparison(compare) : runEval();
   }
+  if (command === 'bench') return runBench(parseBenchArgs(rest));
   if (command === 'label') {
     const label = parseLabelArgs(rest);
     if (label) return runLabel(label.queryId, label.textChars);
@@ -121,6 +129,36 @@ function runComparison({ rerankers, retrievers }: RunArgs): Promise<number> {
     appendToReport(path, rows, date);
     console.log(`\n${comparisonTable(rows, date)}\n\nAppended to ${path}`);
     return rows.some((row) => row.failed) ? 1 : 0;
+  });
+}
+
+/**
+ * `bench`: the main flow and the reference RAG over the evaluation queries (E5-4), printed and
+ * appended to `eval/report-<date>.md`.
+ */
+function runBench({ runs, limit, draft }: BenchArgs): Promise<number> {
+  const queries = readEvalQueries(EVAL_QUERIES_PATH);
+  return withDatabase(async (db) => {
+    // The whole set is checked first; --limit only picks the queries to run.
+    const resolved = resolveEvalQueries(queries, db).slice(0, limit);
+    const { flows, warmUp } = createBenchSetup(db, process.env, problemLogger);
+    await warmUp();
+    const summaries = await benchCompare(resolved, flows, {
+      runs,
+      draft,
+      onResult: ({ flow, query, run, index, result }) =>
+        console.log(
+          `[run ${run + 1}/${runs}] [${index + 1}/${resolved.length}] ${query.id} ${flow}: ` +
+            `${formatSeconds(result.timings.totalMs, 1)}, ${result.approved.length} chunks`,
+        ),
+      onFailure: ({ flow, query, run, error }) =>
+        console.error(`[run ${run + 1}/${runs}] ${query.id} ${flow} failed: ${error}`),
+    });
+    const date = localDate();
+    const path = join(REPO_ROOT, 'eval', `report-${date}.md`);
+    appendBenchToReport(path, summaries, date);
+    console.log(`\n${benchTable(summaries, date)}\n\nAppended to ${path}`);
+    return summaries.some((summary) => summary.failures > 0) ? 1 : 0;
   });
 }
 

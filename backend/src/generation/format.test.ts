@@ -23,9 +23,11 @@ const DRAFT: GenerationResult = {
 
 function result(draft?: GenerationResult, relevant = draft ? 2 : 0): QueryResult {
   return {
+    flow: 'main',
     tags: ['anstallningsavtal', 'provanstallning'],
     candidates: 30,
-    judging: { approved: draft ? 2 : 0, relevant, cacheHits: 4, judgeCalls: 26, unknown: 0 },
+    approved: draft ? [...draft.used, ...draft.unused] : [],
+    judging: { relevant, cacheHits: 4, judgeCalls: 26, unknown: 0 },
     draft,
     timings: {
       translationMs: 800,
@@ -178,5 +180,48 @@ describe('formatQueryResult', () => {
     expect(output).toContain('No relevant sources were found, so no draft was generated.');
     expect(output).toContain('Time (ms): translation 800 · search 15 · judging 3000 · total 4715');
     expect(output).not.toContain('generation');
+  });
+
+  it('shows the embedding time inside the search time when the retriever embeds', () => {
+    const embedded = result();
+    embedded.timings = { ...embedded.timings, embeddingMs: 400, searchMs: 415 };
+
+    expect(formatQueryResult(REQUEST, embedded)).toContain('search 415 (embedding 400)');
+  });
+
+  it('prints the reference RAG without tags or judging, and its own steps', () => {
+    const reference: QueryResult = {
+      ...result(DRAFT),
+      flow: 'reference',
+      tags: [],
+      candidates: 8,
+      judging: undefined,
+      timings: { embeddingMs: 400, searchMs: 410, generationMs: 900, totalMs: 1310 },
+      usage: { generation: DRAFT.usage },
+    };
+
+    const output = formatQueryResult(REQUEST, reference);
+
+    expect(output).toContain(
+      'Reference RAG: the 8 chunks most similar to the instruction (no tags, no rerank)',
+    );
+    expect(output).not.toContain('Tags:');
+    expect(output).not.toContain('judge calls');
+    expect(output).toContain(
+      'Time (ms): search 410 (embedding 400) · generation 900 · total 1310\n' +
+        'Tokens: generation in 5000 / out 1200',
+    );
+  });
+
+  it('adds --reference to the rerun command of a reference run', () => {
+    const limited: GenerationResult = {
+      ...DRAFT,
+      leftOut: [{ id: '13', text: 'c', source: 'SFS 1982:80 12 §' }],
+      context: { ...DRAFT.context, limitedBy: ['maxChunks'] },
+    };
+
+    expect(formatQueryResult(REQUEST, { ...result(limited), flow: 'reference' })).toContain(
+      '--max-chunks 2 --max-context-chars 2 --reference',
+    );
   });
 });

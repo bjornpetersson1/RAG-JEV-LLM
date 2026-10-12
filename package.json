@@ -35,6 +35,7 @@
     "embed:smoke": "npm run embed:smoke -w backend",
     "eval:label": "npm run eval:label -w backend --",
     "eval:run": "npm run eval:run -w backend --",
+    "bench:compare": "npm run bench:compare -w backend --",
     "query": "npm run query -w backend --"
   },
   "devDependencies": {

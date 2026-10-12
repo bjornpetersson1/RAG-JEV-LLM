@@ -20,8 +20,8 @@ import {
 export interface Retrieval {
   /** Best first. */
   candidates: Candidate[];
-  /** Time to embed the instruction; 0 for tag search. */
-  embedMs: number;
+  /** Time to embed the instruction; absent when it was not embedded (tag search). */
+  embedMs?: number;
   /** Time for the searches and the fusion. */
   searchMs: number;
 }
@@ -53,7 +53,7 @@ export function createRetriever(config: RetrievalConfig, deps: RetrieverDependen
       async retrieve(instruction, tags) {
         const started = performance.now();
         const { candidates } = candidateSearch.search({ instruction, tags, mode: 'tags+fts' });
-        return { candidates, embedMs: 0, searchMs: elapsedMs(started) };
+        return { candidates, searchMs: elapsedMs(started) };
       },
     };
   }
@@ -98,7 +98,7 @@ export function createRetriever(config: RetrievalConfig, deps: RetrieverDependen
         fuseRankings(rankings, rrfK, limit),
         limit,
       );
-      return { candidates, embedMs, searchMs: elapsedMs(searchStarted) };
+      return { candidates, ...(query && { embedMs }), searchMs: elapsedMs(searchStarted) };
     },
   };
 }

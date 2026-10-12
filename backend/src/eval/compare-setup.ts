@@ -7,7 +7,7 @@ import { elapsedMs } from '../http.js';
 import type { Env } from '../env.js';
 import type { LlmLogger } from '../llm/client.js';
 import { loadLlmConfig, type LlmConfig } from '../llm/config.js';
-import { loadSampleChunks } from '../models/passages.js';
+import { warmUpLocalModels } from '../models/warm-up.js';
 import { loadRetrievalConfig, type RetrieverName } from '../retrieval/config.js';
 import { createRetriever } from '../retrieval/retriever.js';
 import { loadRetrievalResources, type RetrievalResources } from '../retrieval/setup.js';
@@ -51,7 +51,7 @@ export function createCompareSetup(
         const { candidates, embedMs, searchMs } = await retriever.retrieve(query.instruction, tags);
         return {
           ids: candidates.map(({ chunkId }) => String(chunkId)),
-          elapsedMs: embedMs + searchMs,
+          elapsedMs: (embedMs ?? 0) + searchMs,
         };
       },
     };
@@ -64,17 +64,12 @@ export function createCompareSetup(
       fromSearch('fts'),
     ],
     rerankers: compared,
-    // Loads the embedder and every local reranker (those with a dtype) on one chunk, so no row's
-    // first query pays for a model load. A failure here shows up again in the run itself.
-    async warmUp() {
-      const chunks = loadSampleChunks(db, 1);
-      if (loaded) await loaded.embedder.embed(['uppvärmning'], 'query').catch(() => {});
-      for (const reranker of compared) {
-        if ('cached' in reranker && reranker.cached.dtype) {
-          await reranker.cached.rerank('uppvärmning', chunks, 1).catch(() => {});
-        }
-      }
-    },
+    warmUp: () =>
+      warmUpLocalModels(
+        db,
+        loaded?.embedder,
+        compared.flatMap((reranker) => ('cached' in reranker ? [reranker.cached] : [])),
+      ),
     translate: (query) => search.translate(query),
     loadChunks: search.loadChunks,
     latencyQueries: 5,

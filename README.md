@@ -336,6 +336,32 @@ With `--reranker`, `eval:run` compares rerankers instead (E8-5). Every query goe
 
 Nothing else changes: the query flow and `eval:run` only know the `Reranker` interface.
 
+### Main flow vs reference RAG
+
+```bash
+npm run bench:compare [-- --runs 5] [--limit <n>] [--no-draft]
+```
+
+`bench:compare` (E5-4) runs every evaluation query through the main flow (as `.env` configures it) and the [reference RAG](#reference-rag), `--runs` times each (default 5). Within a run the two flows take turns going first, the embedder and a local reranker are loaded before anything is timed, and the judge cache is off, so an `llm` or `jev` reranker is measured on every run. One row per flow gives the median and p90 over every run of:
+
+- total time;
+- search time: retrieval and loading the chunks, embedding the instruction included, and the embedding time on its own (`–` for tag search, which embeds nothing);
+- rerank time (main flow only) and generation time;
+- LLM time: query translation, generation and, for `llm` or `jev`, the rerank (a local reranker such as `bge` is not LLM time);
+- precision and recall of the chunks sent to the generator (the main flow's approved chunks, the reference RAG's top k, in both cases those that fit the context limits when a draft is written), macro averages over the queries, averaged over the runs;
+- source accuracy: valid references / all references over every draft (E6-3).
+
+The table is printed and appended to the "Main flow vs reference RAG" table in that day's `eval/report-<date>.md`. `--limit <n>` runs only the first n queries and `--no-draft` measures retrieval and rerank without generation. A query that fails in a run is listed, and that query and run is left out of both flows, so the rows are compared on the same samples (the `samples` column counts them); a flow with no measured sample shows `–`. The command then exits non-zero.
+
+The first full run (2026-10-12, in `eval/report-2026-10-12.md`, 84 of 100 query and run pairs after the subscription's session limit stopped some calls): the reference RAG took a median 29.5 s against the main flow's 71.8 s with `RERANKER=bge`, almost all of the difference being the BGE rerank (37.0 s); the main flow sent better chunks (precision 0.398 against 0.302, recall 0.254 against 0.208); source accuracy was about equal (0.917 and 0.914).
+
+The full run (20 queries × 5 runs × 2 flows, each with a draft) takes about three hours, and a long run can reach the subscription's session limit: those calls fail and their query and run pairs are left out of both rows. To run it on the Claude Code subscription instead of the paid API:
+
+```bash
+LLM_PROVIDER=claude-code LLM_MODEL=claude-haiku-5-5 LLM_GENERATOR_MODEL=claude-sonnet-5-5 \
+  npm run bench:compare
+```
+
 ## Prompt templates
 
 The generator drafts contracts from the Swedish prompt templates in [`prompts/`](prompts/): `employment.md` (employment agreement) and `nda.md` (NDA), one per template id. Each template fixes the required contract sections, the inline citation format `[K:<chunk-id>]`, the `[lön]`-style placeholders for details the instruction does not give, the fictional default parties and the not-legal-advice disclaimer. [`prompts/README.md`](prompts/README.md) documents the file structure, the slots and the citation format.
@@ -369,6 +395,16 @@ LLM_PROVIDER=claude-code LLM_MODEL=claude-haiku-5-5 LLM_GENERATOR_MODEL=claude-s
 ```
 
 The token line shows the normally billed input plus cache writes and reads (e.g. `in 2 + cache 41230`), since with the Claude Code provider most of the input can be cache traffic.
+
+## Reference RAG
+
+A plain RAG to measure the main flow against (E5-4): it embeds the instruction with the configured `EMBEDDER`, takes the `REFERENCE_TOP_K` (default 8) chunks most similar to it by cosine similarity over the `index:embed` vectors, and drafts with the same generator, template, context limits and post-check as the main flow. There is no query translation, lexical search or rerank. It needs `npm run index:embed`.
+
+```bash
+npm run query -- "Anställningsavtal för en säljare med sex månaders provanställning" --template employment --reference
+```
+
+The output has the main flow's format, without tags or judging, and the time for embedding the instruction, search (embedding included), generation and in total. `npm run bench:compare` compares the two flows on the evaluation queries (see [Main flow vs reference RAG](#main-flow-vs-reference-rag)).
 
 ## LLM configuration
 

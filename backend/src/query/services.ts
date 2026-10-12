@@ -45,23 +45,27 @@ export function createQueryServices(
     tagIndexBuilder(searchConfig),
     logger,
   );
-  const selectChunks = db.prepare(
-    'SELECT id, text, source_ref, context FROM chunks WHERE id IN (SELECT value FROM json_each(?))',
-  );
-
   return {
     translation: { translator, vocabulary: vocabulary.tags, presets: vocabulary.presets },
     candidateSearch: createCandidateSearch({ db, tagIndex, config: searchConfig, logger }),
-    loadChunks(ids) {
-      const rows = selectChunks.all(JSON.stringify(ids.map(Number))) as unknown as ChunkRow[];
-      const byId = new Map(rows.map((row) => [String(row.id), row]));
-      return ids.flatMap((id): Chunk[] => {
-        const row = byId.get(id);
-        return row ? [{ id, text: row.text, source: row.source_ref, context: row.context }] : [];
-      });
-    },
+    loadChunks: createChunkLoader(db),
     translatorLabel:
       translatorConfig.impl === 'jev' ? 'jev' : roleLabel(llmConfig, 'queryTranslator'),
+  };
+}
+
+/** Loads the chunks with the given ids, in the given order; unknown ids are left out. */
+export function createChunkLoader(db: DatabaseSync): (ids: readonly string[]) => Chunk[] {
+  const selectChunks = db.prepare(
+    'SELECT id, text, source_ref, context FROM chunks WHERE id IN (SELECT value FROM json_each(?))',
+  );
+  return (ids) => {
+    const rows = selectChunks.all(JSON.stringify(ids.map(Number))) as unknown as ChunkRow[];
+    const byId = new Map(rows.map((row) => [String(row.id), row]));
+    return ids.flatMap((id): Chunk[] => {
+      const row = byId.get(id);
+      return row ? [{ id, text: row.text, source: row.source_ref, context: row.context }] : [];
+    });
   };
 }
 
