@@ -69,8 +69,13 @@ export function checkDraft(
     flags,
     references,
     valid,
-    sourceAccuracy: references === 0 ? null : valid / references,
+    sourceAccuracy: sourceAccuracy(valid, references),
   };
+}
+
+/** E6-3's source accuracy: valid references / all references, or null without references. */
+export function sourceAccuracy(valid: number, references: number): number | null {
+  return references === 0 ? null : valid / references;
 }
 
 /** Blanks out `[K:]` citations, keeping offsets, so their ids are not read as free text. */

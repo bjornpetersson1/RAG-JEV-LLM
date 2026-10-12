@@ -46,13 +46,20 @@ export interface RetrievalResources {
   vectorIndex: VectorIndex;
 }
 
+/**
+ * Where a flow gets its embedder and vectors: resources already loaded (shared between flows), an
+ * embedder whose vectors are still to be loaded (a fake one in tests), or by default `EMBEDDER`.
+ */
+export type RetrievalSource = RetrievalResources | Embedder | undefined;
+
 /** Fails, naming `npm run index:embed`, when the chunks are not embedded with this embedder. */
 export function loadRetrievalResources(
   db: DatabaseSync,
   env: Env,
-  /** A fake embedder in tests; by default `EMBEDDER`. */
-  embedder: Embedder = createEmbedder(env),
+  source?: RetrievalSource,
 ): RetrievalResources {
+  if (source && 'vectorIndex' in source) return source;
+  const embedder = source ?? createEmbedder(env);
   return { embedder, vectorIndex: loadVectorIndex(db, embeddingIdentity(embedder)) };
 }
 
@@ -61,13 +68,13 @@ export function createConfiguredRetriever(
   db: DatabaseSync,
   env: Env,
   candidateSearch: CandidateSearch,
-  embedder?: Embedder,
+  source?: RetrievalSource,
 ): Retriever {
   const config = loadRetrievalConfig(env);
   if (config.retriever === 'tags') return createRetriever(config, { db, candidateSearch });
   return createRetriever(config, {
     db,
     candidateSearch,
-    ...loadRetrievalResources(db, env, embedder),
+    ...loadRetrievalResources(db, env, source),
   });
 }

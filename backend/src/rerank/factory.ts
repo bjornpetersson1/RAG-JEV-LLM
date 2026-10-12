@@ -33,6 +33,11 @@ export function loadRerankerConfig(env: Env, registry = RERANKERS): RerankerConf
   return config;
 }
 
+/** Whether the reranker calls a remote model (an LLM or JEV), as its registry entry says. */
+export function isRemoteReranker(reranker: Pick<Reranker, 'name'>, registry = RERANKERS): boolean {
+  return registry[reranker.name]?.remote ?? false;
+}
+
 /** The reranker `RERANKER` selects, with `RERANK_TOP_K`; it reads its own settings once. */
 export function createReranker(
   env: Env,

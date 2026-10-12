@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createTestDatabase } from '../db/test-helpers.js';
 import { loadLlmConfig } from '../llm/config.js';
 import { createCapturingLogger } from '../llm/test-helpers.js';
-import { createReranker, loadRerankerConfig, RERANKERS } from './factory.js';
+import { createReranker, isRemoteReranker, loadRerankerConfig, RERANKERS } from './factory.js';
 import { fakeRerankResult } from './test-helpers.js';
 import type { RerankerEntry } from './types.js';
 
@@ -74,6 +74,7 @@ describe('createReranker', () => {
 
   it('adds a reranker with one registry entry and no other change', async () => {
     const fake: RerankerEntry = {
+      remote: false,
       validate() {},
       create: () => ({
         name: 'fake',
@@ -88,5 +89,17 @@ describe('createReranker', () => {
 
     expect(reranker.name).toBe('fake');
     expect(result.ranked.map(({ chunk }) => chunk.id)).toEqual(['a']);
+  });
+});
+
+describe('isRemoteReranker', () => {
+  it.each([
+    ['llm', true],
+    ['jev', true],
+    ['bge', false],
+    ['qwen3', false],
+    ['unregistered', false],
+  ])('says whether %s calls a remote model: %s', (name, remote) => {
+    expect(isRemoteReranker({ name })).toBe(remote);
   });
 });

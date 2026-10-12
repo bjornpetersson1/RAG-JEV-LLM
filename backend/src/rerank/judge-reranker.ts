@@ -17,6 +17,7 @@ export const llmReranker = judgeReranker('llm');
 
 function judgeReranker(impl: JudgeImpl): RerankerEntry {
   return {
+    remote: true,
     validate(env) {
       loadJudgeConfig(env, impl);
       loadJudgingConfig(env);

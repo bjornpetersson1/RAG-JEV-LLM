@@ -11,3 +11,15 @@ export function sum(values: readonly number[]): number {
 export function mean(values: readonly number[]): number {
   return values.length === 0 ? 0 : sum(values) / values.length;
 }
+
+export interface Latency {
+  median: number;
+  p90: number;
+}
+
+/** The median and p90 of `times`; 0 for no times. */
+export function latencyOf(times: readonly number[]): Latency {
+  if (times.length === 0) return { median: 0, p90: 0 };
+  const sorted = [...times].sort((a, b) => a - b);
+  return { median: percentile(sorted, 0.5), p90: percentile(sorted, 0.9) };
+}

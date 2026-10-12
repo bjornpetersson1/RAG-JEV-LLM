@@ -58,8 +58,8 @@ describe('runQuery', () => {
     expect(calls.generated).toEqual([['2', '1']]);
     expect(result.tags).toEqual(['uppsagning']);
     expect(result.candidates).toBe(3);
+    expect(result.approved.map((c) => c.id)).toEqual(['2', '1']);
     expect(result.judging).toEqual({
-      approved: 2,
       relevant: 2,
       cacheHits: 1,
       judgeCalls: 2,
@@ -74,6 +74,32 @@ describe('runQuery', () => {
     expect(result.usage).toEqual({ translation: USAGE, judging: USAGE, generation: NO_USAGE });
   });
 
+  it('reports the approved chunks and the time the search spent embedding', async () => {
+    const { deps } = fakeFlow({ '1': 0.6, '2': 0.9, '3': 0.2 });
+    const search = deps.search;
+
+    const result = await runQuery(
+      { instruction: 'Säljare', template: 'employment' },
+      { ...deps, search: async (...args) => ({ ...(await search(...args)), embedMs: 25 }) },
+    );
+
+    expect(result.flow).toBe('main');
+    expect(result.approved.map((c) => c.id)).toEqual(['2', '1']);
+    expect(result.timings.embeddingMs).toBe(25);
+  });
+
+  it('writes no draft when none is asked for', async () => {
+    const { deps, calls } = fakeFlow({ '1': 0.6, '2': 0.9 });
+
+    const result = await runQuery({ instruction: 'Säljare', template: 'nda' }, deps, {
+      draft: false,
+    });
+
+    expect(calls.generated).toEqual([]);
+    expect(result.approved).toHaveLength(2);
+    expect(result.draft).toBeUndefined();
+  });
+
   it('stops before generation when nothing is approved', async () => {
     const { deps, calls } = fakeFlow({ '1': 0.1, '2': 0.4 });
 
@@ -81,7 +107,8 @@ describe('runQuery', () => {
 
     expect(calls.generated).toEqual([]);
     expect(result.draft).toBeUndefined();
-    expect(result.judging).toMatchObject({ approved: 0, unknown: 1 });
+    expect(result.approved).toEqual([]);
+    expect(result.judging).toMatchObject({ unknown: 1 });
     expect(result.timings.generationMs).toBeUndefined();
     expect(result.usage.generation).toBeUndefined();
   });
@@ -118,7 +145,8 @@ describe('switching the reranker to JEV', () => {
 
     expect(reranker.name).toBe('jev');
     expect(jevCalls).toEqual(Array(3).fill('https://api.typesafe.ai/v1/systemone'));
-    expect(result.judging).toMatchObject({ approved: 3, judgeCalls: 3 });
+    expect(result.approved).toHaveLength(3);
+    expect(result.judging).toMatchObject({ judgeCalls: 3 });
     expect(result.draft?.used).toHaveLength(3);
   });
 });
@@ -181,7 +209,8 @@ describe('createQueryFlow', () => {
 
     expect(flow.translate !== undefined).toBe(translated);
     expect(result.tags.length > 0).toBe(translated);
-    if (!translated) expect(result.timings.translationMs).toBe(0);
+    expect(result.timings.translationMs !== undefined).toBe(translated);
+    expect(result.timings.embeddingMs !== undefined).toBe(retriever !== 'tags');
     expect(result.candidates).toBeGreaterThan(0);
     expect(result.draft?.text).toContain('inte juridisk rådgivning');
   });

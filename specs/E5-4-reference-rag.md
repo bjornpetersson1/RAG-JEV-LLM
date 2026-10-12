@@ -4,7 +4,7 @@
 - **Labels:** `E5 JEV`
 - **Phase:** 5. UI and measurement (shipped in the E7 epic, before E7-1)
 - **Depends on:** E2-4 (#7), E6-2 (#20), E6-3 (#21), E5-3 (#17), E8-4 (#68)
-- **Status:** Approved
+- **Status:** Implemented — all acceptance criteria verified (npm ci, lint, format:check, typecheck, 788 tests (784 backend, 4 frontend) and build exit 0; the full `bench:compare` run on the demo machine in `eval/report-2026-10-12.md` (84 of 100 pairs, session limit); `npm run query -- --reference` with the real embedder and vectors)
 
 ## Summary
 
@@ -50,14 +50,15 @@ A plain reference RAG (embed the instruction, take the dense top k from E8-4's v
 
 ## Tasks
 
-- [ ] `REFERENCE_TOP_K` (default 8) in config and `.env.example`.
-- [ ] Reference flow: embed → `denseRanking` → load chunks → `generateDraft`, with timings, returning the same result shape as `runQuery` (no tags, rerank fields empty).
-- [ ] `--reference` in `npm run query`.
-- [ ] `bench:compare` command and its argument parsing.
-- [ ] Benchmark runner: warm-up (load the embedder and the reranker before timing), alternate the flows within each run, judge cache off.
-- [ ] Measures and the table (reuse `eval` metrics, `stats` medians and the report writer).
-- [ ] README: reference RAG, `bench:compare`, how to run it on the subscription, and the first result.
-- [ ] Tests with fakes.
+- [x] `REFERENCE_TOP_K` (default 8) in config and `.env.example`.
+- [x] Reference flow: embed → `denseRanking` → load chunks → `generateDraft`, with timings, returning the same result shape as `runQuery` (no tags, rerank fields empty).
+- [x] `--reference` in `npm run query`.
+- [x] `bench:compare` command and its argument parsing.
+- [x] Benchmark runner: warm-up (load the embedder and the reranker before timing), alternate the flows within each run, judge cache off.
+- [x] Measures and the table (reuse `eval` metrics, `stats` medians and the report writer).
+- [x] README: reference RAG, `bench:compare` and how to run it on the subscription.
+- [x] The full default run on the demo machine, its table in `eval/report-<date>.md` and the README.
+- [x] Tests with fakes.
 
 ## Decisions
 
@@ -71,6 +72,26 @@ A plain reference RAG (embed the instruction, take the dense top k from E8-4's v
 - **LLM roles via the Claude Code provider for the real run** (owner's billing rule): the README command sets `LLM_PROVIDER=claude-code`, which starts `claude` without `ANTHROPIC_API_KEY`.
 - **Precision and recall over the chunks sent to the generator** (default): that is what each flow hands on; E7-4 adds precision@k.
 - **Results appended to `eval/report-<date>.md`** (default): like E8-5, so the comparison sits next to the retriever and reranker table.
+
+- **Settled while implementing**:
+  - **One runner for both flows** (clean code): the reference RAG is a set of query-flow steps (`reference/setup.ts`: a dense search, no translation, no rerank) that `runQuery` runs, so E7-1's streaming and E7-3's timings instrument one flow. In `QueryResult` a step that did not run is absent rather than 0: `judging`, `timings.translationMs`, `embeddingMs` and `judgingMs` are optional, `flow` names the flow, and `approved` lists the chunks handed to the generator (replacing `judging.approved`). Tag search reports no embedding time.
+  - **`runQuery` takes `{ draft: false }`** for `--no-draft`.
+  - **`createQueryFlow` also returns the reranker, the retriever, `RERANK_TOP_K` and the generator's label**, for the benchmark's configuration column (and E7-3's).
+  - **A remote rerank is one without a `dtype`** (`llm`, `jev`), decided in one place, `isRemoteReranker`: its time counts as LLM time.
+  - **Translation in the benchmark uses the query's own template**, as E5-3's evaluation does: only a query that chose a template gets its preset tags, while the prompt template comes from the query's contract (`kind`).
+  - **`--limit` takes the first n queries after the whole set is checked**, since `resolveEvalQueries` validates the complete set.
+  - **Shared helpers**: the chunk loader (`createChunkLoader`), the report tables (`eval/report-file.ts`, used by E8-5's table and this one, with `formatLatency`), `latencyOf` (moved to `stats.ts`), the model warm-up (`models/warm-up.ts`, also used by `eval:run --reranker`) and `sourceAccuracy` (E6-3's formula, exported from the post-check).
+- **Code review fixes**:
+  - **Precision and recall count the chunks the generator got**: with a draft, those that fit the context limits (`draft.used` and `draft.unused`), not every approved chunk.
+  - **The flows are compared on the same samples**: a query and run that failed in either flow is left out of both, and a flow with no measured sample shows `–`, not 0.
+  - **Embedding has its own column**, and the main flow's configuration names the embedder when `RETRIEVER` uses it.
+  - **Whether a reranker is remote is declared in its registry entry** (`RerankerEntry.remote`), not inferred from a missing `dtype`; `isRemoteReranker` reads it.
+  - **The vectors load once**: the benchmark loads the embedder and vectors and hands them to both flows (`RetrievalSource`).
+  - **Tag search reports no embedding time** at the source: `Retrieval.embedMs` is absent when the instruction was not embedded, so `createQueryFlow` needs no special case.
+  - **The prompt template is the query's `kind`** (an evaluation query's `template` can only equal it).
+- **The first full run lost 16 of 100 pairs per flow to the subscription's session limit** (runs 1 and 5); the owner chose to keep it rather than spend three more hours: every query is still covered, and both rows average over the same 84 pairs. The command exited non-zero, as specified.
+- **Skipped clean-code suggestions**:
+  - **Splitting `QueryRequest.template` into a prompt template and a preset template**: only the benchmark needs the split; the UI's chosen template drives both.
 
 ## Open Questions
 

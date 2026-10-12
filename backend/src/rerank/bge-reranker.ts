@@ -31,6 +31,7 @@ export function loadBgeRerankerConfig(env: Env): BgeRerankerConfig {
 }
 
 export const bgeReranker: RerankerEntry = {
+  remote: false,
   validate(env) {
     loadBgeRerankerConfig(env);
   },

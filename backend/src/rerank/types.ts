@@ -61,6 +61,8 @@ export interface RerankerDependencies {
 
 /** One `RERANKER` value: adding a reranker is a new file with one of these plus a registry entry. */
 export interface RerankerEntry {
+  /** Whether it calls a remote model (an LLM or JEV): its time then counts as LLM time. */
+  remote: boolean;
   /** Reads the reranker's own settings from `env` and throws on an invalid or missing one. */
   validate(env: Env): void;
   create(env: Env, deps: RerankerDependencies): Reranker;
