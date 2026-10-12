@@ -32,3 +32,9 @@ function fileTimestamp(date: Date): string {
     .replace(/[-:]/g, '')
     .replace(/\.\d{3}/, '');
 }
+
+/** `date` in the local time zone as `YYYY-MM-DD`, e.g. for a dated report file. */
+export function localDate(date = new Date()): string {
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}

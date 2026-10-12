@@ -1,3 +1,4 @@
+import { localDate } from '../reports.js';
 import { withDatabase } from '../db/with-database.js';
 import { describeError } from '../errors.js';
 import { loadChunkConfig } from './chunk-config.js';
@@ -81,11 +82,4 @@ function reportFailures(failed: Failure[]): number {
   if (failed.length === 0) return 0;
   console.error(`Failed: ${failed.map((failure) => failure.identifier).join(', ')}`);
   return 1;
-}
-
-/** Today's date in the local time zone as `YYYY-MM-DD`. */
-function localDate(): string {
-  const now = new Date();
-  const pad = (value: number) => String(value).padStart(2, '0');
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }

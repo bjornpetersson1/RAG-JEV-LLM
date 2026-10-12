@@ -43,6 +43,8 @@ export interface Reranker {
   /** The `RERANKER` value, e.g. `llm`. */
   readonly name: string;
   readonly model: string;
+  /** The precision a local model runs in, e.g. `int8`; absent for a remote reranker. */
+  readonly dtype?: string;
   rerank(query: string, chunks: readonly Chunk[], topK: number): Promise<RerankResult>;
 }
 

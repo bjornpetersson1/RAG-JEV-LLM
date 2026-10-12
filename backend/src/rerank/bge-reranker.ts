@@ -106,6 +106,7 @@ export function createBgeReranker(
   return {
     name: NAME,
     model: BGE_RERANKER_MODEL,
+    dtype: config.dtype,
     async rerank(query, chunks, topK): Promise<RerankResult> {
       const started = performance.now();
       const scores = chunks.length > 0 ? await scoreAll(query, chunks) : [];

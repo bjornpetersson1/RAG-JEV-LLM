@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createEvalDatabase } from '../eval/test-helpers.js';
-import { NO_USAGE } from '../llm/client.js';
+import { NO_USAGE, SILENT_LOGGER } from '../llm/client.js';
+import { loadLlmConfig } from '../llm/config.js';
 import { createFakeGenerator } from '../llm/fakes.js';
+import { createReranker } from '../rerank/factory.js';
 import { indexEmbeddings } from '../retrieval/index-embeddings.js';
 import { createFakeEmbedder } from '../retrieval/test-helpers.js';
 import type { Chunk } from '../llm/types.js';
@@ -85,6 +87,42 @@ describe('runQuery', () => {
   });
 });
 
+describe('switching the reranker to JEV', () => {
+  let database: ReturnType<typeof createEvalDatabase> | undefined;
+
+  afterEach(() => {
+    database?.remove();
+    database = undefined;
+  });
+
+  it('takes only RERANKER=jev and JEV_API_KEY, with no other change to the query flow', async () => {
+    database = createEvalDatabase();
+    const jevCalls: string[] = [];
+    const fakeJev = (async (url: string | URL | Request) => {
+      jevCalls.push(String(url));
+      return Response.json({ answers: { relevant: { type: 'noul', noul: 0.9 } }, usage: {} });
+    }) as typeof globalThis.fetch;
+    const env = { RERANKER: 'jev', JEV_API_KEY: 'k', JUDGE_CACHE: 'off' };
+    const { reranker, topK } = createReranker(env, {
+      db: database.db,
+      llmConfig: loadLlmConfig({ LLM_PROVIDER: 'fake' }),
+      logger: SILENT_LOGGER,
+      fetch: fakeJev,
+    });
+    const { deps } = fakeFlow({});
+
+    const result = await runQuery(
+      { instruction: 'Säljare', template: 'employment' },
+      { ...deps, rerank: (instruction, chunks) => reranker.rerank(instruction, chunks, topK) },
+    );
+
+    expect(reranker.name).toBe('jev');
+    expect(jevCalls).toEqual(Array(3).fill('https://api.typesafe.ai/v1/systemone'));
+    expect(result.judging).toMatchObject({ approved: 3, judgeCalls: 3 });
+    expect(result.draft?.used).toHaveLength(3);
+  });
+});
+
 describe('createQueryFlow', () => {
   let database: ReturnType<typeof createEvalDatabase> | undefined;
 
@@ -99,7 +137,7 @@ describe('createQueryFlow', () => {
     RERANKER: 'llm',
     JUDGE_CACHE: 'off',
   };
-  const logger = { info() {}, warn() {}, error() {} };
+  const logger = SILENT_LOGGER;
 
   it('runs the whole chain from .env with fake roles and a test database', async () => {
     database = createEvalDatabase();
