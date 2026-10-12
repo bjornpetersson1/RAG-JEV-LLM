@@ -315,6 +315,27 @@ LLM_PROVIDER=claude-code LLM_MODEL=claude-haiku-5-5 LLM_TIMEOUT_MS=120000 \
 
 The first run's report is kept in `eval/report-2026-10-11.md`. A query that fails, e.g. because the CLI keeps failing, is listed in the report and left out of the averages, and the command exits non-zero.
 
+### Comparing retrievers and rerankers
+
+```bash
+npm run eval:run -- --reranker bge,llm [--retriever tags,bge,both]
+```
+
+With `--reranker`, `eval:run` compares rerankers instead (E8-5). Every query goes through each retriever (`--retriever`, default the configured `RETRIEVER`; `fts` is always added as a baseline), and each candidate list through each reranker, which keeps every relevant candidate. One row per retriever and reranker gives recall@5/@8/@10 and recall over all candidates, before rerank (the retriever's own order, reranker `none`) and after it, precision@5/@10 after rerank, and the median and p90 latency per query of the rerank and of retrieval. The table is printed and appended to the table in that day's `eval/report-<date>.md`; every report has the same columns, so rows from different days, e.g. JEV once credits exist, can be put side by side. The command exits non-zero when queries failed.
+
+- `tags` here is E5-3's tag search without the full-text fallback; `bge` and `both` need `npm run index:embed`.
+- A reranker that cannot run is a skipped row with the reason, e.g. `jev` without `JEV_API_KEY` or `qwen3` (not implemented); the others still run.
+- The local models are loaded before anything is timed. A reranker whose scores came from the judge cache takes its latency from the queries without cache hits, or, with fewer than 5 of those, from a cache-off pass over the first 5 queries; its row says which.
+- BGE in int8 and fp32 are two runs: `RERANKER_DTYPE=int8` and `RERANKER_DTYPE=fp32`.
+
+### Switch reranker in three steps
+
+1. Set `RERANKER=` in `.env`: `bge` (local, default), `llm`, `jev` or `qwen3` (not implemented yet).
+2. Fill in what it needs: `JEV_API_KEY` for `jev`; the judge's LLM settings for `llm`; nothing for `bge`, whose model downloads into `MODEL_CACHE_DIR` on first use (`RERANKER_DTYPE` picks int8 or fp32).
+3. Verify with `npm run retrieve -- "<question>"` (one question, the reranked chunks and their scores) or `npm run eval:run -- --reranker <name>` (the evaluation set).
+
+Nothing else changes: the query flow and `eval:run` only know the `Reranker` interface.
+
 ## Prompt templates
 
 The generator drafts contracts from the Swedish prompt templates in [`prompts/`](prompts/): `employment.md` (employment agreement) and `nda.md` (NDA), one per template id. Each template fixes the required contract sections, the inline citation format `[K:<chunk-id>]`, the `[lön]`-style placeholders for details the instruction does not give, the fictional default parties and the not-legal-advice disclaimer. [`prompts/README.md`](prompts/README.md) documents the file structure, the slots and the citation format.

@@ -8,6 +8,7 @@ import type { LlmLogger } from '../llm/client.js';
 import { loadLlmConfig, roleLabel } from '../llm/config.js';
 import { createQueryServices } from '../query/services.js';
 import { translateQuery } from '../query/translate-query.js';
+import type { CandidateSearch } from '../search/candidate-search.js';
 import { createReranker } from '../rerank/factory.js';
 import type { Reranker } from '../rerank/types.js';
 import {
@@ -20,6 +21,8 @@ import {
 export interface SearchSetup extends SearchDependencies {
   /** What the run used, for the report, e.g. `{ 'query translator': 'claude-code claude-haiku-5-5' }`. */
   settings: Record<string, string>;
+  /** For the hybrid retrievers of the comparison (E8-5), which fuse in the tag ranking. */
+  candidateSearch: CandidateSearch;
 }
 
 export type EvalSetup = SearchSetup & Omit<EvalDependencies, 'onQuery'>;
@@ -51,6 +54,7 @@ export function createSearchSetup(
       return candidates.map((candidate) => String(candidate.chunkId));
     },
     loadChunks,
+    candidateSearch,
   };
 }
 

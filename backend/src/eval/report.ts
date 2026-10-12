@@ -75,7 +75,7 @@ export function formatAsMarkdown(result: EvalResult, context: ReportContext): st
         `| ${escapeCell(query.id)} | ${query.kind} | ${query.template ?? '–'} | ${tags.length} | ${query.relevantIds.size} | ` +
         EVAL_MODES.map(
           (mode) =>
-            `${format(relevance[mode].precision)} / ${format(relevance[mode].recall)} (${returned[mode].length})`,
+            `${formatScore(relevance[mode].precision)} / ${formatScore(relevance[mode].recall)} (${returned[mode].length})`,
         ).join(' | ') +
         ' |',
     ),
@@ -109,15 +109,15 @@ function mark(result: EvalResult, mode: JudgeMode, row: SweepRow): string {
 
 function scoreColumns(scores: ModeScores): string {
   return [scores.precision, scores.recall, scores.f1]
-    .map((value) => format(value).padEnd(10))
+    .map((value) => formatScore(value).padEnd(10))
     .join(' ')
     .trimEnd();
 }
 
 function scoreCells(scores: ModeScores): string {
-  return [scores.precision, scores.recall, scores.f1].map(format).join(' | ');
+  return [scores.precision, scores.recall, scores.f1].map(formatScore).join(' | ');
 }
 
-function format(value: number): string {
+export function formatScore(value: number): string {
   return value.toFixed(3);
 }

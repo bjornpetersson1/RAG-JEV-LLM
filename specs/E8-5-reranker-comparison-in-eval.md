@@ -4,7 +4,7 @@
 - **Labels:** `E8 Local retrieval and rerank`
 - **Phase:** E8 Local retrieval and rerank
 - **Depends on:** E8-3 (#67), E8-4 (#68), E5-3 (#17)
-- **Status:** Approved
+- **Status:** Implemented — all acceptance criteria verified (npm ci, lint, format:check, typecheck, 752 tests (748 backend, 4 frontend) and build exit 0; the first comparison run on the demo machine in `eval/report-2026-10-12.md`; a run with only skipped rerankers exits 0)
 
 ## Summary
 
@@ -52,13 +52,13 @@
 
 ## Tasks
 
-- [ ] CLI options `--reranker` and `--retriever` (comma-separated, validated).
-- [ ] Metrics: recall@K and precision@K before/after rerank, latency median/p90.
-- [ ] Run loop: per query, retrieve once per retriever, rerank once per reranker; skipped rerankers with a reason.
-- [ ] Report: append rows to the comparison table in `eval/report-<date>.md` (creating the table if absent), and print it.
-- [ ] First real run (bge fp32, bge int8, llm; retrievers tags, bge, both) and the dtype decision.
-- [ ] README "Switch reranker in three steps".
-- [ ] Tests with fakes.
+- [x] CLI options `--reranker` and `--retriever` (comma-separated, validated).
+- [x] Metrics: recall@K and precision@K before/after rerank, latency median/p90.
+- [x] Run loop: per query, retrieve once per retriever, rerank once per reranker; skipped rerankers with a reason.
+- [x] Report: append rows to the comparison table in `eval/report-<date>.md` (creating the table if absent), and print it.
+- [x] First real run (bge fp32, bge int8, llm; retrievers tags, bge, both) and the dtype decision.
+- [x] README "Switch reranker in three steps".
+- [x] Tests with fakes.
 
 ## Decisions
 
@@ -69,6 +69,31 @@
 - **Recall before rerank with `both`** (from E8-4): the RRF order.
 - **The fp32/int8 rule** (from E8-3): a difference of more than 0.03 in recall@8 after rerank switches the default to fp32.
 - **Rows appended across runs** (from the issue): a run on another day, e.g. JEV once credits exist, appends to that day's report, and the table header is the same in every report, so rows can be compared side by side.
+- **Builds on E8-1 to E8-4 as merged** (spec update before implementing):
+  - **Retrievers**: `bge` and `both` are E8-4's `createRetriever` over resources loaded once (`loadRetrievalResources`: the embedder and every chunk's vector), so `--retriever tags,bge,both` embeds each question once per retriever and loads the model once. `tags` is E5-3's tag search without the full-text fallback (`mode: 'tags'`), as criterion 1 says, and `fts` is the full-text baseline; both come from candidate search. `RETRIEVE_CANDIDATES` (40) caps `bge`/`both`, `MAX_CANDIDATES` (30) caps `tags`/`fts`; the table's `candidates` column shows each row's count.
+  - **Rerankers**: each name is built with E8-1's `createReranker`, with `JUDGE_CACHE=on` and `RERANK_TOP_K` not read; a reranker that fails to build (no `JEV_API_KEY`) or fails on every query (`qwen3`: not implemented) becomes a skipped row with the error as its reason.
+  - **dtype**: `Reranker` gains an optional `dtype` (E8-3's `BgeReranker` reports `RERANKER_DTYPE`); the table shows it, or `–`. Two BGE rows (int8, fp32) come from two runs with `RERANKER_DTYPE=int8` and `fp32`.
+  - **Latency without branching on the reranker**: a reranker whose first pass hit its cache gets a second, cache-off pass over the first 5 queries for its latency, and the row says so; others take latency from the first pass. That is the `llm` row's "cache-off pass over 5 queries" from the Decisions, decided by the cache statistics, not the name.
+  - **precision@K** is relevant chunks among the first K divided by K, so a reranker that keeps fewer than K chunks is not rewarded for it.
+  - **Without `--reranker`**, `eval:run` runs E5-3's evaluation unchanged.
+- **Clean code**:
+  - **A long run survives failures**: a query whose translation or retrieval fails is left out of that retriever's rows (noted); a reranker that fails three times in a row is not asked again, and one that never succeeds is a skipped row with its first error.
+  - **Latency with fewer LLM calls**: a reranker that hit its cache takes its latency from the queries without hits when there are at least 5, and only otherwise reranks the first 5 stored candidate lists again with the cache off (no new translation or retrieval). The cache-off reranker is built only then.
+  - **Shared helpers**: `createSearchSetup` (translation, E5-3's search modes, chunk loading, and now the candidate search for `both`), `localDate` in `reports.ts` (also used by the data import), `formatScore` from the E5-3 report, `SILENT_LOGGER` in tests.
+- **Skipped clean-code suggestions**:
+  - **A JSONL results file to resume an interrupted run**: the run no longer stops on a failure, and a resumable store is more than this issue needs.
+  - **Scoring each (question, chunk) once across the three retrievers' lists**: it would save BGE time but change what the per-retriever rerank latency measures.
+- **Code review fixes**:
+  - **Failures in a row are counted per retriever and reranker pair**, so one query failing on all three retrievers does not end a reranker for the run.
+  - **A row's "before" and "after" cover the same queries**: when a rerank fails for a query, that query leaves the row's "before" values too.
+  - **`eval:run --reranker` exits 1 when queries failed** or a latency could not be measured; a reranker skipped by its setup (`jev` without a key) does not count. Each failed step is printed with its query and error.
+  - **No latency is shown as `–`**, with a note, instead of 0.
+  - **The local models load before anything is timed** (`warmUp`: the embedder and every reranker with a `dtype`, on one chunk), so no row's first query includes a model load.
+  - **Chunks are loaded once per retrieved list** and reused by every reranker and the latency pass.
+  - **The report append handles a comparison section without a table**, adding one before the next section. The README and the module comment now say what happens: rows go to that day's report, with the same columns every day.
+- **First run** (criterion 3, 2026-10-12): `eval:run -- --reranker bge,llm,jev,qwen3 --retriever tags,bge,both` with `RERANKER_DTYPE=int8`, then `--reranker bge` with `fp32`, through the Claude Code provider with `ANTHROPIC_API_KEY` set to an invalid value, so a leaked key would have failed instead of billing. Results and findings are in `eval/report-2026-10-12.md`. int8's recall@8 after rerank is never more than 0.03 below fp32's (+0.012, −0.008, +0.022), so `RERANKER_DTYPE` stays `int8`.
+- **A reranker that never works is skipped, not failed** (settled after the run): `qwen3` made the first run exit 1. One that fails for every query with every retriever is now treated like one that cannot be built (`jev` without a key); the exit code is 1 only when something that otherwise works failed.
+- **The root `eval:run` script forwards arguments** (`npm run eval:run -w backend --`), which `--reranker` needs.
 
 ## Open Questions
 

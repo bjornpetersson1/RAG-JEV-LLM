@@ -75,3 +75,25 @@ export function recommendThreshold(rows: readonly SweepRow[]): SweepRow {
 function f1(precision: number, recall: number): number {
   return precision + recall === 0 ? 0 : (2 * precision * recall) / (precision + recall);
 }
+
+/** The share of the relevant chunks among the first `k` returned; 0 when nothing is relevant. */
+export function recallAt(
+  returned: readonly string[],
+  relevant: ReadonlySet<string>,
+  k: number,
+): number {
+  if (relevant.size === 0) return 0;
+  return returned.slice(0, k).filter((id) => relevant.has(id)).length / relevant.size;
+}
+
+/**
+ * Relevant chunks among the first `k` returned, divided by `k`, so returning fewer than `k` is not
+ * rewarded.
+ */
+export function precisionAt(
+  returned: readonly string[],
+  relevant: ReadonlySet<string>,
+  k: number,
+): number {
+  return returned.slice(0, k).filter((id) => relevant.has(id)).length / k;
+}

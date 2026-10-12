@@ -34,7 +34,7 @@
     "bench:rerank": "npm run bench:rerank -w backend --",
     "embed:smoke": "npm run embed:smoke -w backend",
     "eval:label": "npm run eval:label -w backend --",
-    "eval:run": "npm run eval:run -w backend",
+    "eval:run": "npm run eval:run -w backend --",
     "query": "npm run query -w backend --"
   },
   "devDependencies": {
