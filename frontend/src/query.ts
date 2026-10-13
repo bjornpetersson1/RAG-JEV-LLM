@@ -110,6 +110,8 @@ export interface StepTimings {
   embeddingMs?: number;
   searchMs: number;
   judgingMs?: number;
+  /** Time to sources: search plus rerank, without the translation (E7-8). */
+  sourcesMs: number;
   generationMs?: number;
   totalMs: number;
 }
@@ -137,6 +139,8 @@ export interface QueryResult {
   judging?: { cacheHits: number; judgeCalls: number; relevant: number; unknown: number };
   draft?: Draft;
   timings: StepTimings;
+  /** Token use per step; the timing panel reads the draft's output tokens. */
+  usage?: { generation?: { outputTokens: number } };
 }
 
 export type QueryEvent =

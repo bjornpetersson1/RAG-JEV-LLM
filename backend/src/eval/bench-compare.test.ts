@@ -86,10 +86,11 @@ function fakeFlow(
           embeddingMs: 5,
           searchMs: 20,
           judgingMs: reranked ? 30 : undefined,
+          sourcesMs: reranked ? 50 : 20,
           generationMs: references ? 100 : undefined,
           totalMs: fake.totalMs,
         },
-        usage: {},
+        usage: references ? { generation: { ...NO_USAGE, outputTokens: 50 } } : {},
       };
       return result;
     },
@@ -149,10 +150,16 @@ describe('benchCompare', () => {
       configuration: 'main config',
       measured: {
         total: { median: 400, p90: 600 },
+        translation: { median: 10, p90: 10 },
+        // search 20 + rerank 30, without the translation
+        sources: { median: 50, p90: 50 },
         search: { median: 20, p90: 20 },
         embedding: { median: 5, p90: 5 },
         rerank: { median: 30, p90: 30 },
         generation: { median: 100, p90: 100 },
+        // 100 ms over 50 output tokens
+        generationPerToken: { median: 2, p90: 2 },
+        outputTokens: { median: 50, p90: 50 },
         // translation 10 + generation 100 + a remote rerank's 30
         llm: { median: 140, p90: 140 },
         sourceAccuracy: 8 / 10,

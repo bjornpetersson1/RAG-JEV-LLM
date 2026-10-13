@@ -132,6 +132,7 @@ function formatTimings({ timings, usage }: QueryResult): string[] {
     ...step('translation', timings.translationMs),
     search,
     ...step('judging', timings.judgingMs),
+    `sources ${timings.sourcesMs}`,
     ...step('generation', timings.generationMs),
     `total ${timings.totalMs}`,
   ];

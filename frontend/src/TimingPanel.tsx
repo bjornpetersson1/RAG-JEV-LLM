@@ -7,15 +7,29 @@ import {
   type StepTimings,
 } from './query';
 
-type Row = { label: string; step?: QueryStepName; timing: keyof StepTimings };
+interface Row {
+  label: string;
+  /** The step whose event brings the row's time; absent for the total. */
+  step?: QueryStepName | ((planned: readonly QueryStepName[]) => QueryStepName);
+  timing: keyof StepTimings;
+  /** The summary rows stand out: time to sources, the comparison's measure, and the total. */
+  className?: string;
+}
 
 const ROWS: Row[] = [
   { label: 'Översättning', step: 'translation', timing: 'translationMs' },
   { label: 'Sökning', step: 'search', timing: 'searchMs' },
   { label: 'varav inbäddning', step: 'search', timing: 'embeddingMs' },
   { label: 'Rerank', step: 'rerank', timing: 'judgingMs' },
+  {
+    label: 'Tid till källor',
+    // Known with the rerank, or with the search in a flow without one.
+    step: (planned) => (planned.includes('rerank') ? 'rerank' : 'search'),
+    timing: 'sourcesMs',
+    className: 'sources',
+  },
   { label: 'Generering', step: 'generation', timing: 'generationMs' },
-  { label: 'Totalt', timing: 'totalMs' },
+  { label: 'Totalt', timing: 'totalMs', className: 'total' },
 ];
 
 interface TimingPanelProps {
@@ -64,7 +78,7 @@ export function TimingPanel({ flows, reference, skipped, running }: TimingPanelP
         </thead>
         <tbody>
           {ROWS.map((row) => (
-            <tr key={row.label} className={row.timing === 'totalMs' ? 'total' : undefined}>
+            <tr key={row.label} className={row.className}>
               <th scope="row">{row.label}</th>
               {columns.map(({ flow, state, timings }) => (
                 <td key={flow}>
@@ -113,6 +127,7 @@ function TimingCell({ ms, pending, state, row, scale }: TimingCellProps) {
       <span className="time">
         {formatMs(ms)}
         {row.step === 'rerank' && <RerankDetail state={state} ms={ms} />}
+        {row.step === 'generation' && <GenerationDetail state={state} ms={ms} />}
       </span>
       <span className="bar" style={{ width: `${(ms / scale) * 100}%` }} />
     </>
@@ -120,8 +135,9 @@ function TimingCell({ ms, pending, state, row, scale }: TimingCellProps) {
 }
 
 /** A step still to come: planned and not reported, or the total, until the flow's result. */
-function isPending({ result, planned, steps }: FlowState, { step }: Row): boolean {
+function isPending({ result, planned, steps }: FlowState, row: Row): boolean {
   if (result) return false;
+  const step = typeof row.step === 'function' ? row.step(planned) : row.step;
   return step === undefined || (planned.includes(step) && !steps[step]);
 }
 
@@ -130,10 +146,23 @@ function RerankDetail({ state, ms }: { state: FlowState; ms: number }) {
   const { judgeCalls = 0, cacheHits = 0 } = state.result?.judging ?? {};
   const perCall = ms / judgeCalls;
   const details = [
-    ...(judgeCalls > 0 ? [`${perCall < 1 ? '<1 ms' : formatMs(perCall)} per bedömd kandidat`] : []),
+    ...(judgeCalls > 0 ? [`${formatPerUnit(perCall)} per bedömd kandidat`] : []),
     ...(cacheHits > 0 ? [`${cacheHits} cacheträffar`] : []),
   ];
   return details.length > 0 ? <span className="detail"> ({details.join(' · ')})</span> : null;
+}
+
+/** The draft's output tokens and the time per token, so drafts of different length compare. */
+function GenerationDetail({ state, ms }: { state: FlowState; ms: number }) {
+  const tokens = state.result?.usage?.generation?.outputTokens;
+  if (!tokens) return null;
+  const perToken = ms / tokens;
+  return (
+    <span className="detail">
+      {' '}
+      ({tokens.toLocaleString('sv-SE')} tokens, {formatPerUnit(perToken)}/token)
+    </span>
+  );
 }
 
 /** The final timings when the flow is done, else the times its finished steps reported. */
@@ -143,16 +172,39 @@ function timingsOf({ result, steps }: FlowState): Partial<StepTimings> {
   );
 }
 
+/**
+ * Time to sources first, the measure the comparison is about, with the translation named on its
+ * own; then the total, which the drafts' length weighs on too.
+ */
 function Difference({ flows }: { flows: Partial<Record<FlowName, FlowState>> }) {
-  const main = flows.main?.result?.timings.totalMs;
-  const reference = flows.reference?.result?.timings.totalMs;
-  if (main === undefined || reference === undefined) return null;
-  const comparison = main <= reference ? 'snabbare' : 'långsammare';
+  const main = flows.main?.result?.timings;
+  const reference = flows.reference?.result?.timings;
+  if (!main || !reference) return null;
+  const sources = describeGap(main.sourcesMs, reference.sourcesMs, 'före', 'efter');
+  // The verdict is given both without and with the translation, so neither hides the other.
+  const withTranslation =
+    main.translationMs === undefined
+      ? ''
+      : `, och ${describeGap(main.sourcesMs + main.translationMs, reference.sourcesMs, 'före', 'efter')} med översättningen till taggar (${formatMs(main.translationMs)})`;
   return (
-    <p className="difference">
-      Huvudflödet var {formatMs(Math.abs(reference - main))} {comparison} än referens-RAG:en.
-    </p>
+    <>
+      <p className="difference">
+        Huvudflödet hade sina källor {sources} referens-RAG:en
+        {main.translationMs === undefined ? '' : ' utan översättningen'}
+        {withTranslation}.
+      </p>
+      <p className="difference">
+        Totalt var huvudflödet{' '}
+        {describeGap(main.totalMs, reference.totalMs, 'snabbare', 'långsammare')} än
+        referens-RAG:en.
+      </p>
+    </>
   );
+}
+
+/** How far `main` is from `reference`, and which way, e.g. `2,7 s efter`. */
+function describeGap(main: number, reference: number, sooner: string, later: string): string {
+  return `${formatMs(Math.abs(reference - main))} ${main <= reference ? sooner : later}`;
 }
 
 function describeConfiguration(configuration: FlowConfiguration): string {
@@ -165,6 +217,11 @@ function describeConfiguration(configuration: FlowConfiguration): string {
     `högst ${topK} källor`,
     `generator ${generator}`,
   ].join(' · ');
+}
+
+/** A time per candidate or token: `<1 ms` below a millisecond, else as `formatMs`. */
+function formatPerUnit(ms: number): string {
+  return ms < 1 ? '<1 ms' : formatMs(ms);
 }
 
 /** Under a second in ms, otherwise in seconds with one decimal, e.g. `340 ms`, `12,4 s`. */

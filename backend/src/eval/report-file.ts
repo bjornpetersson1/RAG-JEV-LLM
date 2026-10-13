@@ -57,9 +57,9 @@ export function appendToReportTable(
   writeFileAtomically(path, `${lines.join('\n').replace(/\n+$/, '')}\n`);
 }
 
-/** `median / p90`, in whole milliseconds. */
-export function formatLatency({ median, p90 }: Latency): string {
-  return `${Math.round(median)} / ${Math.round(p90)}`;
+/** `median / p90`, in whole milliseconds unless `decimals` asks for more. */
+export function formatLatency({ median, p90 }: Latency, decimals = 0): string {
+  return `${median.toFixed(decimals)} / ${p90.toFixed(decimals)}`;
 }
 
 function tableHead({ columns }: ReportTable): string[] {

@@ -4,7 +4,7 @@
 - **Labels:** `E7 UI and measurement`
 - **Phase:** 5. UI and measurement
 - **Depends on:** none (related: E7-7 (#90), E7-3 (#24), E5-4 (#18))
-- **Status:** Approved
+- **Status:** Implemented — all acceptance criteria verified (npm ci, lint, format:check, typecheck, 928 tests (869 backend, 59 frontend; `npm test` offline under sandbox-exec) and build exit 0; `bench:compare -- --runs 1` with drafts and the Haiku judge, 20 queries, no failures, in `eval/report-2026-10-13.md`; `npm run dev`: the "Tid till källor" row, tokens and ms/token, and both comparison sentences in the timing panel)
 
 ## Summary
 
@@ -44,11 +44,11 @@ The comparison between the main flow and the reference RAG should measure what t
 
 ## Tasks
 
-- [ ] `StepTimings.sourcesMs` in the query flow: in the step event, the result and the run log. Add tests.
-- [ ] Frontend: the "Tid till källor" row, the comparison sentence with the translation shown separately, and the generation tokens and ms/token. Add tests.
-- [ ] `bench:compare`: time to sources, generation ms per output token and output tokens in the summary and the table. Add tests.
-- [ ] README: the timing panel and benchmark sections.
-- [ ] Run `bench:compare -- --runs 1` with drafts and write the analysis in the report.
+- [x] `StepTimings.sourcesMs` in the query flow: in the step event, the result and the run log. Add tests.
+- [x] Frontend: the "Tid till källor" row, the comparison sentence with the translation shown separately, and the generation tokens and ms/token. Add tests.
+- [x] `bench:compare`: time to sources, generation ms per output token and output tokens in the summary and the table. Add tests.
+- [x] README: the timing panel and benchmark sections.
+- [x] Run `bench:compare -- --runs 1` with drafts and write the analysis in the report.
 
 ## Decisions
 
@@ -57,6 +57,18 @@ The comparison between the main flow and the reference RAG should measure what t
 - **The reference RAG stays as the requirements define it** (owner's question "should it be 100 % LLM?"). The requirements define it as "a simple RAG with embeddings and top-k that uses the same chunks and the same generator". Only its generation is an LLM, as in the main flow.
 - **One benchmark run with drafts** (owner). The requirements ask for five runs with the median. One run is about 45 minutes and 1,000 calls on the subscription; five would very likely hit its session limit. The report says it is one run.
 - **`sourcesMs` is computed in the backend, once** (default). The panel, the run log and the benchmark all read the same value, rather than each adding the steps up itself.
+
+- **Settled while implementing:**
+  - **`sourcesMs` is required on the result** and computed once in the flow: it is reported in the event that completes the sources (`rerank`, or `search` without a rerank step, when it equals `searchMs`) and set on the result. The benchmark and the panel read it with no fallback (clean code).
+  - **A new benchmark table heading**, "Main flow vs reference RAG: time to sources": rows are appended under an existing heading, so new columns under the old heading would not line up.
+  - **The CLI timing line prints `sources`** too, next to the other steps.
+- **Code review (high):**
+  - **The comparison sentence gives the verdict both without and with the translation** ("… utan översättningen, och … med översättningen till taggar (Y)"), so the word "före" can never hide that, translation included, the main flow was later.
+  - **The benchmark has a `translation` column** (main flow), so the report can quote it; medians of LLM time minus other steps would not be the translation's median.
+  - **`ms/token` has one decimal**, and generation, ms/token and output tokens are all over the same samples: the drafts written (with output tokens).
+  - **The "Tid till källor" row is pending until its step**: the rerank, or the search without one.
+  - **Swedish digit grouping** for the token count ("1 200 tokens"), and one `formatPerUnit` for per-candidate and per-token times.
+  - **Not changed: the search event's own `sourcesMs: searchMs`.** Without a rerank step the sources are complete at search, before the flow's single `sourcesMs` is computed; both are `searchMs` by definition there.
 
 ## Open Questions
 
