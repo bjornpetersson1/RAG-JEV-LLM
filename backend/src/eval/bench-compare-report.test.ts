@@ -15,6 +15,8 @@ const MAIN: FlowSummary = {
     sources: { median: 30_002, p90: 36_005 },
     search: { median: 2, p90: 5 },
     rerank: { median: 30_000, p90: 36_000 },
+    judgedCandidates: 14,
+    unknown: 2,
     generation: { median: 11_000, p90: 15_000 },
     generationPerToken: { median: 9.2, p90: 11 },
     outputTokens: { median: 1200, p90: 1400 },
@@ -24,7 +26,8 @@ const MAIN: FlowSummary = {
   },
   samples: 100,
   queries: 20,
-  drafts: 100,
+  drafts: 96,
+  withoutDraft: 4,
   runs: 5,
   failures: 0,
 };
@@ -43,15 +46,16 @@ const REFERENCE: FlowSummary = {
     sourceAccuracy: null,
   },
   drafts: 0,
+  withoutDraft: undefined,
 };
 
 describe('benchRows', () => {
   it('gives one row per flow, with – for steps that did not run', () => {
     expect(benchRows([MAIN, REFERENCE], '2026-10-12')).toEqual([
       '| 2026-10-12 | main | retriever tags · reranker bge | 41234 / 52000 | 800 / 900 | 30002 / 36005 | 2 / 5 | – | ' +
-        '30000 / 36000 | 11000 / 15000 | 9.2 / 11.0 | 1200 / 1400 | 12000 / 16000 | 0.400 | 0.250 | 0.950 | 100 | 20 | 100 | 5 | 0 |',
+        '30000 / 36000 | 14 | 2 | 11000 / 15000 | 9.2 / 11.0 | 1200 / 1400 | 12000 / 16000 | 0.400 | 0.250 | 0.950 | 100 | 20 | 96 | 4 | 5 | 0 |',
       '| 2026-10-12 | reference | dense Xenova/bge-m3 int8 | 35000 / 40000 | – | 410 / 500 | 410 / 500 | 400 / 480 | ' +
-        '– | – | – | – | 12000 / 16000 | 0.300 | 0.200 | – | 100 | 20 | 0 | 5 | 0 |',
+        '– | – | – | – | – | – | 12000 / 16000 | 0.300 | 0.200 | – | 100 | 20 | 0 | – | 5 | 0 |',
     ]);
   });
 
@@ -59,7 +63,7 @@ describe('benchRows', () => {
     const [row] = benchRows([{ ...MAIN, measured: undefined, samples: 0, failures: 20 }], 'd');
 
     expect(row).toBe(
-      '| d | main | retriever tags · reranker bge | – | – | – | – | – | – | – | – | – | – | – | – | – | 0 | 20 | 100 | 5 | 20 |',
+      '| d | main | retriever tags · reranker bge | – | – | – | – | – | – | – | – | – | – | – | – | – | – | – | 0 | 20 | 96 | 4 | 5 | 20 |',
     );
   });
 });
@@ -85,7 +89,7 @@ describe('appendBenchToReport', () => {
 
     const report = readFileSync(path, 'utf8');
     expect(report).toContain(
-      `${COMPARISON_HEADING}\n\n| a |\n| --- |\n| 1 |\n\n## Main flow vs reference RAG: time to sources`,
+      `${COMPARISON_HEADING}\n\n| a |\n| --- |\n| 1 |\n\n## Main flow vs reference RAG: the same judge`,
     );
     const rows = report.split('\n').filter((line) => /^\| 2026-10-1[23] \|/.test(line));
     expect(rows).toEqual([

@@ -8,11 +8,10 @@ import type { DatabaseSync } from 'node:sqlite';
 import { openDatabase } from '../db/database.js';
 import { migrationLabel, pendingMigrations } from '../db/migrations.js';
 import type { Env } from '../env.js';
-import type { QueryFlowDependencies } from '../generation/query-flow.js';
-import { createQueryFlow } from '../generation/setup.js';
+import { createQueryFlow, type ConfiguredQueryFlow } from '../generation/setup.js';
 import type { LlmLogger } from '../llm/client.js';
 import { warmUpLocalModels } from '../models/warm-up.js';
-import { createReferenceFlow } from '../reference/setup.js';
+import { createReferenceFlow, type ReferenceFlow } from '../reference/setup.js';
 import { loadRetrievalConfig } from '../retrieval/config.js';
 import {
   loadRetrievalResources,
@@ -29,6 +28,12 @@ export interface QueryFlowsOptions {
   tagIndex?: TagIndex;
 }
 
+/** The flows with their rerankers, so both can be seen to share one judge. */
+export interface ConfiguredQueryFlows extends QueryFlows {
+  main(): ConfiguredQueryFlow;
+  reference(): ReferenceFlow;
+}
+
 /**
  * The embedder and vectors load once, shared by both flows, when the first flow needs them. Fails
  * when the main flow cannot be built, e.g. `RETRIEVER=bge` before `npm run index:embed`.
@@ -38,7 +43,7 @@ export function createQueryFlows(
   env: Env,
   logger: LlmLogger,
   { retrieval, tagIndex }: QueryFlowsOptions = {},
-): QueryFlows {
+): ConfiguredQueryFlows {
   let resources: RetrievalResources | undefined;
   const loadResources = () => (resources ??= loadRetrievalResources(db, env, retrieval));
   const usesEmbeddings = loadRetrievalConfig(env).retriever !== 'tags';
@@ -50,9 +55,9 @@ export function createQueryFlows(
     usesEmbeddings ? loadResources() : undefined,
     tagIndex,
   );
-  let reference: QueryFlowDependencies | undefined;
+  let reference: ReferenceFlow | undefined;
   const buildReference = () =>
-    (reference ??= createReferenceFlow(db, env, logger, {}, loadResources()));
+    (reference ??= createReferenceFlow(db, env, logger, {}, loadResources(), main.reranker));
   return {
     main: () => main,
     reference: buildReference,

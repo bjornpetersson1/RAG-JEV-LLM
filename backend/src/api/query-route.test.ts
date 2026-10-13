@@ -165,12 +165,7 @@ describe('POST /query', () => {
   });
 
   it('runs the reference RAG after the main flow when asked', async () => {
-    const reference = {
-      ...fakeFlow(),
-      flow: 'reference' as const,
-      translate: undefined,
-      rerank: undefined,
-    };
+    const reference = { ...fakeFlow(), flow: 'reference' as const, translate: undefined };
     app = appWith(flows(fakeFlow(), () => reference));
 
     const lines = events((await post(app, { template: 'nda', reference: true })).payload);
@@ -180,18 +175,13 @@ describe('POST /query', () => {
     expect(lines.find((event) => event.type === 'start' && event.flow === 'reference')).toEqual({
       type: 'start',
       flow: 'reference',
-      steps: ['search', 'generation'],
+      steps: ['search', 'rerank', 'generation'],
     });
     expect(lines.at(-1)).toEqual({ type: 'done' });
   });
 
   it('logs each flow of a request as one line, with a shared run id', async () => {
-    const reference = {
-      ...fakeFlow(),
-      flow: 'reference' as const,
-      translate: undefined,
-      rerank: undefined,
-    };
+    const reference = { ...fakeFlow(), flow: 'reference' as const, translate: undefined };
     app = appWith(flows(fakeFlow(), () => reference));
 
     await post(app, { template: 'nda', instruction: 'Säljare', reference: true });
@@ -206,6 +196,11 @@ describe('POST /query', () => {
       instruction: 'Säljare',
       counts: { tags: 2, candidates: 2, fallback: 1, approved: 1, sent: 1, cited: 1 },
       sourceAccuracy: 1,
+    });
+    expect(logged[1]).toMatchObject({
+      flow: 'reference',
+      timings: { judgingMs: expect.any(Number), sourcesMs: expect.any(Number) },
+      judging: { relevant: expect.any(Number), judgeCalls: expect.any(Number) },
     });
   });
 
@@ -303,10 +298,10 @@ describe('createQueryFlows', () => {
     JUDGE_CACHE: 'off',
   };
 
-  // The fake judge approves by shared words, so the default instruction approves nothing here and the
-  // main flow writes no draft; the reference RAG has no judge and always drafts.
+  // The fake judge approves by shared words, so the default instruction approves nothing here and
+  // neither flow writes a draft; both judge with the same LLM judge.
   it.each([
-    ['the template alone', { template: 'employment' }, ['reference']],
+    ['the template alone', { template: 'employment' }, []],
     [
       'the template and free text',
       { template: 'employment', instruction: 'Uppsägning ska vara sakligt grundad' },
@@ -326,6 +321,18 @@ describe('createQueryFlows', () => {
     expect(results.map(({ flow }) => flow)).toEqual(['main', 'reference']);
     expect(results.filter(({ result }) => result.draft).map(({ flow }) => flow)).toEqual(drafted);
     expect(lines.at(-1)).toEqual({ type: 'done' });
+  });
+
+  it('gives both flows one LLM judge when RERANKER=llm', async () => {
+    const { db, path } = (database = createEvalDatabase());
+    const { embedder } = createFakeEmbedder();
+    await indexEmbeddings(db, embedder, FAKE_IDENTITY);
+
+    const flows = createQueryFlows(db, { ...ENV, DATABASE_PATH: path }, SILENT_LOGGER, {
+      retrieval: embedder,
+    });
+
+    expect(flows.reference().reranker).toBe(flows.main().reranker);
   });
 });
 

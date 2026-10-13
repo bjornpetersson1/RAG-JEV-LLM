@@ -38,7 +38,7 @@ export function createBenchSetup(
   // Loaded once and shared, so the model loads once and the vectors are read once.
   const resources = loadRetrievalResources(db, benchEnv, embedder);
   const main = createQueryFlow(db, benchEnv, logger, {}, resources);
-  const reference = createReferenceFlow(db, benchEnv, logger, {}, resources);
+  const reference = createReferenceFlow(db, benchEnv, logger, {}, resources, main.reranker);
 
   return {
     flows: [
@@ -52,7 +52,7 @@ export function createBenchSetup(
       {
         name: 'reference',
         configuration: formatConfiguration(reference.configuration),
-        remoteRerank: false,
+        remoteRerank: isRemoteReranker(reference.reranker),
         run: (query, options) => runQuery(requestFor(query), reference, options),
       },
     ],

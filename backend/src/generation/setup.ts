@@ -12,7 +12,7 @@ import type { Reranker } from '../rerank/types.js';
 import type { TagIndex } from '../search/tag-index.js';
 import { createConfiguredRetriever, type RetrievalSource } from '../retrieval/setup.js';
 import { loadContextLimits, type ContextLimits } from './config.js';
-import { modelLabel, type FlowConfiguration } from './flow-configuration.js';
+import { modelLabel, rerankerLabel, type FlowConfiguration } from './flow-configuration.js';
 import type { QueryFlowDependencies } from './query-flow.js';
 
 /** The query flow's steps, the reranker itself (for a warm-up) and what they were built with. */
@@ -50,7 +50,7 @@ export function createQueryFlow(
       retriever: retriever.embedder
         ? `${retriever.name} (${modelLabel(retriever.embedder)})`
         : retriever.name,
-      reranker: `${reranker.name} ${modelLabel(reranker)}`,
+      reranker: rerankerLabel(reranker),
       ...(retriever.usesTags && {
         translator: translatorLabel,
         tagIndex: tagIndexLabel,

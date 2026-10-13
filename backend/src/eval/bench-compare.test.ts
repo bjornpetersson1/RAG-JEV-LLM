@@ -29,6 +29,10 @@ interface FakeRun {
   references?: [valid: number, all: number];
   /** The ids that fit the context limits; default all of `ids`. */
   sent?: string[];
+  /** Candidates the rerank could not score; default 0. */
+  unknown?: number;
+  /** A draft without text: no approved chunk fitted the context limits. */
+  emptyDraft?: boolean;
 }
 
 /** A flow whose result for each query comes from `runs`, in call order per query. */
@@ -57,11 +61,13 @@ function fakeFlow(
         candidates: fake.ids.length,
         fallback: 0,
         approved: fake.ids.map(chunk),
-        sources: [],
-        ...(reranked && { judging: { relevant: 0, cacheHits: 0, judgeCalls: 0, unknown: 0 } }),
+        sources: fake.ids.map((id) => ({ chunk: chunk(id), status: 'sent', origin: 'dense' })),
+        ...(reranked && {
+          judging: { relevant: 0, cacheHits: 0, judgeCalls: 0, unknown: fake.unknown ?? 0 },
+        }),
         draft: references
           ? {
-              text: 'Utkast',
+              text: fake.emptyDraft ? undefined : 'Utkast',
               used: (fake.sent ?? fake.ids).map(chunk),
               unused: [],
               leftOut: fake.ids.filter((id) => !(fake.sent ?? fake.ids).includes(id)).map(chunk),
@@ -196,9 +202,74 @@ describe('benchCompare', () => {
     expect(main.measured?.generation).toBeUndefined();
     expect(main.measured?.sourceAccuracy).toBeNull();
     expect(main.drafts).toBe(0);
+    expect(main.withoutDraft).toBeUndefined();
     expect(main.measured?.llm.median).toBe(10);
     expect(reference.measured?.rerank).toBeUndefined();
     expect(reference.measured?.llm.median).toBe(0);
+  });
+
+  it('compares the drafts only where both flows wrote one, and counts the pairs without', async () => {
+    const flows = [
+      fakeFlow(
+        'main',
+        {
+          q1: [{ ids: ['1'], totalMs: 1, references: [1, 2] }],
+          q2: [{ ids: ['3'], totalMs: 1, references: [3, 3] }],
+        },
+        [],
+      ),
+      fakeFlow(
+        'reference',
+        { q1: [{ ids: ['1'], totalMs: 1, references: [2, 2] }], q2: [{ ids: [], totalMs: 1 }] },
+        [],
+      ),
+    ];
+
+    const [main, reference] = await benchCompare(QUERIES, flows, { runs: 1, draft: true });
+
+    expect(main).toMatchObject({ drafts: 2, withoutDraft: 0 });
+    expect(reference).toMatchObject({ drafts: 1, withoutDraft: 1 });
+    // q2's draft is the main flow's alone, so only q1's references count.
+    expect(main.measured?.sourceAccuracy).toBe(1 / 2);
+    expect(reference.measured?.sourceAccuracy).toBe(1);
+  });
+
+  it('counts a draft without text as no draft', async () => {
+    const run: FakeRun = { ids: ['1'], totalMs: 1, references: [1, 1] };
+    const flows = [
+      fakeFlow('main', { q1: [run] }, []),
+      fakeFlow('reference', { q1: [{ ...run, references: [0, 0], emptyDraft: true }] }, []),
+    ];
+
+    const [main, reference] = await benchCompare([QUERIES[0]], flows, { runs: 1, draft: true });
+
+    expect(reference).toMatchObject({ drafts: 0, withoutDraft: 1 });
+    expect(main.measured?.sourceAccuracy).toBeNull();
+  });
+
+  it('gives the median candidates judged and the unknown chunks over every pair', async () => {
+    const main = fakeFlow(
+      'main',
+      {
+        q1: [{ ids: ['1', '2', '3'], totalMs: 1, unknown: 2 }],
+        q2: [{ ids: ['3'], totalMs: 1, unknown: 1 }],
+      },
+      [],
+    );
+    const reference = fakeFlow(
+      'reference',
+      { q1: [{ ids: ['1'], totalMs: 1 }], q2: [{ ids: ['3'], totalMs: 1 }] },
+      [],
+    );
+
+    const [summary, unjudged] = await benchCompare(QUERIES, [main, reference], {
+      runs: 1,
+      draft: false,
+    });
+
+    expect(summary.measured).toMatchObject({ judgedCandidates: 3, unknown: 3 });
+    expect(unjudged.measured?.judgedCandidates).toBeUndefined();
+    expect(unjudged.measured?.unknown).toBeUndefined();
   });
 
   it('leaves a query and run that failed in one flow out of every flow', async () => {

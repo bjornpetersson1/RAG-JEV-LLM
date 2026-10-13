@@ -1,5 +1,5 @@
 // The reference RAG's retrieval (E5-4): embed the instruction and take the chunks most similar to
-// it by cosine similarity over E8-4's vectors. Nothing else: no tags, lexical half or rerank.
+// it by cosine similarity over E8-4's vectors. No tags or lexical half; the judge comes after (E7-9).
 
 import type { Embedder } from '../embedding/types.js';
 import type { QueryFlowDependencies } from '../generation/query-flow.js';

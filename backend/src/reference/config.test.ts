@@ -1,16 +1,27 @@
 import { describe, expect, it } from 'vitest';
-import { loadReferenceTopK } from './config.js';
+import { loadReferenceConfig } from './config.js';
 
-describe('loadReferenceTopK', () => {
-  it('defaults to 8, as RERANK_TOP_K does', () => {
-    expect(loadReferenceTopK({})).toBe(8);
+describe('loadReferenceConfig', () => {
+  it('defaults to MAX_CANDIDATES’ and RERANK_TOP_K’s defaults, 30 and 8', () => {
+    expect(loadReferenceConfig({})).toEqual({ candidates: 30, topK: 8 });
   });
 
-  it('reads REFERENCE_TOP_K', () => {
-    expect(loadReferenceTopK({ REFERENCE_TOP_K: '12' })).toBe(12);
+  it('reads MAX_CANDIDATES and RERANK_TOP_K', () => {
+    expect(loadReferenceConfig({ MAX_CANDIDATES: '12', RERANK_TOP_K: '4' })).toEqual({
+      candidates: 12,
+      topK: 4,
+    });
   });
 
-  it.each(['0', '-1', 'many'])('rejects %s, naming the setting', (value) => {
-    expect(() => loadReferenceTopK({ REFERENCE_TOP_K: value })).toThrow('REFERENCE_TOP_K');
+  it('validates the LLM judge’s settings also when RERANKER is another reranker', () => {
+    expect(() => loadReferenceConfig({ RERANKER: 'minilm', JUDGE_THRESHOLD: '2' })).toThrow(
+      'JUDGE_THRESHOLD',
+    );
+  });
+
+  it('rejects REFERENCE_TOP_K, saying to remove it', () => {
+    expect(() => loadReferenceConfig({ REFERENCE_TOP_K: '8' })).toThrow(
+      'remove REFERENCE_TOP_K from .env',
+    );
   });
 });

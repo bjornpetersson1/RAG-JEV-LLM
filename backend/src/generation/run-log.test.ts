@@ -62,7 +62,7 @@ describe('runAndLog from the command line', () => {
     database = undefined;
   });
 
-  it('logs the run with its configuration, timings and counts', async () => {
+  it('logs the run with its configuration, timings, counts and judging', async () => {
     const { db, path } = (database = createEvalDatabase());
     const flow = createQueryFlow(
       db,
@@ -88,6 +88,7 @@ describe('runAndLog from the command line', () => {
         configuration: flow.configuration,
         timings: result.timings,
         counts: expect.objectContaining({ candidates: result.candidates }),
+        judging: result.judging,
         sourceAccuracy: result.draft?.check?.sourceAccuracy,
       },
     ]);

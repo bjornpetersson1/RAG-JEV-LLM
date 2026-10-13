@@ -45,6 +45,8 @@ export interface RunLogEntry {
     sent: number;
     cited: number;
   };
+  /** The rerank's counts; absent without a rerank step. */
+  judging?: QueryResult['judging'];
   sourceAccuracy?: number | null;
   error?: string;
 }
@@ -115,8 +117,9 @@ function outcome({
   fallback,
   approved,
   sources,
+  judging,
   draft,
-}: QueryResult): Pick<RunLogEntry, 'counts' | 'sourceAccuracy'> {
+}: QueryResult): Pick<RunLogEntry, 'counts' | 'judging' | 'sourceAccuracy'> {
   const count = (statuses: readonly string[]) =>
     sources.filter(({ status }) => statuses.includes(status)).length;
   return {
@@ -128,6 +131,7 @@ function outcome({
       sent: count(['cited', 'sent']),
       cited: count(['cited']),
     },
+    ...(judging && { judging }),
     ...(draft?.check && { sourceAccuracy: draft.check.sourceAccuracy }),
   };
 }

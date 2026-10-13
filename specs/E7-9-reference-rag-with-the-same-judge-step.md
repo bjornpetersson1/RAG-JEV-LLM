@@ -4,7 +4,7 @@
 - **Labels:** `E7 UI and measurement`
 - **Phase:** 5. UI and measurement
 - **Depends on:** none (related: E7-7 (#90), E7-8 (#91), E5-4 (#18), E7-6 (#79))
-- **Status:** Approved
+- **Status:** Implemented — all acceptance criteria verified (npm ci, lint, format:check, typecheck, 936 tests (877 backend, 59 frontend; `npm test` offline under sandbox-exec, loopback only) and build exit 0; `bench:compare -- --runs 1` with drafts and the shared Haiku judge, 20 queries, no failures, in `eval/report-2026-10-13.md`)
 
 ## Summary
 
@@ -68,15 +68,15 @@ The reference RAG gets the same steps as the main flow: vector search, then the 
 
 ## Tasks
 
-- [ ] Reference search: dense top `MAX_CANDIDATES`.
-- [ ] Reference judge: the `llm` reranker with `RERANK_TOP_K`, shared with the main flow when `RERANKER=llm` (API server and `bench:compare`).
-- [ ] Remove `REFERENCE_TOP_K`, and reject it at startup with a message.
-- [ ] `bench:compare`: mark the reference's rerank as remote, compare drafts over shared pairs, count pairs without a draft, show candidates judged and unknown chunks.
-- [ ] Timing panel and flow progress: the reference's judge row and cache hits (check that the generic step code covers it; fix whatever does not).
-- [ ] Tests with fakes for every criterion.
-- [ ] README (reference RAG, `bench:compare` columns) and `Constitution/Requirements-and-goal.md` (E5-4's line).
-- [ ] Re-run `bench:compare -- --runs 1` with drafts, and rewrite the report's analysis.
-- [ ] Create the labelling issue for vector-only candidates.
+- [x] Reference search: dense top `MAX_CANDIDATES`.
+- [x] Reference judge: the `llm` reranker with `RERANK_TOP_K`, shared with the main flow when `RERANKER=llm` (API server and `bench:compare`).
+- [x] Remove `REFERENCE_TOP_K`, and reject it at startup with a message.
+- [x] `bench:compare`: mark the reference's rerank as remote, compare drafts over shared pairs, count pairs without a draft, show candidates judged and unknown chunks.
+- [x] Timing panel and flow progress: the reference's judge row and cache hits (check that the generic step code covers it; fix whatever does not).
+- [x] Tests with fakes for every criterion.
+- [x] README (reference RAG, `bench:compare` columns) and `Constitution/Requirements-and-goal.md` (E5-4's line).
+- [x] Re-run `bench:compare -- --runs 1` with drafts, and rewrite the report's analysis.
+- [x] Create the labelling issue for vector-only candidates.
 
 ## Decisions
 
@@ -89,6 +89,26 @@ The reference RAG gets the same steps as the main flow: vector search, then the 
 - **The UI keeps the judge cache on and shows each flow's cache hits** (default). The reference runs after the main flow on the same instruction, so chunks both flows found are cache hits for the reference. Turning the cache off for one flow would make the UI unfair the other way. `bench:compare` already runs with the cache off.
 - **Label bias goes into the report and a new issue** (owner). Re-labelling 20 queries is outside this issue.
 - **The E7-8 decision "the reference RAG stays as the requirements define it" is reversed** (owner, issue #94).
+
+- **Settled while implementing:**
+  - **The reference's judge is built by `createReranker` with `RERANKER=llm`**, so it reads the same `JUDGE_*` settings and `RERANK_TOP_K` as the main flow's LLM judge. `createReferenceFlow` takes the main flow's reranker and uses it when its name is `llm`; the API server and `bench:compare` pass it.
+  - **`createQueryFlows` returns `ConfiguredQueryFlows`**, whose flows carry their rerankers, so a test can see that both share one judge without a cast.
+  - **The run log gets a `judging` field** (relevant, cache hits, judge calls, unknown) for every flow with a rerank step: the spec asks for the reference's judging stats there, and the log had none.
+  - **The `bench:compare` table has a new heading, "Main flow vs reference RAG: the same judge"**, with the columns `judged`, `unknown` and `without draft`; as in E7-8, rows are never appended under an older table's header. `without draft` is `–` with `--no-draft`.
+  - **`npm run query -- --reference` prints "the N chunks most similar to the instruction (no tags)"** followed by the judge's counts, like the main flow.
+  - **The labelling issue is #95 (E7-10)**, on the board as Todo.
+- **Clean code:**
+  - **`ReferenceFlow` is `ConfiguredQueryFlow`**, and both flows label their reranker with one `rerankerLabel`.
+  - **`loadReferenceConfig` validates the reference's LLM judge settings at startup** (`server.ts`), also when `RERANKER` is another reranker, and gives `MAX_CANDIDATES` and `RERANK_TOP_K` once.
+  - **Not done: making `rerank` required in `QueryFlowDependencies`** and removing the "no rerank step" paths (`FlowProgress`, `format.ts`, optional `judging`). No production flow lacks a rerank step now, but the query-flow interface still describes one, and the change reaches far outside this spec. The same goes for sharing a judge per name inside the reranker factory.
+- **Code review (high):**
+  - **Fixed: a draft without text counts as no draft** in `bench:compare` (no approved chunk fitted the context limits), as before E7-9.
+  - **Fixed: `judged` counts the candidates the rerank was given** (the loaded sources), not the search hits.
+  - **Not changed: the UI keeps the judge cache on, so the reference can get cache hits from the main flow.** The spec's decision: the panel shows each flow's cache hits, and `bench:compare`, where the numbers are compared, runs with the cache off.
+  - **Not changed: total and LLM time stay over every measured pair.** The spec's decision: the `without draft` column explains a gap there; only the draft measures are paired.
+  - **Not changed: sharing the judge by comparing the main reranker's name with the reference's own `REFERENCE_RERANKER`.** This does not choose an implementation by `RERANKER` (the registry still does that); it asks whether the main flow already built the judge the reference needs.
+  - **Not changed: `ConfiguredQueryFlows`.** It lets a test check that the API server's wiring shares the judge; a `createReferenceFlow` test alone cannot see that wiring.
+  - **The benchmark run started before these two fixes.** The definitions only differ when a draft had no text or a candidate did not load.
 
 ## Open Questions
 
