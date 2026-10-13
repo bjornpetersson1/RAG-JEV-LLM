@@ -12,6 +12,35 @@ export interface ModeScores extends Relevance {
   f1: number;
 }
 
+/** Precision and recall of a whole list, and precision of its first 5 and 10 (E7-4). */
+export interface RankedRelevance extends Relevance {
+  precision5: number;
+  precision10: number;
+}
+
+export type RankedScores = ModeScores & RankedRelevance;
+
+/** Precision and recall of `returned`, best first, and precision at 5 and 10. */
+export function rankedRelevance(
+  returned: readonly string[],
+  relevant: ReadonlySet<string>,
+): RankedRelevance {
+  return {
+    ...precisionRecall(returned, relevant),
+    precision5: precisionAt(returned, relevant, 5),
+    precision10: precisionAt(returned, relevant, 10),
+  };
+}
+
+/** Macro averages of the ranked measures; F1 from the averaged precision and recall. */
+export function averageRanked(rows: readonly RankedRelevance[]): RankedScores {
+  return {
+    ...averageOver(rows),
+    precision5: mean(rows.map((row) => row.precision5)),
+    precision10: mean(rows.map((row) => row.precision10)),
+  };
+}
+
 export interface SweepRow extends ModeScores {
   threshold: number;
 }

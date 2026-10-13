@@ -8,7 +8,7 @@ import { indexEmbeddings } from '../retrieval/index-embeddings.js';
 import { createFakeEmbedder } from '../retrieval/test-helpers.js';
 import type { Chunk } from '../llm/types.js';
 import { fakeRerankResult } from '../rerank/test-helpers.js';
-import { runQuery, type QueryFlowDependencies } from './query-flow.js';
+import { runQuery, type QueryFlowDependencies, type QueryStep } from './query-flow.js';
 import { createQueryFlow } from './setup.js';
 
 const USAGE = { inputTokens: 7, outputTokens: 3, cacheWriteTokens: 0, cacheReadTokens: 0 };
@@ -58,8 +58,8 @@ describe('runQuery', () => {
     expect(calls.generated).toEqual([['2', '1']]);
     expect(result.tags).toEqual(['uppsagning']);
     expect(result.candidates).toBe(3);
+    expect(result.approved.map((c) => c.id)).toEqual(['2', '1']);
     expect(result.judging).toEqual({
-      approved: 2,
       relevant: 2,
       cacheHits: 1,
       judgeCalls: 2,
@@ -74,6 +74,156 @@ describe('runQuery', () => {
     expect(result.usage).toEqual({ translation: USAGE, judging: USAGE, generation: NO_USAGE });
   });
 
+  it('reports the approved chunks and the time the search spent embedding', async () => {
+    const { deps } = fakeFlow({ '1': 0.6, '2': 0.9, '3': 0.2 });
+    const search = deps.search;
+
+    const result = await runQuery(
+      { instruction: 'Säljare', template: 'employment' },
+      { ...deps, search: async (...args) => ({ ...(await search(...args)), embedMs: 25 }) },
+    );
+
+    expect(result.flow).toBe('main');
+    expect(result.approved.map((c) => c.id)).toEqual(['2', '1']);
+    expect(result.timings.embeddingMs).toBe(25);
+  });
+
+  it('lists every candidate as a source, with its origin and the reranker’s score', async () => {
+    const { deps } = fakeFlow({ '1': 0.6, '2': 0.9 });
+
+    const result = await runQuery({ instruction: 'Säljare', template: 'employment' }, deps);
+
+    // The fake generator cites every chunk it gets.
+    expect(result.sources).toEqual([
+      { chunk: CHUNKS['1'], status: 'cited', origin: 'tag', score: 0.6, reranker: 'fake' },
+      { chunk: CHUNKS['2'], status: 'cited', origin: 'tag', score: 0.9, reranker: 'fake' },
+      { chunk: CHUNKS['3'], status: 'turned-down', origin: 'tag' },
+    ]);
+  });
+
+  it.each([
+    ['a draft that cites one of two sent chunks', true, 20, 'Klausul [K:2].', ['sent', 'cited']],
+    [
+      'a draft that names the other in free text',
+      true,
+      20,
+      'Klausul [K:2]. Enligt 1 § LAS.',
+      ['cited', 'cited'],
+    ],
+    ['the context limit keeping one out', true, 1, 'Klausul [K:2].', ['left-out', 'cited']],
+    ['no draft asked for', false, 20, '', ['left-out', 'left-out']],
+  ])(
+    'gives each approved source its status after %s',
+    async (_case, draft, maxChunks, answer, expected) => {
+      const { deps } = fakeFlow({ '1': 0.6, '2': 0.9 });
+
+      const result = await runQuery(
+        { instruction: 'Säljare', template: 'employment' },
+        {
+          ...deps,
+          generator: createFakeGenerator(() => answer),
+          limits: { ...deps.limits, maxChunks },
+        },
+        { draft },
+      );
+
+      expect(result.sources.slice(0, 2).map(({ status }) => status)).toEqual(expected);
+    },
+  );
+
+  it('reports each step as soon as it is done', async () => {
+    const { deps } = fakeFlow({ '1': 0.6, '2': 0.9, '3': 0.2 });
+    const steps: QueryStep[] = [];
+
+    await runQuery({ instruction: 'Säljare', template: 'employment' }, deps, {
+      onStep: (step) => steps.push(step),
+    });
+
+    expect(steps.map(({ step }) => step)).toEqual([
+      'translation',
+      'search',
+      'rerank',
+      'generation',
+    ]);
+    expect(steps[0]).toMatchObject({ tags: [{ slug: 'uppsagning', origin: 'translated' }] });
+    expect(steps[1]).toMatchObject({ candidates: 3, fallback: 0 });
+    expect(steps[2]).toMatchObject({ approved: 2, relevant: 2, timings: { judgingMs: 40 } });
+  });
+
+  it('asks search, rerank and generator the template’s default instruction without free text', async () => {
+    const { deps, calls } = fakeFlow({ '1': 0.6 });
+    const asked: string[] = [];
+    const translated: string[] = [];
+
+    const result = await runQuery(
+      { instruction: '  ', template: 'nda' },
+      {
+        ...deps,
+        translate: async (query) => {
+          translated.push(query.instruction);
+          return { tags: [], elapsedMs: 0 };
+        },
+        search: async (instruction, tags) => {
+          asked.push(instruction);
+          return deps.search(instruction, tags);
+        },
+      },
+    );
+
+    expect(translated).toEqual(['  ']);
+    expect(asked).toEqual(['Sekretessavtal']);
+    expect(calls.generated).toEqual([['1']]);
+    expect(result.defaultInstruction).toBe('Sekretessavtal');
+  });
+
+  it('counts the candidates the full-text fallback added', async () => {
+    const { deps } = fakeFlow({});
+
+    const result = await runQuery(
+      { instruction: 'Säljare', template: 'nda' },
+      {
+        ...deps,
+        search: async () => ({
+          candidates: [
+            { chunkId: 1, origin: 'tag' as const },
+            { chunkId: 2, origin: 'fts' as const },
+          ],
+        }),
+      },
+    );
+
+    expect(result.fallback).toBe(1);
+    expect(result.defaultInstruction).toBeUndefined();
+  });
+
+  it('stops before the next step once the signal is aborted', async () => {
+    const { deps, calls } = fakeFlow({ '1': 0.6 });
+    const abort = new AbortController();
+
+    const run = runQuery({ instruction: 'Säljare', template: 'nda' }, deps, {
+      signal: abort.signal,
+      onStep: ({ step }) => {
+        if (step === 'search') abort.abort();
+      },
+    });
+
+    await expect(run).rejects.toThrow();
+    expect(calls.judged).toEqual([]);
+    expect(calls.generated).toEqual([]);
+  });
+
+  it('writes no draft when none is asked for', async () => {
+    const { deps, calls } = fakeFlow({ '1': 0.6, '2': 0.9 });
+
+    const result = await runQuery({ instruction: 'Säljare', template: 'nda' }, deps, {
+      draft: false,
+    });
+
+    expect(calls.generated).toEqual([]);
+    expect(result.approved).toHaveLength(2);
+    expect(result.draft).toBeUndefined();
+  });
+
   it('stops before generation when nothing is approved', async () => {
     const { deps, calls } = fakeFlow({ '1': 0.1, '2': 0.4 });
 
@@ -81,7 +231,8 @@ describe('runQuery', () => {
 
     expect(calls.generated).toEqual([]);
     expect(result.draft).toBeUndefined();
-    expect(result.judging).toMatchObject({ approved: 0, unknown: 1 });
+    expect(result.approved).toEqual([]);
+    expect(result.judging).toMatchObject({ unknown: 1 });
     expect(result.timings.generationMs).toBeUndefined();
     expect(result.usage.generation).toBeUndefined();
   });
@@ -118,7 +269,8 @@ describe('switching the reranker to JEV', () => {
 
     expect(reranker.name).toBe('jev');
     expect(jevCalls).toEqual(Array(3).fill('https://api.typesafe.ai/v1/systemone'));
-    expect(result.judging).toMatchObject({ approved: 3, judgeCalls: 3 });
+    expect(result.approved).toHaveLength(3);
+    expect(result.judging).toMatchObject({ judgeCalls: 3 });
     expect(result.draft?.used).toHaveLength(3);
   });
 });
@@ -153,6 +305,7 @@ describe('createQueryFlow', () => {
     expect(result.candidates).toBeGreaterThan(0);
     expect(result.draft?.used.map((c) => c.id)).toEqual(['11']);
     expect(result.draft?.used[0].source).toBe('SFS 1982:80 7 §');
+    expect(result.draft?.used[0].document).toEqual({ title: 'Lag (1982:80) om anställningsskydd' });
     expect(result.draft?.context.limits).toEqual({ maxChunks: 1, maxContextChars: 60_000 });
     expect(result.draft?.text).toContain('inte juridisk rådgivning');
     expect(result.draft?.check).toMatchObject({ flags: [], sourceAccuracy: 1 });
@@ -181,7 +334,8 @@ describe('createQueryFlow', () => {
 
     expect(flow.translate !== undefined).toBe(translated);
     expect(result.tags.length > 0).toBe(translated);
-    if (!translated) expect(result.timings.translationMs).toBe(0);
+    expect(result.timings.translationMs !== undefined).toBe(translated);
+    expect(result.timings.embeddingMs !== undefined).toBe(retriever !== 'tags');
     expect(result.candidates).toBeGreaterThan(0);
     expect(result.draft?.text).toContain('inte juridisk rådgivning');
   });

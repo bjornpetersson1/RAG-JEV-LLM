@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createTestDatabase } from '../db/test-helpers.js';
 import { loadLlmConfig } from '../llm/config.js';
 import { createCapturingLogger } from '../llm/test-helpers.js';
-import { createReranker, loadRerankerConfig, RERANKERS } from './factory.js';
+import { createReranker, isRemoteReranker, loadRerankerConfig, RERANKERS } from './factory.js';
 import { fakeRerankResult } from './test-helpers.js';
 import type { RerankerEntry } from './types.js';
 
@@ -25,11 +25,11 @@ function deps() {
 }
 
 describe('loadRerankerConfig', () => {
-  it('defaults to the BGE reranker keeping 8 chunks', () => {
-    expect(loadRerankerConfig({})).toEqual({ name: 'bge', topK: 8 });
+  it('defaults to the minilm reranker keeping 8 chunks', () => {
+    expect(loadRerankerConfig({})).toEqual({ name: 'minilm', topK: 8 });
   });
 
-  it.each(['bge', 'jev', 'llm', 'qwen3'])('accepts RERANKER=%s', (name) => {
+  it.each(['bge', 'jev', 'llm', 'minilm', 'qwen3'])('accepts RERANKER=%s', (name) => {
     expect(loadRerankerConfig({ ...JEV_KEY, RERANKER: name, RERANK_TOP_K: '5' })).toEqual({
       name,
       topK: 5,
@@ -37,12 +37,12 @@ describe('loadRerankerConfig', () => {
   });
 
   it.each([
-    [{ RERANKER: 'foo' }, 'Invalid RERANKER "foo": expected bge or jev or llm or qwen3'],
+    [{ RERANKER: 'foo' }, 'Invalid RERANKER "foo": expected bge or minilm or jev or llm or qwen3'],
     [{ RERANKER: 'jev' }, 'JEV_API_KEY is required because RERANKER is jev'],
     [{ RERANK_TOP_K: '0' }, 'Invalid RERANK_TOP_K "0"'],
     [
       { JUDGE_IMPL: 'llm' },
-      'JUDGE_IMPL was replaced by RERANKER (bge, jev, llm, qwen3); remove JUDGE_IMPL from .env',
+      'JUDGE_IMPL was replaced by RERANKER (bge, minilm, jev, llm, qwen3); remove JUDGE_IMPL from .env',
     ],
     [{ RERANKER: 'llm', JUDGE_THRESHOLD: '2' }, 'Invalid JUDGE_THRESHOLD "2"'],
     [{ RERANKER: 'llm', JUDGE_CACHE: 'maybe' }, 'Invalid JUDGE_CACHE "maybe"'],
@@ -56,6 +56,7 @@ describe('createReranker', () => {
     [{ RERANKER: 'jev', ...JEV_KEY }, 'jev', 'jev-latest'],
     [{ RERANKER: 'llm' }, 'llm', 'fake'],
     [{ RERANKER: 'bge' }, 'bge', 'onnx-community/bge-reranker-v2-m3-ONNX'],
+    [{}, 'minilm', 'cross-encoder/mmarco-mMiniLMv2-L12-H384-v1'],
     [{ RERANKER: 'qwen3' }, 'qwen3', 'Qwen3-Reranker'],
   ])('builds %o from .env alone', (env, name, model) => {
     const { reranker, topK } = createReranker(env, deps());
@@ -74,6 +75,7 @@ describe('createReranker', () => {
 
   it('adds a reranker with one registry entry and no other change', async () => {
     const fake: RerankerEntry = {
+      remote: false,
       validate() {},
       create: () => ({
         name: 'fake',
@@ -88,5 +90,18 @@ describe('createReranker', () => {
 
     expect(reranker.name).toBe('fake');
     expect(result.ranked.map(({ chunk }) => chunk.id)).toEqual(['a']);
+  });
+});
+
+describe('isRemoteReranker', () => {
+  it.each([
+    ['llm', true],
+    ['jev', true],
+    ['bge', false],
+    ['minilm', false],
+    ['qwen3', false],
+    ['unregistered', false],
+  ])('says whether %s calls a remote model: %s', (name, remote) => {
+    expect(isRemoteReranker({ name })).toBe(remote);
   });
 });

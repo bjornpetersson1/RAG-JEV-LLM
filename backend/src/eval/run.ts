@@ -6,16 +6,22 @@ import type { RerankResult, Reranker } from '../rerank/types.js';
 import { describeError } from '../errors.js';
 import { sum } from '../stats.js';
 import {
-  averageOver,
-  precisionRecall,
+  averageRanked,
+  rankedRelevance,
   recommendThreshold,
   sweepThresholds,
   type ChunkScore,
-  type ModeScores,
-  type Relevance,
+  type RankedRelevance,
+  type RankedScores,
   type SweepRow,
 } from './metrics.js';
-import type { EvalQuery, ResolvedQuery } from './queries.js';
+import {
+  byGradeScope,
+  relevantFor,
+  type EvalQuery,
+  type GradeScope,
+  type ResolvedQuery,
+} from './queries.js';
 
 export const EVAL_MODES = ['tags', 'tags+jev', 'tags+llm', 'fts'] as const;
 export type EvalMode = (typeof EVAL_MODES)[number];
@@ -56,7 +62,8 @@ export interface QueryOutcome {
   tags: string[];
   /** The chunk ids each mode returned. */
   returned: Record<EvalMode, string[]>;
-  relevance: Record<EvalMode, Relevance>;
+  /** Each mode's list measured against the central chunks and against every graded chunk. */
+  relevance: Record<EvalMode, Record<GradeScope, RankedRelevance>>;
   /** Each judge mode's scores, for the sweep; unknown chunks are left out. */
   scores: Record<JudgeMode, ChunkScore[]>;
   answeredBy: Record<JudgeMode, AnsweredBy>;
@@ -73,8 +80,8 @@ export interface EvalResult {
   /** The queries evaluated; the averages are over these. */
   queries: QueryOutcome[];
   failed: FailedQuery[];
-  /** Macro averages over the queries. */
-  modes: Record<EvalMode, ModeScores>;
+  /** Macro averages over the queries, per grade scope. */
+  modes: Record<EvalMode, Record<GradeScope, RankedScores>>;
   sweeps: Record<JudgeMode, SweepRow[]>;
   recommended: Record<JudgeMode, SweepRow>;
   judges: Record<JudgeMode, RerankerIdentity>;
@@ -109,7 +116,9 @@ export async function runEvaluation(
   return {
     queries: outcomes,
     failed,
-    modes: byEvalMode((mode) => averageOver(outcomes.map((o) => o.relevance[mode]))),
+    modes: byEvalMode((mode) =>
+      byGradeScope((scope) => averageRanked(outcomes.map((o) => o.relevance[mode][scope]))),
+    ),
     sweeps,
     recommended: byJudgeMode((mode) => recommendThreshold(sweeps[mode])),
     judges: deps.judges,
@@ -141,7 +150,9 @@ async function evaluateQuery(query: ResolvedQuery, deps: EvalDependencies): Prom
     query,
     tags,
     returned,
-    relevance: byEvalMode((mode) => precisionRecall(returned[mode], query.relevantIds)),
+    relevance: byEvalMode((mode) =>
+      byGradeScope((scope) => rankedRelevance(returned[mode], relevantFor(query, scope))),
+    ),
     scores: byJudgeMode((mode) =>
       judged[mode].scored.map(({ chunk, score }) => ({ chunkId: chunk.id, score })),
     ),

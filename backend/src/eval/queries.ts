@@ -5,13 +5,22 @@
 import { readFileSync } from 'node:fs';
 import type { DatabaseSync } from 'node:sqlite';
 import { parse } from 'yaml';
+import { isOneOf } from '../env.js';
 import { isTemplate, type Template } from '../tagging/vocabulary.js';
+
+/**
+ * How relevant a chunk is (E7-4): `central` when the clause rests on it, `related` for the rest of
+ * the same law or case.
+ */
+export const GRADES = ['central', 'related'] as const;
+export type Grade = (typeof GRADES)[number];
 
 export interface ChunkRef {
   /** The document identifier, e.g. `SFS 1982:80` or `AD 2001 nr 91`. */
   document: string;
   /** The chunk's stored source reference, e.g. `SFS 1982:80 4 b §`. */
   sourceRef: string;
+  grade: Grade;
 }
 
 export interface EvalQuery {
@@ -24,9 +33,29 @@ export interface EvalQuery {
   relevant: ChunkRef[];
 }
 
+/**
+ * Which labels count as relevant in a measure: the central chunks only, or every graded chunk
+ * (central and related).
+ */
+export const GRADE_SCOPES = ['central', 'all'] as const;
+export type GradeScope = (typeof GRADE_SCOPES)[number];
+
+/** One value per grade scope. */
+export function byGradeScope<T>(value: (scope: GradeScope) => T): Record<GradeScope, T> {
+  return { central: value('central'), all: value('all') };
+}
+
+/** The query's relevant chunks for `scope`. */
+export function relevantFor(query: ResolvedQuery, scope: GradeScope): ReadonlySet<string> {
+  return scope === 'central' ? query.centralIds : query.relevantIds;
+}
+
 /** A query with its relevant chunks resolved to chunk ids in the database. */
 export interface ResolvedQuery extends EvalQuery {
+  /** Every relevant chunk, central and related. */
   relevantIds: ReadonlySet<string>;
+  /** The central ones only. */
+  centralIds: ReadonlySet<string>;
 }
 
 /** What a complete evaluation set must contain. */
@@ -90,15 +119,24 @@ export function resolveEvalQueries(
      WHERE d.identifier = ? AND c.source_ref = ?`,
   );
   const resolved = queries.map((query) => {
-    if (query.relevant.length === 0)
+    if (query.relevant.length === 0) {
       problems.push(`query ${query.id}: no relevant chunk is marked`);
+    } else if (!query.relevant.some(({ grade }) => grade === 'central')) {
+      // Its central recall would be 0 and pull every central average down.
+      problems.push(`query ${query.id}: no chunk is graded central`);
+    }
     const relevantIds = new Set<string>();
+    const centralIds = new Set<string>();
     for (const ref of query.relevant) {
       const row = findChunk.get(ref.document, ref.sourceRef) as { id: number } | undefined;
-      if (row) relevantIds.add(String(row.id));
-      else problems.push(`query ${query.id}: no chunk "${ref.sourceRef}" in ${ref.document}`);
+      if (!row) {
+        problems.push(`query ${query.id}: no chunk "${ref.sourceRef}" in ${ref.document}`);
+        continue;
+      }
+      relevantIds.add(String(row.id));
+      if (ref.grade === 'central') centralIds.add(String(row.id));
     }
-    return { ...query, relevantIds };
+    return { ...query, relevantIds, centralIds };
   });
   if (problems.length > 0) throw evalSetError(problems);
   return resolved;
@@ -117,11 +155,14 @@ function parseQuery(entry: unknown): EvalQuery | string {
   if (!Array.isArray(relevant)) return '"relevant" must be a list';
   const refs: ChunkRef[] = [];
   for (const ref of relevant as unknown[]) {
-    const { document, sourceRef } = (ref ?? {}) as Record<string, unknown>;
+    const { document, sourceRef, grade } = (ref ?? {}) as Record<string, unknown>;
     if (typeof document !== 'string' || typeof sourceRef !== 'string') {
       return 'every relevant chunk needs "document" and "sourceRef"';
     }
-    refs.push({ document, sourceRef });
+    if (typeof grade !== 'string' || !isOneOf(GRADES, grade)) {
+      return `"grade" of ${sourceRef} must be ${GRADES.join(' or ')}`;
+    }
+    refs.push({ document, sourceRef, grade });
   }
   return {
     id,

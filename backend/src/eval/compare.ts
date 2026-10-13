@@ -1,13 +1,14 @@
-// Compares retrievers and rerankers on the evaluation set (E8-5): recall@K before and after rerank,
-// precision@5/@10 after it, and the latency of each. The retrievers and rerankers are passed in, so
+// Compares retrievers and rerankers on the evaluation set (E8-5): recall@K and precision@5/@10
+// before and after rerank, for the central chunks and for every graded chunk (E7-4), and the
+// latency of each. The retrievers and rerankers are passed in, so
 // the same code runs against the database and models or against fakes in tests.
 
 import { describeError } from '../errors.js';
 import type { Chunk } from '../llm/types.js';
 import type { Reranker } from '../rerank/types.js';
-import { mean, percentile } from '../stats.js';
+import { latencyOf, mean, type Latency } from '../stats.js';
 import { precisionAt, recallAt } from './metrics.js';
-import type { ResolvedQuery } from './queries.js';
+import { byGradeScope, relevantFor, type GradeScope, type ResolvedQuery } from './queries.js';
 
 /** A candidate source as the comparison sees it. */
 export interface ComparedRetriever {
@@ -48,13 +49,14 @@ export interface CompareDependencies {
   onFailure?(step: string, query: ResolvedQuery, error: string): void;
 }
 
-export interface Latency {
-  median: number;
-  p90: number;
-}
-
 /** Recall at 5, 8, 10 and the whole list. */
 export type RecallAt = Record<'5' | '8' | '10' | 'candidates', number>;
+
+/** A list's recall at each K and precision at 5 and 10. */
+export type ListMeasures = RecallAt & { precision5: number; precision10: number };
+
+/** The measures against each grade scope. */
+export type GradedMeasures = Record<GradeScope, ListMeasures>;
 
 export interface ComparisonRow {
   retriever: string;
@@ -64,8 +66,10 @@ export interface ComparisonRow {
   dtype: string;
   /** Mean candidates per query. */
   candidates: number;
-  before: RecallAt;
-  after?: RecallAt & { precision5: number; precision10: number };
+  /** The retriever's own order. */
+  before: GradedMeasures;
+  /** The reranker's score order. */
+  after?: GradedMeasures;
   retrievalMs: Latency;
   /** Absent when no latency could be measured. */
   rerankMs?: Latency;
@@ -257,7 +261,7 @@ function beforeRow(
     model: '–',
     dtype: '–',
     candidates: mean(lists.map(({ ids }) => ids.length)),
-    before: recallOver(lists),
+    before: gradedMeasures(lists),
     retrievalMs: latencyOf(lists.map(({ elapsedMs }) => elapsedMs)),
     queries: lists.length,
     notes: failedQueries > 0 ? [`${failedQueries} queries failed`] : [],
@@ -281,11 +285,7 @@ function afterRow(
     reranker: reranker.name,
     model: reranker.model,
     dtype: reranker.dtype ?? '–',
-    after: {
-      ...recallOver(results),
-      precision5: mean(results.map(({ ids, query }) => precisionAt(ids, query.relevantIds, 5))),
-      precision10: mean(results.map(({ ids, query }) => precisionAt(ids, query.relevantIds, 10))),
-    },
+    after: gradedMeasures(results),
     rerankMs: latency,
     notes: [
       ...before.notes,
@@ -305,22 +305,25 @@ function skippedRow(
   return { ...before, reranker, queries: 0, notes: [`skipped: ${reason}`], failed };
 }
 
-/** Macro averages of recall at each K over the queries. */
-function recallOver(lists: readonly QueryList[]): RecallAt {
-  const at = (k: (ids: readonly string[]) => number) =>
-    mean(lists.map(({ ids, query }) => recallAt(ids, query.relevantIds, k(ids))));
-  return {
-    '5': at(() => 5),
-    '8': at(() => 8),
-    '10': at(() => 10),
-    candidates: at((ids) => ids.length),
-  };
+/** The measures against the central chunks and against every graded chunk. */
+function gradedMeasures(lists: readonly QueryList[]): GradedMeasures {
+  return byGradeScope((scope) => measuresOver(lists, scope));
 }
 
-function latencyOf(times: readonly number[]): Latency {
-  if (times.length === 0) return { median: 0, p90: 0 };
-  const sorted = [...times].sort((a, b) => a - b);
-  return { median: percentile(sorted, 0.5), p90: percentile(sorted, 0.9) };
+/** Macro averages over the queries of recall at each K and precision at 5 and 10. */
+function measuresOver(lists: readonly QueryList[], scope: GradeScope): ListMeasures {
+  const recall = (k: (ids: readonly string[]) => number) =>
+    mean(lists.map(({ ids, query }) => recallAt(ids, relevantFor(query, scope), k(ids))));
+  const precision = (k: number) =>
+    mean(lists.map(({ ids, query }) => precisionAt(ids, relevantFor(query, scope), k)));
+  return {
+    '5': recall(() => 5),
+    '8': recall(() => 8),
+    '10': recall(() => 10),
+    candidates: recall((ids) => ids.length),
+    precision5: precision(5),
+    precision10: precision(10),
+  };
 }
 
 function rowKey(retriever: string, reranker: string): string {

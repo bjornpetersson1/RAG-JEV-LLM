@@ -11,7 +11,7 @@ const DRAFT: GenerationResult = {
   used: [{ id: '11', text: 'a', source: 'SFS 1982:80 7 §' }],
   unused: [{ id: '12', text: 'b', source: 'SFS 1982:80 11 §' }],
   leftOut: [],
-  check: { flags: [], references: 1, valid: 1, sourceAccuracy: 1 },
+  check: { flags: [], matches: [], references: 1, valid: 1, sourceAccuracy: 1 },
   context: {
     limits: { maxChunks: 20, maxContextChars: 60_000 },
     limitedBy: [],
@@ -23,9 +23,13 @@ const DRAFT: GenerationResult = {
 
 function result(draft?: GenerationResult, relevant = draft ? 2 : 0): QueryResult {
   return {
+    flow: 'main',
     tags: ['anstallningsavtal', 'provanstallning'],
     candidates: 30,
-    judging: { approved: draft ? 2 : 0, relevant, cacheHits: 4, judgeCalls: 26, unknown: 0 },
+    fallback: 0,
+    approved: draft ? [...draft.used, ...draft.unused] : [],
+    sources: [],
+    judging: { relevant, cacheHits: 4, judgeCalls: 26, unknown: 0 },
     draft,
     timings: {
       translationMs: 800,
@@ -79,6 +83,7 @@ describe('formatQueryResult', () => {
 
   it('prints the source accuracy and each flagged reference with its position', () => {
     const check = {
+      matches: [],
       flags: [
         {
           kind: 'citation' as const,
@@ -110,8 +115,22 @@ describe('formatQueryResult', () => {
     );
   });
 
+  it('computes the percentage from the counts, so 29 of 100 is 29 %, not 28 %', () => {
+    const check = { flags: [], matches: [], references: 100, valid: 29, sourceAccuracy: 0.29 };
+
+    expect(formatQueryResult(REQUEST, result({ ...DRAFT, check }))).toContain(
+      'Source accuracy: 29 % (29 of 100 references)',
+    );
+  });
+
   it('rounds the source accuracy down, so a flagged draft never shows 100 %', () => {
-    const check = { flags: [], references: 250, valid: 249, sourceAccuracy: 249 / 250 };
+    const check = {
+      flags: [],
+      matches: [],
+      references: 250,
+      valid: 249,
+      sourceAccuracy: 249 / 250,
+    };
 
     expect(formatQueryResult(REQUEST, result({ ...DRAFT, check }))).toContain(
       'Source accuracy: 99 % (249 of 250 references)',
@@ -119,7 +138,7 @@ describe('formatQueryResult', () => {
   });
 
   it('shows a draft without references as having no source accuracy', () => {
-    const check = { flags: [], references: 0, valid: 0, sourceAccuracy: null };
+    const check = { flags: [], matches: [], references: 0, valid: 0, sourceAccuracy: null };
 
     expect(formatQueryResult(REQUEST, result({ ...DRAFT, check }))).toContain(
       'Source accuracy: – (no references)',
@@ -178,5 +197,48 @@ describe('formatQueryResult', () => {
     expect(output).toContain('No relevant sources were found, so no draft was generated.');
     expect(output).toContain('Time (ms): translation 800 · search 15 · judging 3000 · total 4715');
     expect(output).not.toContain('generation');
+  });
+
+  it('shows the embedding time inside the search time when the retriever embeds', () => {
+    const embedded = result();
+    embedded.timings = { ...embedded.timings, embeddingMs: 400, searchMs: 415 };
+
+    expect(formatQueryResult(REQUEST, embedded)).toContain('search 415 (embedding 400)');
+  });
+
+  it('prints the reference RAG without tags or judging, and its own steps', () => {
+    const reference: QueryResult = {
+      ...result(DRAFT),
+      flow: 'reference',
+      tags: [],
+      candidates: 8,
+      judging: undefined,
+      timings: { embeddingMs: 400, searchMs: 410, generationMs: 900, totalMs: 1310 },
+      usage: { generation: DRAFT.usage },
+    };
+
+    const output = formatQueryResult(REQUEST, reference);
+
+    expect(output).toContain(
+      'Reference RAG: the 8 chunks most similar to the instruction (no tags, no rerank)',
+    );
+    expect(output).not.toContain('Tags:');
+    expect(output).not.toContain('judge calls');
+    expect(output).toContain(
+      'Time (ms): search 410 (embedding 400) · generation 900 · total 1310\n' +
+        'Tokens: generation in 5000 / out 1200',
+    );
+  });
+
+  it('adds --reference to the rerun command of a reference run', () => {
+    const limited: GenerationResult = {
+      ...DRAFT,
+      leftOut: [{ id: '13', text: 'c', source: 'SFS 1982:80 12 §' }],
+      context: { ...DRAFT.context, limitedBy: ['maxChunks'] },
+    };
+
+    expect(formatQueryResult(REQUEST, { ...result(limited), flow: 'reference' })).toContain(
+      '--max-chunks 2 --max-context-chars 2 --reference',
+    );
   });
 });

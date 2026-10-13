@@ -6,6 +6,14 @@ describe('parseQueryArgs', () => {
     expect(parseQueryArgs(['Säljare med provanställning', '--template', 'employment'])).toEqual({
       request: { instruction: 'Säljare med provanställning', template: 'employment' },
       limits: {},
+      reference: false,
+    });
+  });
+
+  it('reads --reference, which runs the reference RAG instead', () => {
+    expect(parseQueryArgs(['NDA', '--template', 'nda', '--reference'])).toMatchObject({
+      request: { instruction: 'NDA', template: 'nda' },
+      reference: true,
     });
   });
 
@@ -22,6 +30,7 @@ describe('parseQueryArgs', () => {
     ).toEqual({
       request: { instruction: 'NDA', template: 'nda' },
       limits: { maxChunks: 30, maxContextChars: 90_000 },
+      reference: false,
     });
   });
 

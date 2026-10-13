@@ -99,7 +99,7 @@ export function loadVectorIndex(db: DatabaseSync, identity: EmbeddingIdentity): 
 }
 
 /** Throws, naming `npm run index:embed`, unless every chunk has an up-to-date embedding. */
-export function assertEmbeddingsReady(db: DatabaseSync, identity: EmbeddingIdentity): void {
+function assertEmbeddingsReady(db: DatabaseSync, identity: EmbeddingIdentity): void {
   const migrated = db
     .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'chunk_embeddings'")
     .get();

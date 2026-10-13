@@ -12,6 +12,8 @@ const QUERIES: ResolvedQuery[] = [
     instruction: 'Konkurrensklausul',
     relevant: [],
     relevantIds: new Set(['1', '2']),
+    // Chunk 2 is related, not central.
+    centralIds: new Set(['1']),
   },
   {
     id: 'nda-01',
@@ -19,6 +21,7 @@ const QUERIES: ResolvedQuery[] = [
     instruction: 'Sekretess',
     relevant: [],
     relevantIds: new Set(['5']),
+    centralIds: new Set(['5']),
   },
 ];
 
@@ -68,14 +71,28 @@ describe('runEvaluation', () => {
       'tags+llm': ['1', '3'],
       fts: ['2', '9'],
     });
-    expect(anst.relevance).toEqual({
-      tags: { precision: 0.5, recall: 1 },
-      'tags+jev': { precision: 0.5, recall: 0.5 },
-      'tags+llm': { precision: 0.5, recall: 0.5 },
-      fts: { precision: 0.5, recall: 0.5 },
+    expect(anst.relevance.tags).toEqual({
+      all: { precision: 0.5, recall: 1, precision5: 0.4, precision10: 0.2 },
+      central: { precision: 0.25, recall: 1, precision5: 0.2, precision10: 0.1 },
     });
-    expect(nda.relevance.fts).toEqual({ precision: 0, recall: 0 });
-    expect(result.modes.tags).toEqual({ precision: 0.75, recall: 1, f1: 1.5 / 1.75 });
+    expect(anst.relevance['tags+jev']).toEqual({
+      all: { precision: 0.5, recall: 0.5, precision5: 0.2, precision10: 0.1 },
+      central: { precision: 0.5, recall: 1, precision5: 0.2, precision10: 0.1 },
+    });
+    expect(anst.relevance.fts.central).toEqual({
+      precision: 0,
+      recall: 0,
+      precision5: 0,
+      precision10: 0,
+    });
+    expect(nda.relevance.fts.all).toMatchObject({ precision: 0, recall: 0 });
+    expect(result.modes.tags.all).toEqual({
+      precision: 0.75,
+      recall: 1,
+      f1: 1.5 / 1.75,
+      precision5: expect.closeTo(0.3, 10),
+      precision10: expect.closeTo(0.15, 10),
+    });
     expect(anst.unknown).toEqual({ 'tags+jev': 1, 'tags+llm': 1 });
     // Without a JEV key both modes have the same judge, which judges the tag candidates once.
     expect(judgeCalls).toEqual([
@@ -114,7 +131,7 @@ describe('runEvaluation', () => {
     expect(result.queries.map((outcome) => outcome.query.id)).toEqual(['nda-01']);
     expect(result.failed).toEqual([{ id: 'anst-01', error: 'claude exited with code 1' }]);
     expect(failures).toEqual(['anst-01']);
-    expect(result.modes.tags).toMatchObject({ precision: 1, recall: 1 });
+    expect(result.modes.tags.all).toMatchObject({ precision: 1, recall: 1 });
     expect(formatForTerminal(result)).toContain(
       '1 query failed (left out of every average):\n  - anst-01: claude exited with code 1',
     );
@@ -161,7 +178,8 @@ describe('report', () => {
     const text = formatForTerminal(result);
 
     expect(text).toContain('Relevance over 2 queries (macro average):');
-    expect(text).toMatch(/ {2}tags {7}0\.750 {6}1\.000 {6}0\.857/);
+    expect(text).toMatch(/ {2}tags {7}all {6}0\.750 {6}1\.000 {6}0\.857 {6}0\.300 {6}0\.150/);
+    expect(text).toMatch(/ {2}tags {7}central {2}0\.625 /);
     expect(text).toContain('Threshold sweep for tags+llm');
     expect(text).toMatch(/0\.1 .*<- recommended/);
     expect(text).toContain('Recommended threshold: 0.1 (highest F1)');
@@ -177,7 +195,8 @@ describe('report', () => {
 
     expect(markdown).toContain('Run started 2026-10-11T12:00:00.000Z over 2 queries');
     expect(markdown).toContain('- LLM judge: `claude-code claude-haiku-5-5`');
-    expect(markdown).toContain('| tags | 0.750 | 1.000 | 0.857 |');
+    expect(markdown).toContain('| tags | all | 0.750 | 1.000 | 0.857 | 0.300 | 0.150 |');
+    expect(markdown).toContain('| tags | central | 0.625 | 1.000 |');
     expect(markdown).toContain('## Threshold sweep: tags+jev');
     expect(markdown).toContain(
       '| anst-01 | employment | employment | 1 | 2 | 0.500 / 1.000 (4) | 0.500 / 0.500 (2) | 0.500 / 0.500 (2) | 0.500 / 0.500 (2) |',

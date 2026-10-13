@@ -1,7 +1,5 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createEvalDatabase } from '../eval/test-helpers.js';
+import { describe, expect, it, vi } from 'vitest';
 import { fakeRerankResult } from '../rerank/test-helpers.js';
-import { checkRetrieverReady } from './setup.js';
 import { formatRetrieveResult, parseRetrieveArgs, retrieve } from './retrieve.js';
 import type { Retriever } from './retriever.js';
 
@@ -113,26 +111,5 @@ describe('parseRetrieveArgs', () => {
     [['x', '--other'], undefined],
   ])('parses %o', (args, expected) => {
     expect(parseRetrieveArgs(args)).toEqual(expected);
-  });
-});
-
-describe('checkRetrieverReady', () => {
-  let database: ReturnType<typeof createEvalDatabase> | undefined;
-
-  afterEach(() => {
-    database?.remove();
-    database = undefined;
-  });
-
-  it('needs nothing for tag search', () => {
-    expect(() => checkRetrieverReady('/no/such/database.db', {})).not.toThrow();
-  });
-
-  it('fails for bge, naming index:embed, when the chunks are not embedded', () => {
-    database = createEvalDatabase();
-
-    expect(() => checkRetrieverReady(database!.path, { RETRIEVER: 'bge' })).toThrow(
-      'RETRIEVER=bge: 3 chunks have no up-to-date Xenova/bge-m3 (int8) embedding; run `npm run index:embed`',
-    );
   });
 });

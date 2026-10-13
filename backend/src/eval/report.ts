@@ -1,7 +1,8 @@
 // The evaluation's terminal table and Markdown report (E5-3).
 
 import { escapeCell } from '../reports.js';
-import type { ModeScores, SweepRow } from './metrics.js';
+import type { ModeScores, RankedScores, SweepRow } from './metrics.js';
+import { GRADE_SCOPES } from './queries.js';
 import { EVAL_MODES, JUDGE_MODES, type EvalResult, type JudgeMode } from './run.js';
 
 export interface ReportContext {
@@ -16,8 +17,13 @@ export function formatForTerminal(result: EvalResult): string {
   return [
     `Relevance over ${result.queries.length} queries (macro average):`,
     '',
-    `  ${'mode'.padEnd(10)} precision  recall     F1`,
-    ...EVAL_MODES.map((mode) => `  ${mode.padEnd(10)} ${scoreColumns(result.modes[mode])}`),
+    `  ${'mode'.padEnd(10)} ${'grade'.padEnd(8)} precision  recall     F1         P@5        P@10`,
+    ...EVAL_MODES.flatMap((mode) =>
+      GRADE_SCOPES.map(
+        (scope) =>
+          `  ${mode.padEnd(10)} ${scope.padEnd(8)} ${rankedColumns(result.modes[mode][scope])}`,
+      ),
+    ),
     ...JUDGE_MODES.flatMap((mode) => [
       '',
       `Threshold sweep for ${mode} (${judgeNote(result, mode)}):`,
@@ -44,11 +50,15 @@ export function formatAsMarkdown(result: EvalResult, context: ReportContext): st
     ...failureLines(result).flatMap((line) => [line, '']),
     '## Relevance per mode',
     '',
-    'Macro averages over the queries. Precision is 0 for a query with nothing returned. The three tag modes start from the same tag-search candidates.',
+    "Macro averages over the queries. Precision is 0 for a query with nothing returned. The three tag modes start from the same tag-search candidates. Grade `central` counts the chunks the clause rests on, `all` every graded chunk; P@K is relevant chunks among the first K divided by K, in the retriever's order for `tags` and `fts` and the judge's score order for the judge modes.",
     '',
-    '| Mode | Precision | Recall | F1 |',
-    '| --- | --- | --- | --- |',
-    ...EVAL_MODES.map((mode) => `| ${mode} | ${scoreCells(result.modes[mode])} |`),
+    '| Mode | Grade | Precision | Recall | F1 | P@5 | P@10 |',
+    '| --- | --- | --- | --- | --- | --- | --- |',
+    ...EVAL_MODES.flatMap((mode) =>
+      GRADE_SCOPES.map(
+        (scope) => `| ${mode} | ${scope} | ${rankedCells(result.modes[mode][scope])} |`,
+      ),
+    ),
     '',
     '## Judges',
     '',
@@ -66,7 +76,7 @@ export function formatAsMarkdown(result: EvalResult, context: ReportContext): st
     '',
     '## Per query',
     '',
-    'Precision / recall per mode; "returned" counts what each mode returned.',
+    'Precision / recall per mode against every graded chunk; "returned" counts what each mode returned.',
     '',
     `| Query | Kind | Template | Tags | Relevant | ${EVAL_MODES.join(' | ')} |`,
     `| --- | --- | --- | --- | --- | ${EVAL_MODES.map(() => '---').join(' | ')} |`,
@@ -75,7 +85,7 @@ export function formatAsMarkdown(result: EvalResult, context: ReportContext): st
         `| ${escapeCell(query.id)} | ${query.kind} | ${query.template ?? '–'} | ${tags.length} | ${query.relevantIds.size} | ` +
         EVAL_MODES.map(
           (mode) =>
-            `${formatScore(relevance[mode].precision)} / ${formatScore(relevance[mode].recall)} (${returned[mode].length})`,
+            `${formatScore(relevance[mode].all.precision)} / ${formatScore(relevance[mode].all.recall)} (${returned[mode].length})`,
         ).join(' | ') +
         ' |',
     ),
@@ -108,14 +118,34 @@ function mark(result: EvalResult, mode: JudgeMode, row: SweepRow): string {
 }
 
 function scoreColumns(scores: ModeScores): string {
-  return [scores.precision, scores.recall, scores.f1]
+  return columns([scores.precision, scores.recall, scores.f1]);
+}
+
+function scoreCells(scores: ModeScores): string {
+  return cells([scores.precision, scores.recall, scores.f1]);
+}
+
+function rankedColumns(scores: RankedScores): string {
+  return columns(rankedValues(scores));
+}
+
+function rankedCells(scores: RankedScores): string {
+  return cells(rankedValues(scores));
+}
+
+function rankedValues(scores: RankedScores): number[] {
+  return [scores.precision, scores.recall, scores.f1, scores.precision5, scores.precision10];
+}
+
+function columns(values: readonly number[]): string {
+  return values
     .map((value) => formatScore(value).padEnd(10))
     .join(' ')
     .trimEnd();
 }
 
-function scoreCells(scores: ModeScores): string {
-  return [scores.precision, scores.recall, scores.f1].map(formatScore).join(' | ');
+function cells(values: readonly number[]): string {
+  return values.map(formatScore).join(' | ');
 }
 
 export function formatScore(value: number): string {

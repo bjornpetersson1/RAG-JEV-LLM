@@ -39,7 +39,7 @@
    - The query flow and `eval:run` contain no reference to BGE, batching or the model; only the factory entry names `BgeReranker` (checked by review and by a grep in the verification).
 4. **`npm test` runs without network access or downloaded models.**
    - Tests use a fake model; no test reads the model cache.
-5. **`RERANKER=bge` is the default.**
+5. **`RERANKER=bge` is the default.** (**superseded by E7-5**: the default is `minilm`.)
    - The config default and `.env.example` both say `bge`; a config test covers the default.
 6. **The canonical checks pass.**
    - `npm run lint && npm run format:check && npm run typecheck && npm test && npm run build` exits 0.

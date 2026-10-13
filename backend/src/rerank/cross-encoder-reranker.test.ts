@@ -1,15 +1,18 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createCapturingLogger } from '../llm/test-helpers.js';
 import type { Chunk } from '../llm/types.js';
-import { BGE_RERANKER_MAX_TOKENS } from '../models/catalog.js';
+import { BGE_RERANKER, MMINILM_RERANKER } from '../models/catalog.js';
 import {
-  createBgeReranker,
-  loadBgeRerankerConfig,
+  createCrossEncoderReranker,
+  loadCrossEncoderRerankerConfig,
   sigmoid,
-  type BgeRerankerConfig,
-} from './bge-reranker.js';
+  type CrossEncoderRerankerConfig,
+} from './cross-encoder-reranker.js';
+import { localCrossEncoders, RERANKERS } from './factory.js';
 
-const CONFIG: BgeRerankerConfig = {
+const BGE = { name: 'bge', model: BGE_RERANKER };
+
+const CONFIG: CrossEncoderRerankerConfig = {
   dtype: 'int8',
   cacheDir: '/models',
   batchSize: 2,
@@ -35,10 +38,10 @@ function fakeModel(logits: Record<string, number>, truncate: string[] = []) {
   return { load, batches };
 }
 
-describe('createBgeReranker', () => {
+describe('createCrossEncoderReranker', () => {
   it('turns logits into scores with a sigmoid and ranks best first, at most topK', async () => {
     const { load } = fakeModel({ a: -1, b: 2, c: 0 });
-    const reranker = createBgeReranker(CONFIG, createCapturingLogger(), load);
+    const reranker = createCrossEncoderReranker(BGE, CONFIG, createCapturingLogger(), load);
 
     const result = await reranker.rerank('Uppsägning', CHUNKS, 2);
 
@@ -53,7 +56,8 @@ describe('createBgeReranker', () => {
 
   it('applies RERANK_THRESHOLD_BGE before topK', async () => {
     const { load } = fakeModel({ a: -1, b: 2, c: 0 });
-    const reranker = createBgeReranker(
+    const reranker = createCrossEncoderReranker(
+      BGE,
       { ...CONFIG, threshold: 0.6 },
       createCapturingLogger(),
       load,
@@ -67,7 +71,7 @@ describe('createBgeReranker', () => {
 
   it('scores the heading path and text, or the source and text, in batches of similar length', async () => {
     const { load, batches } = fakeModel({ a: 0, b: 0, c: 0 });
-    const reranker = createBgeReranker(CONFIG, createCapturingLogger(), load);
+    const reranker = createCrossEncoderReranker(BGE, CONFIG, createCapturingLogger(), load);
 
     await reranker.rerank('Uppsägning', CHUNKS, 8);
 
@@ -83,7 +87,7 @@ describe('createBgeReranker', () => {
   it('loads the model once, on the first rerank with chunks, and logs the load', async () => {
     const { load } = fakeModel({ a: 0, b: 0, c: 0 });
     const logger = createCapturingLogger();
-    const reranker = createBgeReranker(CONFIG, logger, load);
+    const reranker = createCrossEncoderReranker(BGE, CONFIG, logger, load);
 
     await expect(reranker.rerank('x', [], 8)).resolves.toMatchObject({ ranked: [], scored: [] });
     expect(load).not.toHaveBeenCalled();
@@ -91,7 +95,7 @@ describe('createBgeReranker', () => {
     await reranker.rerank('x', CHUNKS, 8);
 
     expect(load).toHaveBeenCalledOnce();
-    expect(load).toHaveBeenCalledWith('onnx-community/bge-reranker-v2-m3-ONNX', 'int8', '/models');
+    expect(load).toHaveBeenCalledWith(BGE_RERANKER, 'int8', '/models');
     expect(logger.info).toHaveBeenCalledWith(
       expect.objectContaining({ role: 'reranker', loadMs: expect.any(Number) }),
       'Reranker model loaded',
@@ -101,7 +105,7 @@ describe('createBgeReranker', () => {
   it('tries to load again after a failed load', async () => {
     const { load } = fakeModel({ a: 0, b: 0, c: 0 });
     load.mockRejectedValueOnce(new Error('download failed'));
-    const reranker = createBgeReranker(CONFIG, createCapturingLogger(), load);
+    const reranker = createCrossEncoderReranker(BGE, CONFIG, createCapturingLogger(), load);
 
     await expect(reranker.rerank('x', CHUNKS, 8)).rejects.toThrow('download failed');
     await expect(reranker.rerank('x', CHUNKS, 8)).resolves.toMatchObject({
@@ -111,7 +115,7 @@ describe('createBgeReranker', () => {
 
   it('spells out law abbreviations in the instruction', async () => {
     const { load, batches } = fakeModel({ a: 0, b: 0, c: 0 });
-    const reranker = createBgeReranker(CONFIG, createCapturingLogger(), load);
+    const reranker = createCrossEncoderReranker(BGE, CONFIG, createCapturingLogger(), load);
 
     await reranker.rerank('Uppsägning enligt 7 § LAS', CHUNKS.slice(0, 1), 8);
 
@@ -128,7 +132,7 @@ describe('createBgeReranker', () => {
       if (calls === 1) throw new Error('out of memory');
       return pairs.map(() => ({ logit: 1, truncated: false }));
     });
-    const reranker = createBgeReranker(CONFIG, logger, load);
+    const reranker = createCrossEncoderReranker(BGE, CONFIG, logger, load);
 
     const result = await reranker.rerank('x', CHUNKS, 8);
 
@@ -143,13 +147,13 @@ describe('createBgeReranker', () => {
   it('logs each chunk the model had to cut', async () => {
     const { load } = fakeModel({ a: 0, b: 0, c: 0 }, ['c']);
     const logger = createCapturingLogger();
-    const reranker = createBgeReranker(CONFIG, logger, load);
+    const reranker = createCrossEncoderReranker(BGE, CONFIG, logger, load);
 
     await reranker.rerank('x', CHUNKS, 8);
 
     expect(logger.warn).toHaveBeenCalledOnce();
     expect(logger.warn).toHaveBeenCalledWith(
-      { role: 'reranker', chunkId: 'c', maxTokens: BGE_RERANKER_MAX_TOKENS },
+      { role: 'reranker', chunkId: 'c', maxTokens: BGE_RERANKER.maxTokens },
       'Pair cut to fit the reranker',
     );
   });
@@ -164,7 +168,7 @@ describe('createBgeReranker', () => {
       running -= 1;
       return pairs.map(() => ({ logit: 0, truncated: false }));
     });
-    const reranker = createBgeReranker(CONFIG, createCapturingLogger(), load);
+    const reranker = createCrossEncoderReranker(BGE, CONFIG, createCapturingLogger(), load);
 
     await Promise.all([reranker.rerank('x', CHUNKS, 8), reranker.rerank('y', CHUNKS, 8)]);
 
@@ -172,15 +176,46 @@ describe('createBgeReranker', () => {
   });
 });
 
-describe('loadBgeRerankerConfig', () => {
+describe('loadCrossEncoderRerankerConfig', () => {
   it('defaults to int8, batches of 8 and threshold 0', () => {
-    expect(loadBgeRerankerConfig({})).toMatchObject({ dtype: 'int8', batchSize: 8, threshold: 0 });
+    expect(loadCrossEncoderRerankerConfig({}, 'bge')).toMatchObject({
+      dtype: 'int8',
+      batchSize: 8,
+      threshold: 0,
+    });
   });
 
   it.each([
     [{ RERANKER_DTYPE: 'fp16' }, 'Invalid RERANKER_DTYPE "fp16"'],
     [{ RERANK_THRESHOLD_BGE: '1.5' }, 'Invalid RERANK_THRESHOLD_BGE "1.5"'],
   ])('rejects %o', (env, message) => {
-    expect(() => loadBgeRerankerConfig(env)).toThrow(message);
+    expect(() => loadCrossEncoderRerankerConfig(env, 'bge')).toThrow(message);
+  });
+});
+
+describe('the minilm reranker', () => {
+  it.each([
+    [{}, 0],
+    [{ RERANK_THRESHOLD_MINILM: '0.3' }, 0.3],
+  ])('reads RERANK_THRESHOLD_MINILM from %o', (env, threshold) => {
+    expect(loadCrossEncoderRerankerConfig(env, 'minilm')).toMatchObject({ threshold });
+  });
+
+  it('names RERANK_THRESHOLD_MINILM when it is invalid', () => {
+    expect(() =>
+      loadCrossEncoderRerankerConfig({ RERANK_THRESHOLD_MINILM: '2' }, 'minilm'),
+    ).toThrow('RERANK_THRESHOLD_MINILM');
+  });
+});
+
+describe('the cross-encoders in the registry', () => {
+  it('are registered under their own name, which picks their threshold setting', () => {
+    expect(localCrossEncoders()).toEqual([
+      { name: 'bge', model: BGE_RERANKER },
+      { name: 'minilm', model: MMINILM_RERANKER },
+    ]);
+    for (const spec of localCrossEncoders()) {
+      expect(RERANKERS[spec.name].crossEncoder).toBe(spec);
+    }
   });
 });

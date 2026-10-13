@@ -10,6 +10,7 @@ import type { Chunk, LlmRoles } from '../llm/types.js';
 import { createCandidateSearch, type CandidateSearch } from '../search/candidate-search.js';
 import { loadSearchConfig, tagIndexBuilder } from '../search/config.js';
 import { loadTagIndex } from '../search/load-index.js';
+import type { TagIndex } from '../search/tag-index.js';
 import { VOCABULARY_PATH } from '../tagging/paths.js';
 import { loadVocabulary } from '../tagging/vocabulary.js';
 import { loadQueryTranslatorConfig } from './config.js';
@@ -24,6 +25,8 @@ export interface QueryServices {
   loadChunks(ids: readonly string[]): Chunk[];
   /** E.g. `jev` or `claude-code claude-haiku-5-5`, for reports. */
   translatorLabel: string;
+  /** The tag index in use, e.g. `roaring`, for reports. */
+  tagIndexLabel: string;
 }
 
 export function createQueryServices(
@@ -32,6 +35,8 @@ export function createQueryServices(
   logger: LlmLogger,
   llmConfig: LlmConfig = loadLlmConfig(env),
   roles: LlmRoles = createLlmRoles(llmConfig, { logger }),
+  /** The server's tag index, so it is built once; by default built here. */
+  tagIndex?: TagIndex,
 ): QueryServices {
   const vocabulary = loadVocabulary(VOCABULARY_PATH);
   const translatorConfig = loadQueryTranslatorConfig(env);
@@ -40,28 +45,38 @@ export function createQueryServices(
     logger,
   });
   const searchConfig = loadSearchConfig(env);
-  const tagIndex = loadTagIndex(
-    resolveDatabasePath(env.DATABASE_PATH),
-    tagIndexBuilder(searchConfig),
-    logger,
-  );
-  const selectChunks = db.prepare(
-    'SELECT id, text, source_ref, context FROM chunks WHERE id IN (SELECT value FROM json_each(?))',
-  );
-
+  const index =
+    tagIndex ??
+    loadTagIndex(resolveDatabasePath(env.DATABASE_PATH), tagIndexBuilder(searchConfig), logger);
   return {
     translation: { translator, vocabulary: vocabulary.tags, presets: vocabulary.presets },
-    candidateSearch: createCandidateSearch({ db, tagIndex, config: searchConfig, logger }),
-    loadChunks(ids) {
-      const rows = selectChunks.all(JSON.stringify(ids.map(Number))) as unknown as ChunkRow[];
-      const byId = new Map(rows.map((row) => [String(row.id), row]));
-      return ids.flatMap((id): Chunk[] => {
-        const row = byId.get(id);
-        return row ? [{ id, text: row.text, source: row.source_ref, context: row.context }] : [];
-      });
-    },
+    candidateSearch: createCandidateSearch({ db, tagIndex: index, config: searchConfig, logger }),
+    loadChunks: createChunkLoader(db),
     translatorLabel:
       translatorConfig.impl === 'jev' ? 'jev' : roleLabel(llmConfig, 'queryTranslator'),
+    tagIndexLabel: index.description.implementation,
+  };
+}
+
+/**
+ * Loads the chunks with the given ids, in the given order, with their document's title and source
+ * URL; unknown ids are left out.
+ */
+export function createChunkLoader(db: DatabaseSync): (ids: readonly string[]) => Chunk[] {
+  const selectChunks = db.prepare(
+    `SELECT c.id, c.text, c.source_ref, c.context, d.title, d.source_url
+     FROM chunks c JOIN documents d ON d.id = c.document_id
+     WHERE c.id IN (SELECT value FROM json_each(?))`,
+  );
+  return (ids) => {
+    const rows = selectChunks.all(JSON.stringify(ids.map(Number))) as unknown as ChunkRow[];
+    const byId = new Map(rows.map((row) => [String(row.id), row]));
+    return ids.flatMap((id): Chunk[] => {
+      const row = byId.get(id);
+      if (!row) return [];
+      const document = { title: row.title, ...(row.source_url && { url: row.source_url }) };
+      return [{ id, text: row.text, source: row.source_ref, context: row.context, document }];
+    });
   };
 }
 
@@ -70,4 +85,6 @@ interface ChunkRow {
   text: string;
   source_ref: string;
   context: string;
+  title: string;
+  source_url: string | null;
 }

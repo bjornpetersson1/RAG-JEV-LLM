@@ -20,8 +20,8 @@ import {
 export interface Retrieval {
   /** Best first. */
   candidates: Candidate[];
-  /** Time to embed the instruction; 0 for tag search. */
-  embedMs: number;
+  /** Time to embed the instruction; absent when it was not embedded (tag search). */
+  embedMs?: number;
   /** Time for the searches and the fusion. */
   searchMs: number;
 }
@@ -30,6 +30,8 @@ export interface Retriever {
   readonly name: RetrieverName;
   /** Whether `retrieve` uses the instruction's tags, i.e. whether query translation is needed. */
   readonly usesTags: boolean;
+  /** The embedder's model and precision, for a retriever that embeds the instruction. */
+  readonly embedder?: Pick<Embedder, 'model' | 'dtype'>;
   retrieve(instruction: string, tags: readonly string[]): Promise<Retrieval>;
 }
 
@@ -53,7 +55,7 @@ export function createRetriever(config: RetrievalConfig, deps: RetrieverDependen
       async retrieve(instruction, tags) {
         const started = performance.now();
         const { candidates } = candidateSearch.search({ instruction, tags, mode: 'tags+fts' });
-        return { candidates, embedMs: 0, searchMs: elapsedMs(started) };
+        return { candidates, searchMs: elapsedMs(started) };
       },
     };
   }
@@ -64,8 +66,9 @@ export function createRetriever(config: RetrievalConfig, deps: RetrieverDependen
   return {
     name,
     usesTags: name === 'both',
+    // With the dense half switched off (weight 0), the instruction is never embedded.
+    ...(weights.dense > 0 && { embedder }),
     async retrieve(instruction, tags) {
-      // With the dense half switched off (weight 0), the question is not embedded at all.
       const embedStarted = performance.now();
       const [query] = weights.dense > 0 ? await embedder.embed([instruction], 'query') : [];
       const embedMs = elapsedMs(embedStarted);
@@ -98,7 +101,7 @@ export function createRetriever(config: RetrievalConfig, deps: RetrieverDependen
         fuseRankings(rankings, rrfK, limit),
         limit,
       );
-      return { candidates, embedMs, searchMs: elapsedMs(searchStarted) };
+      return { candidates, ...(query && { embedMs }), searchMs: elapsedMs(searchStarted) };
     },
   };
 }
