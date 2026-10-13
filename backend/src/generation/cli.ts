@@ -1,13 +1,14 @@
 // `npm run query -- "<instruction>" --template <employment|nda> [--reference]` (E6-2, E5-4): the
 // whole query flow, or the reference RAG, in the terminal, printing the draft, its sources and the
-// time per step.
+// time per step. Each run is appended to `logs/runs.jsonl` (E7-3).
 
+import { randomUUID } from 'node:crypto';
 import { withDatabase } from '../db/with-database.js';
 import { describeError } from '../errors.js';
 import { createConsoleLogger } from '../llm/console-logger.js';
 import { formatQueryResult } from './format.js';
 import { parseQueryArgs, QUERY_USAGE } from './query-args.js';
-import { runQuery } from './query-flow.js';
+import { createRunLog, runAndLog } from './run-log.js';
 import { createQueryFlow } from './setup.js';
 import { createReferenceFlow } from '../reference/setup.js';
 
@@ -32,7 +33,11 @@ async function run(args: string[]): Promise<number> {
     const flow = parsed.reference
       ? createReferenceFlow(db, process.env, problemLogger, limits)
       : createQueryFlow(db, process.env, problemLogger, limits);
-    const result = await runQuery(request, flow);
+    const result = await runAndLog(request, flow, {
+      log: createRunLog((message) => console.warn(message)),
+      source: 'cli',
+      runId: randomUUID(),
+    });
     console.log(formatQueryResult(request, result));
     return 0;
   });

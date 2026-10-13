@@ -15,7 +15,8 @@ interface QueryFormProps {
 export function QueryForm({ running, onSubmit }: QueryFormProps) {
   const [template, setTemplate] = useState<Template>();
   const [instruction, setInstruction] = useState('');
-  const [reference, setReference] = useState(false);
+  // On by default: the demo compares the two flows (E7-3).
+  const [reference, setReference] = useState(true);
 
   function submit(event: FormEvent) {
     event.preventDefault();

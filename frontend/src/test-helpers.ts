@@ -58,6 +58,13 @@ export function queryResult(overrides: Partial<QueryResult> = {}): QueryResult {
     approved: [cited],
     sources: [{ chunk: cited, status: 'cited', origin: 'tag', score: 0.9, reranker: 'bge' }],
     draft: { text: '# Anställningsavtal\n\nText [K:11].', used: [cited], unused: [], leftOut: [] },
+    timings: {
+      translationMs: 800,
+      searchMs: 20,
+      judgingMs: 3000,
+      generationMs: 9000,
+      totalMs: 12820,
+    },
     ...overrides,
   };
 }

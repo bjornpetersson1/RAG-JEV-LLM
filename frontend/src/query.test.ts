@@ -12,7 +12,7 @@ describe('streamQuery', () => {
 
     const done = streamQuery(REQUEST, (event) => events.push(event));
     stream.send({ type: 'start', flow: 'main', steps: ['search'] });
-    stream.step({ step: 'search', candidates: 3, fallback: 1, searchMs: 2 });
+    stream.step({ step: 'search', candidates: 3, fallback: 1, timings: { searchMs: 2 } });
     stream.send({ type: 'done' });
     stream.end();
     await done;
@@ -24,7 +24,14 @@ describe('streamQuery', () => {
     });
     expect(events).toEqual([
       { type: 'start', flow: 'main', steps: ['search'] },
-      { type: 'step', flow: 'main', step: 'search', candidates: 3, fallback: 1, searchMs: 2 },
+      {
+        type: 'step',
+        flow: 'main',
+        step: 'search',
+        candidates: 3,
+        fallback: 1,
+        timings: { searchMs: 2 },
+      },
     ]);
   });
 

@@ -147,7 +147,7 @@ describe('runQuery', () => {
     ]);
     expect(steps[0]).toMatchObject({ tags: [{ slug: 'uppsagning', origin: 'translated' }] });
     expect(steps[1]).toMatchObject({ candidates: 3, fallback: 0 });
-    expect(steps[2]).toMatchObject({ approved: 2, relevant: 2, elapsedMs: 40 });
+    expect(steps[2]).toMatchObject({ approved: 2, relevant: 2, timings: { judgingMs: 40 } });
   });
 
   it('asks search, rerank and generator the template’s default instruction without free text', async () => {

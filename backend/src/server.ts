@@ -1,10 +1,11 @@
-import { registerQueryRoute } from './api/query-route.js';
+import { registerQueryRoute, type QueryFlows } from './api/query-route.js';
 import { createQueryFlows, openQueryDatabase } from './api/setup.js';
 import { buildApp } from './app.js';
 import { resolveDatabasePath } from './db/config.js';
 import { loadEmbedderConfig } from './embedding/factory.js';
 import { describeError } from './errors.js';
 import { loadContextLimits } from './generation/config.js';
+import { createRunLog } from './generation/run-log.js';
 import { createConsoleLogger } from './llm/console-logger.js';
 import { loadLlmConfig } from './llm/config.js';
 import { resolvePort } from './port.js';
@@ -19,7 +20,11 @@ const app = buildApp();
 
 try {
   app.tagIndex = loadTagIndex(databasePath, buildTagIndex, app.log);
-  registerQueryFlows(databasePath);
+  const flows = registerQueryFlows(databasePath);
+  // Before listening, so the first query's timings do not include loading the local models.
+  const warmUpStarted = performance.now();
+  await flows?.warmUp?.();
+  app.log.info({ ms: Math.round(performance.now() - warmUpStarted) }, 'Local models warmed up');
   await app.listen({ port });
 } catch (error) {
   app.log.error(describeError(error));
@@ -31,11 +36,11 @@ try {
  * registers `POST /query`. Without one the server still starts, without the route, and warns. A
  * flow that cannot be built, e.g. `RETRIEVER=bge` before `npm run index:embed`, stops the server.
  */
-function registerQueryFlows(databasePath: string): void {
+function registerQueryFlows(databasePath: string): QueryFlows | undefined {
   const opened = openQueryDatabase(databasePath);
   if ('unavailable' in opened) {
     app.log.warn({ databasePath }, `POST /query is not available: ${opened.unavailable}`);
-    return;
+    return undefined;
   }
   const { db } = opened;
   app.addHook('onClose', async () => db.close());
@@ -43,7 +48,12 @@ function registerQueryFlows(databasePath: string): void {
   const flows = createQueryFlows(db, process.env, createConsoleLogger({ quiet: true }), {
     tagIndex: app.tagIndex,
   });
-  registerQueryRoute(app, flows);
+  registerQueryRoute(
+    app,
+    flows,
+    createRunLog((message) => app.log.warn(message)),
+  );
+  return flows;
 }
 
 /** Validates `.env` before listening; an invalid value prints its message and exits, no stack trace. */

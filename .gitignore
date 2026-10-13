@@ -15,3 +15,6 @@ coverage/
 
 # Tagging reports (npm run index:report)
 /reports/
+
+# Query run log (E7-3: npm run query and the UI)
+/logs/

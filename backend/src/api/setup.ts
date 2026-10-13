@@ -10,6 +10,7 @@ import type { Env } from '../env.js';
 import type { QueryFlowDependencies } from '../generation/query-flow.js';
 import { createQueryFlow } from '../generation/setup.js';
 import type { LlmLogger } from '../llm/client.js';
+import { warmUpLocalModels } from '../models/warm-up.js';
 import { createReferenceFlow } from '../reference/setup.js';
 import { loadRetrievalConfig } from '../retrieval/config.js';
 import {
@@ -49,9 +50,20 @@ export function createQueryFlows(
     tagIndex,
   );
   let reference: QueryFlowDependencies | undefined;
+  const buildReference = () =>
+    (reference ??= createReferenceFlow(db, env, logger, {}, loadResources()));
   return {
     main: () => main,
-    reference: () => (reference ??= createReferenceFlow(db, env, logger, {}, loadResources())),
+    reference: buildReference,
+    async warmUp() {
+      // The reference RAG loads the embedder and vectors; without them only the reranker warms up.
+      try {
+        buildReference();
+      } catch {
+        // Reported when a query asks for the reference RAG.
+      }
+      await warmUpLocalModels(db, resources?.embedder, [main.reranker]);
+    },
   };
 }
 

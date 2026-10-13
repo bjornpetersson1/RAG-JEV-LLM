@@ -8,14 +8,16 @@ const RESULT = queryResult();
 
 const MAIN_STEPS: QueryStepName[] = ['translation', 'search', 'rerank', 'generation'];
 
-function submitForm({ template = 'Anställningsavtal', instruction = '', reference = false } = {}) {
+/** Fills in the form and submits it; `reference` sets the reference RAG option (on by default). */
+function submitForm({ template = 'Anställningsavtal', instruction = '', reference = true } = {}) {
   fireEvent.click(screen.getByLabelText(template));
   if (instruction) {
     fireEvent.change(screen.getByLabelText('Instruktion (valfri)'), {
       target: { value: instruction },
     });
   }
-  if (reference) fireEvent.click(screen.getByLabelText('Kör även referens-RAG för jämförelse'));
+  const option = screen.getByLabelText('Kör även referens-RAG för jämförelse') as HTMLInputElement;
+  if (option.checked !== reference) fireEvent.click(option);
   fireEvent.click(screen.getByRole('button', { name: 'Skapa utkast' }));
 }
 
@@ -65,11 +67,15 @@ describe('the query form', () => {
   });
 
   it.each([
-    ['the template alone', {}, { template: 'employment', instruction: '', reference: false }],
     [
-      'the template with free text and the reference RAG',
-      { template: 'Sekretessavtal', instruction: ' Konsult med kunddata ', reference: true },
-      { template: 'nda', instruction: 'Konsult med kunddata', reference: true },
+      'the template alone, with the reference RAG on by default',
+      {},
+      { template: 'employment', instruction: '', reference: true },
+    ],
+    [
+      'the template with free text and without the reference RAG',
+      { template: 'Sekretessavtal', instruction: ' Konsult med kunddata ', reference: false },
+      { template: 'nda', instruction: 'Konsult med kunddata', reference: false },
     ],
   ])('starts the same query from %s', async (_case, form, body) => {
     const fetchMock = stubFetch(() => new Promise(() => {}));
@@ -97,7 +103,7 @@ describe('the query form', () => {
           { slug: 'anstallningsavtal', origin: 'preset' },
           { slug: 'provanstallning', origin: 'translated' },
         ],
-        elapsedMs: 800,
+        timings: { translationMs: 800 },
       }),
     );
     expect(await screen.findByText('anstallningsavtal (mall)')).toBeDefined();
@@ -105,12 +111,12 @@ describe('the query form', () => {
     expect(screen.getByText('Söker kandidater…')).toBeDefined();
 
     await act(async () =>
-      stream.step({ step: 'search', candidates: 30, fallback: 6, searchMs: 3 }),
+      stream.step({ step: 'search', candidates: 30, fallback: 6, timings: { searchMs: 3 } }),
     );
     expect(await screen.findByText('30 kandidater, varav 6 från fritextsökning')).toBeDefined();
 
     await act(async () =>
-      stream.step({ step: 'rerank', approved: 8, relevant: 12, elapsedMs: 30_000 }),
+      stream.step({ step: 'rerank', approved: 8, relevant: 12, timings: { judgingMs: 30_000 } }),
     );
     expect(await screen.findByText('8 godkända av rerankern')).toBeDefined();
     expect(screen.getByText('Skriver utkast…')).toBeDefined();
@@ -154,7 +160,10 @@ describe('the query form', () => {
         result: { ...RESULT, defaultInstruction: 'Anställningsavtal' },
       });
       stream.send({ type: 'start', flow: 'reference', steps: ['search', 'generation'] });
-      stream.step({ step: 'search', candidates: 8, fallback: 0, searchMs: 400 }, 'reference');
+      stream.step(
+        { step: 'search', candidates: 8, fallback: 0, timings: { searchMs: 400 } },
+        'reference',
+      );
     });
 
     expect(
@@ -220,7 +229,7 @@ describe('the query form', () => {
 
     await act(async () => {
       stream.send({ type: 'start', flow: 'main', steps: ['search', 'rerank'] });
-      stream.step({ step: 'search', candidates: 3, fallback: 0, searchMs: 1 });
+      stream.step({ step: 'search', candidates: 3, fallback: 0, timings: { searchMs: 1 } });
       stream.end();
     });
 
@@ -242,5 +251,26 @@ describe('the query form', () => {
     });
 
     expect(await screen.findByText('Förbereder referens-RAG…')).toBeDefined();
+  });
+
+  it('keeps the main flow’s result when the reference RAG is skipped, without an error', async () => {
+    const stream = controlledStream();
+    stubFetch(() => Promise.resolve(stream.response));
+    render(<App />);
+    submitForm();
+
+    await act(async () => {
+      stream.send({ type: 'start', flow: 'main', steps: MAIN_STEPS });
+      stream.send({ type: 'result', flow: 'main', result: RESULT });
+      stream.send({ type: 'skipped', flow: 'reference', reason: 'run `npm run index:embed`' });
+      stream.send({ type: 'done' });
+      stream.end();
+    });
+
+    expect(
+      await screen.findByText('Referens-RAG:en kördes inte: run `npm run index:embed`'),
+    ).toBeDefined();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByText('Förbereder referens-RAG…')).toBeNull();
   });
 });

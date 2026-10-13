@@ -1,10 +1,11 @@
-import type { FlowName, QueryResult, QueryStep, QueryStepName } from './query';
+import type { FlowConfiguration, FlowName, QueryResult, QueryStep, QueryStepName } from './query';
 import { ResultView } from './ResultView';
 
 /** What one flow has reported so far. */
 export interface FlowState {
   /** The steps the backend said the flow will run, in order. */
   planned: QueryStepName[];
+  configuration?: FlowConfiguration;
   steps: Partial<{ [S in QueryStep as S['step']]: S }>;
   result?: QueryResult;
 }

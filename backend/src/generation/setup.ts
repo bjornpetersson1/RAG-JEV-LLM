@@ -10,19 +10,16 @@ import { translateQuery } from '../query/translate-query.js';
 import { createReranker } from '../rerank/factory.js';
 import type { Reranker } from '../rerank/types.js';
 import type { TagIndex } from '../search/tag-index.js';
-import type { RetrieverName } from '../retrieval/config.js';
 import { createConfiguredRetriever, type RetrievalSource } from '../retrieval/setup.js';
 import { loadContextLimits, type ContextLimits } from './config.js';
+import { modelLabel, type FlowConfiguration } from './flow-configuration.js';
 import type { QueryFlowDependencies } from './query-flow.js';
 
-/** The query flow's steps, and what they were built with, for reports. */
+/** The query flow's steps, the reranker itself (for a warm-up) and what they were built with. */
 export interface ConfiguredQueryFlow extends QueryFlowDependencies {
   rerank: NonNullable<QueryFlowDependencies['rerank']>;
-  retriever: RetrieverName;
   reranker: Reranker;
-  topK: number;
-  /** E.g. `claude-code claude-sonnet-5-5`. */
-  generatorLabel: string;
+  configuration: FlowConfiguration;
 }
 
 export function createQueryFlow(
@@ -38,14 +35,8 @@ export function createQueryFlow(
   const llmConfig = loadLlmConfig(env);
   const { reranker, topK } = createReranker(env, { db, llmConfig, logger });
   const roles = createLlmRoles(llmConfig, { logger });
-  const { translation, candidateSearch, loadChunks } = createQueryServices(
-    db,
-    env,
-    logger,
-    llmConfig,
-    roles,
-    tagIndex,
-  );
+  const { translation, candidateSearch, loadChunks, translatorLabel, tagIndexLabel } =
+    createQueryServices(db, env, logger, llmConfig, roles, tagIndex);
   const retriever = createConfiguredRetriever(db, env, candidateSearch, retrieval);
   return {
     ...(retriever.usesTags && { translate: (query) => translateQuery(query, translation) }),
@@ -54,9 +45,18 @@ export function createQueryFlow(
     rerank: (instruction, chunks) => reranker.rerank(instruction, chunks, topK),
     generator: roles.generator,
     limits: { ...loadContextLimits(env), ...limits },
-    retriever: retriever.name,
     reranker,
-    topK,
-    generatorLabel: roleLabel(llmConfig, 'generator'),
+    configuration: {
+      retriever: retriever.embedder
+        ? `${retriever.name} (${modelLabel(retriever.embedder)})`
+        : retriever.name,
+      reranker: `${reranker.name} ${modelLabel(reranker)}`,
+      ...(retriever.usesTags && {
+        translator: translatorLabel,
+        tagIndex: tagIndexLabel,
+      }),
+      generator: roleLabel(llmConfig, 'generator'),
+      topK,
+    },
   };
 }
