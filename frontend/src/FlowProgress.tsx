@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import type { FlowConfiguration, FlowName, QueryResult, QueryStep, QueryStepName } from './query';
 import { ResultView } from './ResultView';
 
@@ -10,8 +11,6 @@ export interface FlowState {
   result?: QueryResult;
 }
 
-const TITLES: Record<FlowName, string> = { main: 'Huvudflödet', reference: 'Referens-RAG' };
-
 const RUNNING: Record<QueryStepName, string> = {
   translation: 'Översätter frågan till taggar…',
   search: 'Söker kandidater…',
@@ -21,18 +20,27 @@ const RUNNING: Record<QueryStepName, string> = {
 
 interface FlowProgressProps {
   flow: FlowName;
+  title: string;
   state: FlowState;
   /** Whether this flow is the one running now. */
   active: boolean;
 }
 
-/** One flow's tags, counts and draft, each shown as soon as its step is done. */
-export function FlowProgress({ flow, state, active }: FlowProgressProps) {
+/**
+ * One flow's tags, counts and draft, each shown as soon as its step is done. Memoised, so a
+ * finished flow's result view is not re-rendered for every event of the next flow.
+ */
+export const FlowProgress = memo(function FlowProgress({
+  flow,
+  title,
+  state,
+  active,
+}: FlowProgressProps) {
   const { planned, steps, result } = state;
   const pending = active ? planned.find((step) => !steps[step]) : undefined;
   return (
-    <section className="flow" aria-label={TITLES[flow]}>
-      <h2>{TITLES[flow]}</h2>
+    <section className="flow" aria-label={title}>
+      <h2>{title}</h2>
       {result?.defaultInstruction && (
         <p className="notice">
           Ingen fritext angavs, så instruktionen &quot;{result.defaultInstruction}&quot; användes.
@@ -50,7 +58,7 @@ export function FlowProgress({ flow, state, active }: FlowProgressProps) {
               ))}
         </div>
       )}
-      {steps.search && <p>{describeSearch(flow, steps.search)}</p>}
+      {steps.search && <p>{describeSearch(planned, steps.search)}</p>}
       {steps.rerank && <p>{steps.rerank.approved} godkända av rerankern</p>}
       {pending && (
         <p className="pending" role="status">
@@ -60,13 +68,14 @@ export function FlowProgress({ flow, state, active }: FlowProgressProps) {
       {result && <ResultView flow={flow} result={result} />}
     </section>
   );
-}
+});
 
 function describeSearch(
-  flow: FlowName,
+  planned: readonly QueryStepName[],
   { candidates, fallback }: Extract<QueryStep, { step: 'search' }>,
 ): string {
-  if (flow === 'reference') return `${candidates} närmaste chunkar skickas till generatorn`;
+  // Without a rerank step every candidate goes to the generator (the reference RAG).
+  if (!planned.includes('rerank')) return `${candidates} närmaste chunkar skickas till generatorn`;
   return fallback > 0
     ? `${candidates} kandidater, varav ${fallback} från fritextsökning`
     : `${candidates} kandidater`;

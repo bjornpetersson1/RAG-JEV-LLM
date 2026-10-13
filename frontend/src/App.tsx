@@ -4,6 +4,7 @@ import { QueryForm } from './QueryForm';
 import { TimingPanel } from './TimingPanel';
 import { fetchHealthStatus } from './health';
 import {
+  FLOWS,
   QueryError,
   streamQuery,
   type FlowName,
@@ -12,9 +13,6 @@ import {
 } from './query';
 
 const UNREACHABLE = 'unreachable';
-
-/** The flows in the order they run; a flow appears once the backend starts it. */
-const FLOW_ORDER: FlowName[] = ['main', 'reference'];
 
 interface Run {
   flows: Partial<Record<FlowName, FlowState>>;
@@ -84,13 +82,15 @@ export function App() {
           Förbereder referens-RAG…
         </p>
       )}
-      {FLOW_ORDER.map((flow) => {
+      {/* A flow appears once the backend starts it. */}
+      {FLOWS.map(({ flow, title }) => {
         const state = run?.flows[flow];
         return (
           state && (
             <FlowProgress
               key={flow}
               flow={flow}
+              title={title}
               state={state}
               active={(run?.running ?? false) && !state.result}
             />

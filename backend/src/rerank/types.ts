@@ -60,13 +60,13 @@ export interface RerankerDependencies {
   fetch?: typeof fetch;
 }
 
-/** One `RERANKER` value: adding a reranker is a new file with one of these plus a registry entry. */
 /** A local cross-encoder reranker: its name (its `RERANKER` value) and the model it runs. */
 export interface CrossEncoderSpec {
   name: string;
   model: CrossEncoderModel;
 }
 
+/** One `RERANKER` value: adding a reranker is a new file with one of these plus a registry entry. */
 export interface RerankerEntry {
   /** Whether it calls a remote model (an LLM or JEV): its time then counts as LLM time. */
   remote: boolean;

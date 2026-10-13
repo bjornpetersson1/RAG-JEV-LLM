@@ -10,7 +10,7 @@ import { elapsedMs } from '../http.js';
 import { checkDtype, formatSeconds } from '../models/bench-args.js';
 import { SILENT_LOGGER } from '../llm/client.js';
 import { BENCH_INSTRUCTION, loadSampleChunks } from '../models/passages.js';
-import { mean, percentile } from '../stats.js';
+import { latencyOf, mean } from '../stats.js';
 import type { ModelDtype } from '../models/config.js';
 import {
   createCrossEncoderReranker,
@@ -51,10 +51,7 @@ try {
     for (let run = 0; run < RUNS; run++) {
       times.push((await reranker.rerank(BENCH_INSTRUCTION, sample, size)).stats.elapsedMs);
     }
-    const median = percentile(
-      times.sort((a, b) => a - b),
-      0.5,
-    );
+    const { median } = latencyOf(times);
     console.log(
       `| ${spec.name} | ${dtype} | ${size} | ${formatSeconds(median, 2)} | ${formatSeconds(median / size, 2)} |`,
     );

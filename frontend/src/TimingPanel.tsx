@@ -1,10 +1,11 @@
 import type { FlowState } from './FlowProgress';
-import type { FlowConfiguration, FlowName, QueryStepName, StepTimings } from './query';
-
-const FLOWS: { flow: FlowName; title: string }[] = [
-  { flow: 'main', title: 'Huvudflödet' },
-  { flow: 'reference', title: 'Referens-RAG' },
-];
+import {
+  FLOWS,
+  type FlowConfiguration,
+  type FlowName,
+  type QueryStepName,
+  type StepTimings,
+} from './query';
 
 type Row = { label: string; step?: QueryStepName; timing: keyof StepTimings };
 

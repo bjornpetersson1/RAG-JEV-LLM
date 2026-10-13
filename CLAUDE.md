@@ -1,6 +1,6 @@
 # Legal RAG POC (RAG-JEV-LLM)
 
-Proof of concept: tag search or local bge-m3 hybrid retrieval, then a reranker (local BGE by default; JEV or an LLM optional), find relevant Swedish laws and rulings, and an LLM drafts employment agreements and NDAs from them. The requirements live in `Constitution/Requirements-and-goal.md`; every piece of work is a GitHub issue on the project board "Legal RAG POC" (https://github.com/users/bjornpetersson1/projects/4).
+Proof of concept: tag search or local bge-m3 hybrid retrieval, then a reranker (the local mMiniLM cross-encoder by default; bge-reranker, JEV or an LLM optional), find relevant Swedish laws and rulings, and an LLM drafts employment agreements and NDAs from them. The requirements live in `Constitution/Requirements-and-goal.md`; every piece of work is a GitHub issue on the project board "Legal RAG POC" (https://github.com/users/bjornpetersson1/projects/4).
 
 ## Language
 

@@ -33,6 +33,11 @@ export const DEFAULT_INSTRUCTIONS: Record<Template, string> = {
 /** Which flow produced a result: the main flow, or the reference RAG (E5-4). */
 export type QueryFlowName = 'main' | 'reference';
 
+/** The flow a set of dependencies runs: `main` unless it says otherwise. */
+export function flowName({ flow }: Pick<QueryFlowDependencies, 'flow'>): QueryFlowName {
+  return flow ?? 'main';
+}
+
 /**
  * The steps of a query flow, each built from `.env` (`generation/setup.ts`, `reference/setup.ts`)
  * or faked in tests. A step that is absent is skipped, and its fields are absent from the result.
@@ -211,7 +216,7 @@ export async function runQuery(
   if (draft) report({ step: 'generation', timings: { generationMs: draft.elapsedMs } });
   const sources = describeSources(candidates, chunks, reranked, statuses(approved, draft));
   return {
-    flow: deps.flow ?? 'main',
+    flow: flowName(deps),
     tags,
     candidates: candidates.length,
     fallback,
