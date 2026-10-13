@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   averageOver,
+  precisionAt,
   precisionRecall,
+  recallAt,
   recommendThreshold,
   SWEEP_THRESHOLDS,
   sweepThresholds,
@@ -59,5 +61,23 @@ describe('threshold sweep', () => {
     expect(
       recommendThreshold([row(0.1, 0.4), row(0.2, 0.7), row(0.3, 0.7), row(0.4, 0.6)]),
     ).toEqual(row(0.2, 0.7));
+  });
+});
+
+describe('precisionAt and recallAt', () => {
+  const relevant = new Set(['a', 'b', 'c']);
+
+  it('counts the relevant chunks among the first k', () => {
+    expect(precisionAt(['a', 'x', 'b', 'y', 'c', 'd'], relevant, 5)).toBe(0.6);
+    expect(recallAt(['a', 'x', 'b', 'y', 'c', 'd'], relevant, 2)).toBeCloseTo(1 / 3);
+  });
+
+  it('counts missing places as not relevant when fewer than k chunks are returned', () => {
+    expect(precisionAt(['a', 'b'], relevant, 5)).toBe(0.4);
+    expect(precisionAt([], relevant, 10)).toBe(0);
+  });
+
+  it('gives a recall of 0 when nothing is relevant', () => {
+    expect(recallAt(['a'], new Set(), 5)).toBe(0);
   });
 });

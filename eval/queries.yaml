@@ -6,6 +6,12 @@
 # source reference, which survive a re-import, unlike chunk ids.
 #
 # kind: which contract the query is for. template: a chosen template adds its preset tags.
+#
+# grade (E7-4): `central` for a chunk the clause rests on, i.e. the provision itself or a court's
+# general statement of the rule (e.g. 38 § avtalslagen and AD's test of a non-compete's
+# reasonableness); `related` for the rest of the same law or case: background, one case's own
+# facts, neighbouring sections. Claude set the grades, reading each chunk against its instruction;
+# the owner's review is #79.
 
 queries:
   - id: anst-01
@@ -13,98 +19,118 @@ queries:
     template: employment
     instruction: Anställningsavtal för en säljare med provision och konkurrensklausul i tolv månader efter anställningens slut.
     relevant:
-      - { document: 'SFS 1915:218', sourceRef: 'SFS 1915:218 3 kap. 38 §' }
-      - { document: 'AD 2001 nr 91', sourceRef: 'AD 2001 nr 91, Domskäl, del 1/5' }
-      - { document: 'AD 2001 nr 91', sourceRef: 'AD 2001 nr 91, Domskäl, del 2/5' }
-      - { document: 'AD 2001 nr 91', sourceRef: 'AD 2001 nr 91, Domskäl, del 3/5' }
-      - { document: 'AD 2001 nr 91', sourceRef: 'AD 2001 nr 91, Domskäl, del 4/5' }
+      - { grade: central, document: 'SFS 1915:218', sourceRef: 'SFS 1915:218 3 kap. 38 §' }
+      - { grade: related, document: 'AD 2001 nr 91', sourceRef: 'AD 2001 nr 91, Domskäl, del 1/5' }
+      - { grade: central, document: 'AD 2001 nr 91', sourceRef: 'AD 2001 nr 91, Domskäl, del 2/5' }
+      - { grade: related, document: 'AD 2001 nr 91', sourceRef: 'AD 2001 nr 91, Domskäl, del 3/5' }
+      - { grade: central, document: 'AD 2001 nr 91', sourceRef: 'AD 2001 nr 91, Domskäl, del 4/5' }
       - {
+          grade: central,
           document: 'AD 2015 nr 8',
           sourceRef: 'AD 2015 nr 8, Domskäl, Är konkurrensklausulen oskälig enligt 38 § avtalslagen?, del 1/5',
         }
       - {
+          grade: central,
           document: 'AD 2015 nr 8',
           sourceRef: 'AD 2015 nr 8, Domskäl, Är konkurrensklausulen oskälig enligt 38 § avtalslagen?, del 2/5',
         }
       - {
+          grade: central,
           document: 'AD 2015 nr 8',
           sourceRef: 'AD 2015 nr 8, Domskäl, Är konkurrensklausulen oskälig enligt 38 § avtalslagen?, del 3/5',
         }
       - {
+          grade: related,
           document: 'AD 2015 nr 8',
           sourceRef: 'AD 2015 nr 8, Domskäl, Är konkurrensklausulen oskälig enligt 38 § avtalslagen?, del 4/5',
         }
       - {
+          grade: related,
           document: 'AD 2015 nr 8',
           sourceRef: 'AD 2015 nr 8, Domskäl, Är konkurrensklausulen oskälig enligt 38 § avtalslagen?, del 5/5',
         }
       - {
+          grade: central,
           document: 'AD 2017 nr 57',
           sourceRef: 'AD 2017 nr 57, Domskäl, Rättsliga utgångspunkter, del 1/2',
         }
       - {
+          grade: central,
           document: 'AD 2017 nr 57',
           sourceRef: 'AD 2017 nr 57, Domskäl, Rättsliga utgångspunkter, del 2/2',
         }
       - {
+          grade: central,
           document: 'AD 2017 nr 57',
           sourceRef: 'AD 2017 nr 57, Domskäl, Arbetsdomstolens bedömning, del 1/2',
         }
       - {
+          grade: related,
           document: 'AD 2017 nr 57',
           sourceRef: 'AD 2017 nr 57, Domskäl, Arbetsdomstolens bedömning, del 2/2',
         }
       - {
+          grade: related,
           document: 'AD 2017 nr 44',
           sourceRef: 'AD 2017 nr 44, Skäl, Bakgrund och tvisten, del 1/2',
         }
       - {
+          grade: central,
           document: 'AD 2018 nr 49',
           sourceRef: 'AD 2018 nr 49, Domskäl, Rättsliga utgångspunkter, del 1/6',
         }
       - {
+          grade: central,
           document: 'AD 2018 nr 49',
           sourceRef: 'AD 2018 nr 49, Domskäl, Rättsliga utgångspunkter, del 2/6',
         }
       - {
+          grade: central,
           document: 'AD 2018 nr 61',
           sourceRef: 'AD 2018 nr 61, Skäl, Har MachineGames visat sannolika skäl för sina anspråk mot A.B. och Neon Giant?, del 2/6',
         }
       - {
+          grade: related,
           document: 'AD 2002 nr 115',
           sourceRef: 'AD 2002 nr 115, Domskäl, Vitesklausulen, del 1/3',
         }
       - {
+          grade: related,
           document: 'AD 2009 nr 63',
           sourceRef: 'AD 2009 nr 63, Domskäl, Frågan om brott mot anställningsavtalen efter anställningarnas upphörande, del 1/3',
         }
       - {
+          grade: related,
           document: 'AD 2009 nr 63',
           sourceRef: 'AD 2009 nr 63, Domskäl, Frågan om brott mot anställningsavtalen efter anställningarnas upphörande, del 3/3',
         }
-      - { document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 6 c § st. 2, del 1/2' }
+      - { grade: related, document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 6 c § st. 2, del 1/2' }
   - id: anst-02
     kind: employment
     instruction: Anställningsavtal med sex månaders provanställning som sedan övergår i en tillsvidareanställning.
     relevant:
-      - { document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 6 §' }
-      - { document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 4 §' }
-      - { document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 6 c § st. 1' }
-      - { document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 6 c § st. 2, del 1/2' }
-      - { document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 31 §' }
+      - { grade: central, document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 6 §' }
+      - { grade: central, document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 4 §' }
+      - { grade: related, document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 6 c § st. 1' }
+      - { grade: related, document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 6 c § st. 2, del 1/2' }
+      - { grade: central, document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 31 §' }
       - {
+          grade: central,
           document: 'AD 2020 nr 53',
           sourceRef: 'AD 2020 nr 53, Domskäl, Överenskommelser som innebär en förlängning av prövotiden, del 1/6',
         }
       - {
+          grade: related,
           document: 'AD 2020 nr 53',
           sourceRef: 'AD 2020 nr 53, Domskäl, Överenskommelser som innebär en förlängning av prövotiden, del 3/6',
         }
       - {
+          grade: related,
           document: 'AD 2020 nr 53',
           sourceRef: 'AD 2020 nr 53, Domskäl, Överenskommelser som innebär en förlängning av prövotiden, del 4/6',
         }
       - {
+          grade: related,
           document: 'AD 2020 nr 53',
           sourceRef: 'AD 2020 nr 53, Domskäl, Överenskommelser som innebär en förlängning av prövotiden, del 6/6',
         }
@@ -112,180 +138,217 @@ queries:
     kind: employment
     instruction: Anställningsavtal för en konsult med tre månaders uppsägningstid från båda parter.
     relevant:
-      - { document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 11 §' }
-      - { document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 12 §' }
-      - { document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 13 §' }
+      - { grade: central, document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 11 §' }
+      - { grade: related, document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 12 §' }
+      - { grade: related, document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 13 §' }
       - {
+          grade: related,
           document: 'AD 2019 nr 12',
           sourceRef: 'AD 2019 nr 12, Bakgrund, Revisorsgruppen, del 4/6',
         }
-      - { document: 'AD 2019 nr 12', sourceRef: 'AD 2019 nr 12, Skäl, del 2/4' }
-      - { document: 'AD 2019 nr 12', sourceRef: 'AD 2019 nr 12, Skäl, del 3/4' }
+      - { grade: related, document: 'AD 2019 nr 12', sourceRef: 'AD 2019 nr 12, Skäl, del 2/4' }
+      - { grade: central, document: 'AD 2019 nr 12', sourceRef: 'AD 2019 nr 12, Skäl, del 3/4' }
       - {
+          grade: related,
           document: 'AD 2016 nr 21',
           sourceRef: 'AD 2016 nr 21, Domskäl, Finns ett giltigt avtal om sex månaders uppsägningstid?, del 1/2',
         }
       - {
+          grade: related,
           document: 'AD 2016 nr 21',
           sourceRef: 'AD 2016 nr 21, Domskäl, Finns ett giltigt avtal om sex månaders uppsägningstid?, del 2/2',
         }
-      - { document: 'AD 2016 nr 21', sourceRef: 'AD 2016 nr 21, Domskäl, Sammanfattande bedömning' }
-      - { document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 6 c § st. 2, del 1/2' }
-      - { document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 2 a §' }
+      - {
+          grade: related,
+          document: 'AD 2016 nr 21',
+          sourceRef: 'AD 2016 nr 21, Domskäl, Sammanfattande bedömning',
+        }
+      - { grade: related, document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 6 c § st. 2, del 1/2' }
+      - { grade: central, document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 2 a §' }
   - id: anst-04
     kind: employment
     template: employment
     instruction: Anställningsavtal för en regionchef med konkurrensklausul och vite vid brott mot klausulen.
     relevant:
-      - { document: 'SFS 1915:218', sourceRef: 'SFS 1915:218 3 kap. 38 §' }
-      - { document: 'AD 2001 nr 91', sourceRef: 'AD 2001 nr 91, Domskäl, del 1/5' }
-      - { document: 'AD 2001 nr 91', sourceRef: 'AD 2001 nr 91, Domskäl, del 2/5' }
-      - { document: 'AD 2001 nr 91', sourceRef: 'AD 2001 nr 91, Domskäl, del 3/5' }
-      - { document: 'AD 2001 nr 91', sourceRef: 'AD 2001 nr 91, Domskäl, del 4/5' }
+      - { grade: central, document: 'SFS 1915:218', sourceRef: 'SFS 1915:218 3 kap. 38 §' }
+      - { grade: related, document: 'AD 2001 nr 91', sourceRef: 'AD 2001 nr 91, Domskäl, del 1/5' }
+      - { grade: central, document: 'AD 2001 nr 91', sourceRef: 'AD 2001 nr 91, Domskäl, del 2/5' }
+      - { grade: related, document: 'AD 2001 nr 91', sourceRef: 'AD 2001 nr 91, Domskäl, del 3/5' }
+      - { grade: central, document: 'AD 2001 nr 91', sourceRef: 'AD 2001 nr 91, Domskäl, del 4/5' }
       - {
+          grade: central,
           document: 'AD 2015 nr 8',
           sourceRef: 'AD 2015 nr 8, Domskäl, Är konkurrensklausulen oskälig enligt 38 § avtalslagen?, del 1/5',
         }
       - {
+          grade: central,
           document: 'AD 2015 nr 8',
           sourceRef: 'AD 2015 nr 8, Domskäl, Är konkurrensklausulen oskälig enligt 38 § avtalslagen?, del 2/5',
         }
       - {
+          grade: central,
           document: 'AD 2015 nr 8',
           sourceRef: 'AD 2015 nr 8, Domskäl, Är konkurrensklausulen oskälig enligt 38 § avtalslagen?, del 3/5',
         }
       - {
+          grade: related,
           document: 'AD 2015 nr 8',
           sourceRef: 'AD 2015 nr 8, Domskäl, Är konkurrensklausulen oskälig enligt 38 § avtalslagen?, del 4/5',
         }
       - {
+          grade: related,
           document: 'AD 2015 nr 8',
           sourceRef: 'AD 2015 nr 8, Domskäl, Är konkurrensklausulen oskälig enligt 38 § avtalslagen?, del 5/5',
         }
       - {
+          grade: central,
           document: 'AD 2017 nr 57',
           sourceRef: 'AD 2017 nr 57, Domskäl, Rättsliga utgångspunkter, del 1/2',
         }
       - {
+          grade: central,
           document: 'AD 2017 nr 57',
           sourceRef: 'AD 2017 nr 57, Domskäl, Rättsliga utgångspunkter, del 2/2',
         }
       - {
+          grade: central,
           document: 'AD 2017 nr 57',
           sourceRef: 'AD 2017 nr 57, Domskäl, Arbetsdomstolens bedömning, del 1/2',
         }
       - {
+          grade: related,
           document: 'AD 2017 nr 57',
           sourceRef: 'AD 2017 nr 57, Domskäl, Arbetsdomstolens bedömning, del 2/2',
         }
       - {
+          grade: related,
           document: 'AD 2017 nr 44',
           sourceRef: 'AD 2017 nr 44, Skäl, Bakgrund och tvisten, del 1/2',
         }
       - {
+          grade: central,
           document: 'AD 2018 nr 49',
           sourceRef: 'AD 2018 nr 49, Domskäl, Rättsliga utgångspunkter, del 1/6',
         }
       - {
+          grade: central,
           document: 'AD 2018 nr 49',
           sourceRef: 'AD 2018 nr 49, Domskäl, Rättsliga utgångspunkter, del 2/6',
         }
       - {
+          grade: central,
           document: 'AD 2018 nr 61',
           sourceRef: 'AD 2018 nr 61, Skäl, Har MachineGames visat sannolika skäl för sina anspråk mot A.B. och Neon Giant?, del 2/6',
         }
       - {
+          grade: central,
           document: 'AD 2002 nr 115',
           sourceRef: 'AD 2002 nr 115, Domskäl, Vitesklausulen, del 1/3',
         }
       - {
+          grade: related,
           document: 'AD 2009 nr 63',
           sourceRef: 'AD 2009 nr 63, Domskäl, Frågan om brott mot anställningsavtalen efter anställningarnas upphörande, del 1/3',
         }
       - {
+          grade: related,
           document: 'AD 2009 nr 63',
           sourceRef: 'AD 2009 nr 63, Domskäl, Frågan om brott mot anställningsavtalen efter anställningarnas upphörande, del 3/3',
         }
-      - { document: 'AD 2010 nr 27', sourceRef: 'AD 2010 nr 27, Domskäl, Vitesförbudet' }
       - {
+          grade: related,
+          document: 'AD 2010 nr 27',
+          sourceRef: 'AD 2010 nr 27, Domskäl, Vitesförbudet',
+        }
+      - {
+          grade: central,
           document: 'AD 2002 nr 15',
           sourceRef: 'AD 2002 nr 15, Domskäl, Frågan om anställningsform, del 2/6',
         }
-      - { document: 'SFS 1915:218', sourceRef: 'SFS 1915:218 3 kap. 36 §' }
+      - { grade: central, document: 'SFS 1915:218', sourceRef: 'SFS 1915:218 3 kap. 36 §' }
   - id: anst-05
     kind: employment
     instruction: Anställningsavtal som reglerar semester och semesterlön för en heltidsanställd.
     relevant:
-      - { document: 'SFS 1977:480', sourceRef: 'SFS 1977:480 1 §' }
-      - { document: 'SFS 1977:480', sourceRef: 'SFS 1977:480 2 a §' }
-      - { document: 'SFS 1977:480', sourceRef: 'SFS 1977:480 3 a §' }
-      - { document: 'SFS 1977:480', sourceRef: 'SFS 1977:480 4 §' }
-      - { document: 'SFS 1977:480', sourceRef: 'SFS 1977:480 7 §' }
-      - { document: 'SFS 1977:480', sourceRef: 'SFS 1977:480 11 §' }
-      - { document: 'SFS 1977:480', sourceRef: 'SFS 1977:480 16 §' }
-      - { document: 'SFS 1977:480', sourceRef: 'SFS 1977:480 16 a §' }
-      - { document: 'SFS 1977:480', sourceRef: 'SFS 1977:480 16 b §' }
-      - { document: 'SFS 1977:480', sourceRef: 'SFS 1977:480 18 §' }
-      - { document: 'SFS 1977:480', sourceRef: 'SFS 1977:480 26 §' }
-      - { document: 'SFS 1977:480', sourceRef: 'SFS 1977:480 28 §' }
-      - { document: 'SFS 1977:480', sourceRef: 'SFS 1977:480 29 §' }
+      - { grade: related, document: 'SFS 1977:480', sourceRef: 'SFS 1977:480 1 §' }
+      - { grade: central, document: 'SFS 1977:480', sourceRef: 'SFS 1977:480 2 a §' }
+      - { grade: related, document: 'SFS 1977:480', sourceRef: 'SFS 1977:480 3 a §' }
+      - { grade: central, document: 'SFS 1977:480', sourceRef: 'SFS 1977:480 4 §' }
+      - { grade: related, document: 'SFS 1977:480', sourceRef: 'SFS 1977:480 7 §' }
+      - { grade: central, document: 'SFS 1977:480', sourceRef: 'SFS 1977:480 11 §' }
+      - { grade: central, document: 'SFS 1977:480', sourceRef: 'SFS 1977:480 16 §' }
+      - { grade: central, document: 'SFS 1977:480', sourceRef: 'SFS 1977:480 16 a §' }
+      - { grade: related, document: 'SFS 1977:480', sourceRef: 'SFS 1977:480 16 b §' }
+      - { grade: central, document: 'SFS 1977:480', sourceRef: 'SFS 1977:480 18 §' }
+      - { grade: central, document: 'SFS 1977:480', sourceRef: 'SFS 1977:480 26 §' }
+      - { grade: related, document: 'SFS 1977:480', sourceRef: 'SFS 1977:480 28 §' }
+      - { grade: related, document: 'SFS 1977:480', sourceRef: 'SFS 1977:480 29 §' }
   - id: anst-06
     kind: employment
     instruction: Anställningsavtal som reglerar arbetstid, övertid och jour.
     relevant:
-      - { document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 6 c § st. 2, del 2/2' }
-      - { document: 'SFS 1982:673', sourceRef: 'SFS 1982:673 3 §' }
-      - { document: 'SFS 1982:673', sourceRef: 'SFS 1982:673 5 §' }
-      - { document: 'SFS 1982:673', sourceRef: 'SFS 1982:673 6 §' }
-      - { document: 'SFS 1982:673', sourceRef: 'SFS 1982:673 7 §' }
-      - { document: 'SFS 1982:673', sourceRef: 'SFS 1982:673 8 §' }
-      - { document: 'SFS 1982:673', sourceRef: 'SFS 1982:673 8 a §' }
-      - { document: 'SFS 1982:673', sourceRef: 'SFS 1982:673 10 b §' }
-      - { document: 'SFS 1982:673', sourceRef: 'SFS 1982:673 11 §' }
-      - { document: 'SFS 1982:673', sourceRef: 'SFS 1982:673 13 §' }
-      - { document: 'SFS 1982:673', sourceRef: 'SFS 1982:673 14 §' }
-      - { document: 'SFS 1982:673', sourceRef: 'SFS 1982:673 15 §' }
+      - { grade: related, document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 6 c § st. 2, del 2/2' }
+      - { grade: related, document: 'SFS 1982:673', sourceRef: 'SFS 1982:673 3 §' }
+      - { grade: central, document: 'SFS 1982:673', sourceRef: 'SFS 1982:673 5 §' }
+      - { grade: central, document: 'SFS 1982:673', sourceRef: 'SFS 1982:673 6 §' }
+      - { grade: central, document: 'SFS 1982:673', sourceRef: 'SFS 1982:673 7 §' }
+      - { grade: central, document: 'SFS 1982:673', sourceRef: 'SFS 1982:673 8 §' }
+      - { grade: related, document: 'SFS 1982:673', sourceRef: 'SFS 1982:673 8 a §' }
+      - { grade: central, document: 'SFS 1982:673', sourceRef: 'SFS 1982:673 10 b §' }
+      - { grade: related, document: 'SFS 1982:673', sourceRef: 'SFS 1982:673 11 §' }
+      - { grade: related, document: 'SFS 1982:673', sourceRef: 'SFS 1982:673 13 §' }
+      - { grade: related, document: 'SFS 1982:673', sourceRef: 'SFS 1982:673 14 §' }
+      - { grade: related, document: 'SFS 1982:673', sourceRef: 'SFS 1982:673 15 §' }
   - id: anst-07
     kind: employment
     template: employment
     instruction: Anställningsavtal för en IT-tekniker med förbud mot bisysslor som konkurrerar med arbetsgivaren.
     relevant:
-      - { document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 6 i §' }
-      - { document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 6 c § st. 2, del 1/2' }
-      - { document: 'AD 2003 nr 21', sourceRef: 'AD 2003 nr 21, Domskäl, del 9/17' }
+      - { grade: central, document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 6 i §' }
+      - { grade: related, document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 6 c § st. 2, del 1/2' }
+      - { grade: related, document: 'AD 2003 nr 21', sourceRef: 'AD 2003 nr 21, Domskäl, del 9/17' }
       - {
+          grade: related,
           document: 'AD 2009 nr 63',
           sourceRef: 'AD 2009 nr 63, Domskäl, Brott mot anställningsavtalen',
         }
       - {
+          grade: central,
           document: 'AD 2010 nr 42',
           sourceRef: 'AD 2010 nr 42, Domskäl, Allmänt om lojalitetskravet i ett anställningsförhållande',
         }
       - {
+          grade: central,
           document: 'AD 2010 nr 42',
           sourceRef: 'AD 2010 nr 42, Domskäl, Mom 3 Konkurrerande verksamhet',
         }
       - {
+          grade: related,
           document: 'AD 2012 nr 40',
           sourceRef: 'AD 2012 nr 40, Domskäl, Har det förelegat laga skäl för avskedandet?, del 2/5',
         }
       - {
+          grade: central,
           document: 'AD 2015 nr 35',
           sourceRef: 'AD 2015 nr 35, Inledning, H.L. har handlat i strid med lag och avtal, del 1/2',
         }
       - {
+          grade: central,
           document: 'AD 2017 nr 12',
           sourceRef: 'AD 2017 nr 12, Domskäl, Har U.K.G. och C.Y. agerat i strid med sina anställningsavtal med QQFS?',
         }
       - {
+          grade: related,
           document: 'AD 2018 nr 25',
           sourceRef: 'AD 2018 nr 25, Domskäl, Har arbetstagarna brutit mot lojalitetsplikten?',
         }
       - {
+          grade: central,
           document: 'AD 2018 nr 31',
           sourceRef: 'AD 2018 nr 31, Domskäl, Har arbetstagarna brutit mot lojalitetsplikten?',
         }
       - {
+          grade: central,
           document: 'AD 2020 nr 11',
           sourceRef: 'AD 2020 nr 11, Domskäl, Rättsliga utgångspunkter, del 3/3',
         }
@@ -293,53 +356,61 @@ queries:
     kind: employment
     instruction: Tidsbegränsad anställning som vikariat under en annan anställds föräldraledighet.
     relevant:
-      - { document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 2 a §' }
-      - { document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 4 §' }
-      - { document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 5 §' }
-      - { document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 5 a §' }
-      - { document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 6 c § st. 2, del 1/2' }
-      - { document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 15 §' }
-      - { document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 36 §' }
-      - { document: 'SFS 2002:293', sourceRef: 'SFS 2002:293 3 §' }
-      - { document: 'SFS 2002:293', sourceRef: 'SFS 2002:293 4 §' }
+      - { grade: related, document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 2 a §' }
+      - { grade: central, document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 4 §' }
+      - { grade: central, document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 5 §' }
+      - { grade: related, document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 5 a §' }
+      - { grade: related, document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 6 c § st. 2, del 1/2' }
+      - { grade: central, document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 15 §' }
+      - { grade: related, document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 36 §' }
+      - { grade: related, document: 'SFS 2002:293', sourceRef: 'SFS 2002:293 3 §' }
+      - { grade: related, document: 'SFS 2002:293', sourceRef: 'SFS 2002:293 4 §' }
   - id: anst-09
     kind: employment
     instruction: Anställningsavtal med lojalitetsplikt och vad som gäller vid avskedande på grund av illojalitet.
     relevant:
-      - { document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 18 §' }
-      - { document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 19 §' }
-      - { document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 20 §' }
-      - { document: 'AD 1999 nr 61', sourceRef: 'AD 1999 nr 61, Domskäl, del 2/3' }
-      - { document: 'AD 1999 nr 61', sourceRef: 'AD 1999 nr 61, Domskäl, del 3/3' }
+      - { grade: central, document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 18 §' }
+      - { grade: related, document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 19 §' }
+      - { grade: related, document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 20 §' }
+      - { grade: central, document: 'AD 1999 nr 61', sourceRef: 'AD 1999 nr 61, Domskäl, del 2/3' }
+      - { grade: related, document: 'AD 1999 nr 61', sourceRef: 'AD 1999 nr 61, Domskäl, del 3/3' }
       - {
+          grade: central,
           document: 'AD 2010 nr 42',
           sourceRef: 'AD 2010 nr 42, Domskäl, Allmänt om lojalitetskravet i ett anställningsförhållande',
         }
       - {
+          grade: related,
           document: 'AD 2012 nr 40',
           sourceRef: 'AD 2012 nr 40, Domskäl, Har det förelegat laga skäl för avskedandet?, del 2/5',
         }
       - {
+          grade: related,
           document: 'AD 2012 nr 40',
           sourceRef: 'AD 2012 nr 40, Domskäl, Har det förelegat laga skäl för avskedandet?, del 3/5',
         }
       - {
+          grade: related,
           document: 'AD 2012 nr 40',
           sourceRef: 'AD 2012 nr 40, Domskäl, Har det förelegat laga skäl för avskedandet?, del 5/5',
         }
       - {
+          grade: central,
           document: 'AD 2017 nr 12',
           sourceRef: 'AD 2017 nr 12, Domskäl, Har U.K.G. och C.Y. agerat i strid med sina anställningsavtal med QQFS?',
         }
       - {
+          grade: central,
           document: 'AD 2018 nr 31',
           sourceRef: 'AD 2018 nr 31, Domskäl, Har arbetstagarna brutit mot lojalitetsplikten?',
         }
       - {
+          grade: central,
           document: 'AD 2020 nr 11',
           sourceRef: 'AD 2020 nr 11, Domskäl, Rättsliga utgångspunkter, del 3/3',
         }
       - {
+          grade: central,
           document: 'AD 2015 nr 35',
           sourceRef: 'AD 2015 nr 35, Inledning, H.L. har handlat i strid med lag och avtal, del 1/2',
         }
@@ -347,44 +418,58 @@ queries:
     kind: employment
     instruction: Anställningsavtal där arbetstagaren förbinder sig att stanna en viss tid och betala tillbaka utbildningskostnader vid uppsägning.
     relevant:
-      - { document: 'AD 2002 nr 15', sourceRef: 'AD 2002 nr 15, Domskäl, Bakgrund, del 1/2' }
-      - { document: 'AD 2002 nr 15', sourceRef: 'AD 2002 nr 15, Domskäl, Bakgrund, del 2/2' }
       - {
+          grade: related,
+          document: 'AD 2002 nr 15',
+          sourceRef: 'AD 2002 nr 15, Domskäl, Bakgrund, del 1/2',
+        }
+      - {
+          grade: related,
+          document: 'AD 2002 nr 15',
+          sourceRef: 'AD 2002 nr 15, Domskäl, Bakgrund, del 2/2',
+        }
+      - {
+          grade: related,
           document: 'AD 2002 nr 15',
           sourceRef: 'AD 2002 nr 15, Domskäl, Parternas ståndpunkter i fråga om avtalets giltighet',
         }
       - {
+          grade: central,
           document: 'AD 2002 nr 15',
           sourceRef: 'AD 2002 nr 15, Domskäl, Frågan om anställningsform, del 1/6',
         }
       - {
+          grade: central,
           document: 'AD 2002 nr 15',
           sourceRef: 'AD 2002 nr 15, Domskäl, Frågan om anställningsform, del 2/6',
         }
       - {
+          grade: related,
           document: 'AD 2002 nr 15',
           sourceRef: 'AD 2002 nr 15, Domskäl, Frågan om anställningsform, del 3/6',
         }
-      - { document: 'SFS 1915:218', sourceRef: 'SFS 1915:218 3 kap. 36 §' }
+      - { grade: central, document: 'SFS 1915:218', sourceRef: 'SFS 1915:218 3 kap. 36 §' }
   - id: nda-01
     kind: nda
     template: nda
     instruction: Sekretessavtal för en konsult som får tillgång till kunddata och affärsplaner.
     relevant:
-      - { document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 1 §' }
-      - { document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 2 §' }
-      - { document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 4 §' }
-      - { document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 6 §' }
-      - { document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 7 §' }
-      - { document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 8 §' }
-      - { document: 'AD 1998 nr 80', sourceRef: 'AD 1998 nr 80, Domskäl, del 7/7' }
-      - { document: 'AD 2003 nr 21', sourceRef: 'AD 2003 nr 21, Domskäl, del 3/17' }
-      - { document: 'AD 2003 nr 21', sourceRef: 'AD 2003 nr 21, Domskäl, del 6/17' }
+      - { grade: related, document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 1 §' }
+      - { grade: central, document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 2 §' }
+      - { grade: related, document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 4 §' }
+      - { grade: central, document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 6 §' }
+      - { grade: related, document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 7 §' }
+      - { grade: related, document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 8 §' }
+      - { grade: central, document: 'AD 1998 nr 80', sourceRef: 'AD 1998 nr 80, Domskäl, del 7/7' }
+      - { grade: central, document: 'AD 2003 nr 21', sourceRef: 'AD 2003 nr 21, Domskäl, del 3/17' }
+      - { grade: central, document: 'AD 2003 nr 21', sourceRef: 'AD 2003 nr 21, Domskäl, del 6/17' }
       - {
+          grade: related,
           document: 'AD 2010 nr 90',
           sourceRef: 'AD 2010 nr 90, Inledning, Sekretess hos bolaget, del 1/3',
         }
       - {
+          grade: related,
           document: 'AD 2010 nr 90',
           sourceRef: 'AD 2010 nr 90, Inledning, Sekretess hos bolaget, del 2/3',
         }
@@ -392,56 +477,84 @@ queries:
     kind: nda
     instruction: Sekretessavtal med vite vid brott mot tystnadsplikten.
     relevant:
-      - { document: 'SFS 1915:218', sourceRef: 'SFS 1915:218 3 kap. 36 §' }
+      - { grade: central, document: 'SFS 1915:218', sourceRef: 'SFS 1915:218 3 kap. 36 §' }
       - {
+          grade: central,
           document: 'AD 1994 nr 79',
           sourceRef: 'AD 1994 nr 79, Parternas talan, Avslutande synpunkter (2), del 3/4',
         }
-      - { document: 'AD 1994 nr 79', sourceRef: 'AD 1994 nr 79, Domskäl, Tystnadsplikt, del 2/9' }
       - {
+          grade: related,
+          document: 'AD 1994 nr 79',
+          sourceRef: 'AD 1994 nr 79, Domskäl, Tystnadsplikt, del 2/9',
+        }
+      - {
+          grade: central,
           document: 'AD 2002 nr 15',
           sourceRef: 'AD 2002 nr 15, Domskäl, Frågan om anställningsform, del 2/6',
         }
       - {
+          grade: related,
           document: 'AD 2002 nr 15',
           sourceRef: 'AD 2002 nr 15, Domskäl, Frågan om anställningsform, del 3/6',
         }
       - {
+          grade: central,
           document: 'AD 2002 nr 115',
           sourceRef: 'AD 2002 nr 115, Domskäl, Vitesklausulen, del 1/3',
         }
       - {
+          grade: related,
           document: 'AD 2010 nr 90',
           sourceRef: 'AD 2010 nr 90, Inledning, Sekretess hos bolaget, del 1/3',
         }
       - {
+          grade: related,
           document: 'AD 2010 nr 90',
           sourceRef: 'AD 2010 nr 90, Inledning, Sekretess hos bolaget, del 2/3',
         }
-      - { document: 'AD 2018 nr 61', sourceRef: 'AD 2018 nr 61, Yrkanden och inställning, Vite' }
-      - { document: 'NJA 2010 s. 629', sourceRef: 'NJA 2010 s. 629, Domskäl, Bakgrund, del 4/7' }
-      - { document: 'NJA 2010 s. 629', sourceRef: 'NJA 2010 s. 629, Domskäl, Bakgrund, del 5/7' }
-      - { document: 'NJA 2010 s. 629', sourceRef: 'NJA 2010 s. 629, Skiljaktig mening, del 2/2' }
-      - { document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 7 §' }
+      - {
+          grade: related,
+          document: 'AD 2018 nr 61',
+          sourceRef: 'AD 2018 nr 61, Yrkanden och inställning, Vite',
+        }
+      - {
+          grade: central,
+          document: 'NJA 2010 s. 629',
+          sourceRef: 'NJA 2010 s. 629, Domskäl, Bakgrund, del 4/7',
+        }
+      - {
+          grade: related,
+          document: 'NJA 2010 s. 629',
+          sourceRef: 'NJA 2010 s. 629, Domskäl, Bakgrund, del 5/7',
+        }
+      - {
+          grade: related,
+          document: 'NJA 2010 s. 629',
+          sourceRef: 'NJA 2010 s. 629, Skiljaktig mening, del 2/2',
+        }
+      - { grade: central, document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 7 §' }
   - id: nda-03
     kind: nda
     template: nda
     instruction: Sekretessavtal mellan två bolag inför ett samarbete om produktutveckling.
     relevant:
-      - { document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 1 §' }
-      - { document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 2 §' }
-      - { document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 4 §' }
-      - { document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 6 §' }
-      - { document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 8 §' }
-      - { document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 14 §' }
-      - { document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 15 §' }
-      - { document: 'AD 2003 nr 21', sourceRef: 'AD 2003 nr 21, Domskäl, del 3/17' }
-      - { document: 'AD 2003 nr 21', sourceRef: 'AD 2003 nr 21, Domskäl, del 4/17' }
+      - { grade: related, document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 1 §' }
+      - { grade: central, document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 2 §' }
+      - { grade: related, document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 4 §' }
+      - { grade: central, document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 6 §' }
+      - { grade: related, document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 8 §' }
+      - { grade: related, document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 14 §' }
+      - { grade: related, document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 15 §' }
+      - { grade: central, document: 'AD 2003 nr 21', sourceRef: 'AD 2003 nr 21, Domskäl, del 3/17' }
+      - { grade: related, document: 'AD 2003 nr 21', sourceRef: 'AD 2003 nr 21, Domskäl, del 4/17' }
       - {
+          grade: central,
           document: 'AD 2020 nr 11',
           sourceRef: 'AD 2020 nr 11, Domskäl, Rättsliga utgångspunkter, del 1/3',
         }
       - {
+          grade: central,
           document: 'AD 2020 nr 18',
           sourceRef: 'AD 2020 nr 18, Domskäl, Rättsliga utgångspunkter, del 1/2',
         }
@@ -449,45 +562,55 @@ queries:
     kind: nda
     instruction: Sekretessåtagande som ska gälla även efter att anställningen har upphört.
     relevant:
-      - { document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 2 §' }
-      - { document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 7 §' }
+      - { grade: central, document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 2 §' }
+      - { grade: central, document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 7 §' }
       - {
+          grade: central,
           document: 'AD 1994 nr 79',
           sourceRef: 'AD 1994 nr 79, Parternas talan, Avslutande synpunkter (2), del 3/4',
         }
       - {
+          grade: related,
           document: 'AD 2009 nr 63',
           sourceRef: 'AD 2009 nr 63, Domskäl, Frågan om brott mot anställningsavtalen efter anställningarnas upphörande, del 1/3',
         }
       - {
+          grade: central,
           document: 'AD 2010 nr 42',
           sourceRef: 'AD 2010 nr 42, Domskäl, Mom 1 Förtroende och tystnadsplikt',
         }
       - {
+          grade: related,
           document: 'AD 2010 nr 90',
           sourceRef: 'AD 2010 nr 90, Inledning, Sekretess hos bolaget, del 2/3',
         }
       - {
+          grade: related,
           document: 'AD 2010 nr 90',
           sourceRef: 'AD 2010 nr 90, Inledning, Sekretess hos bolaget, del 3/3',
         }
       - {
+          grade: central,
           document: 'AD 2013 nr 24',
           sourceRef: 'AD 2013 nr 24, Domskäl, K.K:s skadeståndsansvar enligt företagshemlighetslagen, del 1/3',
         }
       - {
+          grade: central,
           document: 'AD 2015 nr 39',
           sourceRef: 'AD 2015 nr 39, Domskäl, Angrepp på företagshemligheter, del 1/3',
         }
       - {
+          grade: related,
           document: 'AD 2016 nr 21',
           sourceRef: 'AD 2016 nr 21, Domskäl, Har ROL Retail en motfordran som ska kvittas?, del 2/3',
         }
       - {
+          grade: central,
           document: 'AD 2024 nr 13',
           sourceRef: 'AD 2024 nr 13, Domskäl, Rättsliga utgångspunkter, del 1/4',
         }
       - {
+          grade: related,
           document: 'AD 2024 nr 13',
           sourceRef: 'AD 2024 nr 13, Domskäl, Rättsliga utgångspunkter, del 2/4',
         }
@@ -495,53 +618,64 @@ queries:
     kind: nda
     instruction: Sekretessavtal som skyddar företagshemligheter som kundregister och prislistor.
     relevant:
-      - { document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 2 §' }
-      - { document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 7 §' }
-      - { document: 'AD 1998 nr 80', sourceRef: 'AD 1998 nr 80, Domskäl, del 7/7' }
+      - { grade: central, document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 2 §' }
+      - { grade: central, document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 7 §' }
+      - { grade: central, document: 'AD 1998 nr 80', sourceRef: 'AD 1998 nr 80, Domskäl, del 7/7' }
       - {
+          grade: central,
           document: 'AD 2000 nr 3',
           sourceRef: 'AD 2000 nr 3, Domskäl, Har L.J. vid försäljningarna utnyttjat bolagets företagshemligheter?, del 2/5',
         }
       - {
+          grade: related,
           document: 'AD 2000 nr 3',
           sourceRef: 'AD 2000 nr 3, Domskäl, Har L.J. vid försäljningarna utnyttjat bolagets företagshemligheter?, del 3/5',
         }
-      - { document: 'AD 2003 nr 21', sourceRef: 'AD 2003 nr 21, Domskäl, del 3/17' }
-      - { document: 'AD 2003 nr 21', sourceRef: 'AD 2003 nr 21, Domskäl, del 6/17' }
-      - { document: 'AD 2006 nr 49', sourceRef: 'AD 2006 nr 49, Domskäl, del 3/6' }
+      - { grade: central, document: 'AD 2003 nr 21', sourceRef: 'AD 2003 nr 21, Domskäl, del 3/17' }
+      - { grade: central, document: 'AD 2003 nr 21', sourceRef: 'AD 2003 nr 21, Domskäl, del 6/17' }
+      - { grade: related, document: 'AD 2006 nr 49', sourceRef: 'AD 2006 nr 49, Domskäl, del 3/6' }
       - {
+          grade: related,
           document: 'AD 2013 nr 24',
           sourceRef: 'AD 2013 nr 24, Domskäl, Bakgrund och tvisten, del 8/12',
         }
       - {
+          grade: related,
           document: 'AD 2013 nr 24',
           sourceRef: 'AD 2013 nr 24, Domskäl, K.K:s skadeståndsansvar enligt företagshemlighetslagen, del 1/3',
         }
       - {
+          grade: related,
           document: 'AD 2015 nr 35',
           sourceRef: 'AD 2015 nr 35, Domskäl, Företagshemlighetslagen, del 1/2',
         }
       - {
+          grade: related,
           document: 'AD 2015 nr 39',
           sourceRef: 'AD 2015 nr 39, Domskäl, Angrepp på företagshemligheter, del 1/3',
         }
       - {
+          grade: central,
           document: 'AD 2015 nr 39',
           sourceRef: 'AD 2015 nr 39, Domskäl, Angrepp på företagshemligheter, del 2/3',
         }
       - {
+          grade: related,
           document: 'AD 2020 nr 11',
           sourceRef: 'AD 2020 nr 11, Domskäl, Rättsliga utgångspunkter, del 1/3',
         }
       - {
+          grade: central,
           document: 'AD 2020 nr 11',
           sourceRef: 'AD 2020 nr 11, Domskäl, Rättsliga utgångspunkter, del 2/3',
         }
       - {
+          grade: related,
           document: 'AD 2020 nr 18',
           sourceRef: 'AD 2020 nr 18, Domskäl, Rättsliga utgångspunkter, del 1/2',
         }
       - {
+          grade: central,
           document: 'AD 2024 nr 13',
           sourceRef: 'AD 2024 nr 13, Domskäl, Rättsliga utgångspunkter, del 3/4',
         }
@@ -549,128 +683,178 @@ queries:
     kind: nda
     instruction: Sekretessavtal för en säljare som efter anställningen inte får värva arbetsgivarens kunder.
     relevant:
-      - { document: 'SFS 1915:218', sourceRef: 'SFS 1915:218 3 kap. 38 §' }
-      - { document: 'AD 2001 nr 91', sourceRef: 'AD 2001 nr 91, Domskäl, del 1/5' }
-      - { document: 'AD 2001 nr 91', sourceRef: 'AD 2001 nr 91, Domskäl, del 2/5' }
-      - { document: 'AD 2001 nr 91', sourceRef: 'AD 2001 nr 91, Domskäl, del 3/5' }
-      - { document: 'AD 2001 nr 91', sourceRef: 'AD 2001 nr 91, Domskäl, del 4/5' }
+      - { grade: central, document: 'SFS 1915:218', sourceRef: 'SFS 1915:218 3 kap. 38 §' }
+      - { grade: related, document: 'AD 2001 nr 91', sourceRef: 'AD 2001 nr 91, Domskäl, del 1/5' }
+      - { grade: related, document: 'AD 2001 nr 91', sourceRef: 'AD 2001 nr 91, Domskäl, del 2/5' }
+      - { grade: related, document: 'AD 2001 nr 91', sourceRef: 'AD 2001 nr 91, Domskäl, del 3/5' }
+      - { grade: central, document: 'AD 2001 nr 91', sourceRef: 'AD 2001 nr 91, Domskäl, del 4/5' }
       - {
+          grade: central,
           document: 'AD 2015 nr 8',
           sourceRef: 'AD 2015 nr 8, Domskäl, Är konkurrensklausulen oskälig enligt 38 § avtalslagen?, del 1/5',
         }
       - {
+          grade: central,
           document: 'AD 2015 nr 8',
           sourceRef: 'AD 2015 nr 8, Domskäl, Är konkurrensklausulen oskälig enligt 38 § avtalslagen?, del 2/5',
         }
       - {
+          grade: central,
           document: 'AD 2015 nr 8',
           sourceRef: 'AD 2015 nr 8, Domskäl, Är konkurrensklausulen oskälig enligt 38 § avtalslagen?, del 3/5',
         }
       - {
+          grade: central,
           document: 'AD 2015 nr 8',
           sourceRef: 'AD 2015 nr 8, Domskäl, Är konkurrensklausulen oskälig enligt 38 § avtalslagen?, del 4/5',
         }
       - {
+          grade: related,
           document: 'AD 2015 nr 8',
           sourceRef: 'AD 2015 nr 8, Domskäl, Är konkurrensklausulen oskälig enligt 38 § avtalslagen?, del 5/5',
         }
       - {
+          grade: central,
           document: 'AD 2017 nr 57',
           sourceRef: 'AD 2017 nr 57, Domskäl, Rättsliga utgångspunkter, del 1/2',
         }
       - {
+          grade: central,
           document: 'AD 2017 nr 57',
           sourceRef: 'AD 2017 nr 57, Domskäl, Rättsliga utgångspunkter, del 2/2',
         }
       - {
+          grade: central,
           document: 'AD 2017 nr 57',
           sourceRef: 'AD 2017 nr 57, Domskäl, Arbetsdomstolens bedömning, del 1/2',
         }
       - {
+          grade: related,
           document: 'AD 2017 nr 57',
           sourceRef: 'AD 2017 nr 57, Domskäl, Arbetsdomstolens bedömning, del 2/2',
         }
       - {
+          grade: related,
           document: 'AD 2017 nr 44',
           sourceRef: 'AD 2017 nr 44, Skäl, Bakgrund och tvisten, del 1/2',
         }
       - {
+          grade: central,
           document: 'AD 2018 nr 49',
           sourceRef: 'AD 2018 nr 49, Domskäl, Rättsliga utgångspunkter, del 1/6',
         }
       - {
+          grade: central,
           document: 'AD 2018 nr 49',
           sourceRef: 'AD 2018 nr 49, Domskäl, Rättsliga utgångspunkter, del 2/6',
         }
       - {
+          grade: central,
           document: 'AD 2018 nr 61',
           sourceRef: 'AD 2018 nr 61, Skäl, Har MachineGames visat sannolika skäl för sina anspråk mot A.B. och Neon Giant?, del 2/6',
         }
       - {
+          grade: related,
           document: 'AD 2002 nr 115',
           sourceRef: 'AD 2002 nr 115, Domskäl, Vitesklausulen, del 1/3',
         }
       - {
+          grade: related,
           document: 'AD 2009 nr 63',
           sourceRef: 'AD 2009 nr 63, Domskäl, Frågan om brott mot anställningsavtalen efter anställningarnas upphörande, del 1/3',
         }
       - {
+          grade: related,
           document: 'AD 2009 nr 63',
           sourceRef: 'AD 2009 nr 63, Domskäl, Frågan om brott mot anställningsavtalen efter anställningarnas upphörande, del 3/3',
         }
       - {
+          grade: central,
           document: 'AD 2013 nr 24',
           sourceRef: 'AD 2013 nr 24, Domskäl, K.K:s skadeståndsansvar för brott mot konkurrensklausulen, del 1/4',
         }
       - {
+          grade: central,
           document: 'AD 2013 nr 24',
           sourceRef: 'AD 2013 nr 24, Domskäl, K.K:s skadeståndsansvar för brott mot konkurrensklausulen, del 2/4',
         }
       - {
+          grade: central,
           document: 'AD 2013 nr 24',
           sourceRef: 'AD 2013 nr 24, Domskäl, K.K:s skadeståndsansvar för brott mot konkurrensklausulen, del 3/4',
         }
       - {
+          grade: related,
           document: 'AD 2017 nr 44',
           sourceRef: 'AD 2017 nr 44, Skäl, Har bolaget visat sannolika skäl för sitt anspråk?, del 2/3',
         }
       - {
+          grade: related,
           document: 'AD 2018 nr 49',
           sourceRef: 'AD 2018 nr 49, Domskäl, Rättsliga utgångspunkter, del 4/6',
         }
       - {
+          grade: related,
           document: 'AD 2018 nr 61',
           sourceRef: 'AD 2018 nr 61, Yrkanden och inställning, MachineGames – MachineGames har visat sannolika skäl för sina anspråk, del 3/3',
         }
       - {
+          grade: related,
           document: 'AD 2018 nr 61',
           sourceRef: 'AD 2018 nr 61, Skäl, Har MachineGames visat sannolika skäl för sina anspråk mot A.B. och Neon Giant?, del 6/6',
         }
-      - { document: 'AD 2010 nr 27', sourceRef: 'AD 2010 nr 27, Domskäl, Konkurrensförbudet' }
+      - {
+          grade: related,
+          document: 'AD 2010 nr 27',
+          sourceRef: 'AD 2010 nr 27, Domskäl, Konkurrensförbudet',
+        }
   - id: nda-07
     kind: nda
     template: nda
     instruction: Sekretessavtal för en anställd med tillgång till personuppgifter om patienter och kunder.
     relevant:
-      - { document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 7 §' }
-      - { document: 'SFS 2018:218', sourceRef: 'SFS 2018:218 1 kap. 1 §' }
-      - { document: 'SFS 2018:218', sourceRef: 'SFS 2018:218 3 kap. 1 §' }
-      - { document: 'SFS 2018:218', sourceRef: 'SFS 2018:218 3 kap. 5 §' }
-      - { document: 'SFS 2018:218', sourceRef: 'SFS 2018:218 3 kap. 10 §' }
+      - { grade: related, document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 7 §' }
+      - { grade: central, document: 'SFS 2018:218', sourceRef: 'SFS 2018:218 1 kap. 1 §' }
+      - { grade: central, document: 'SFS 2018:218', sourceRef: 'SFS 2018:218 3 kap. 1 §' }
+      - { grade: central, document: 'SFS 2018:218', sourceRef: 'SFS 2018:218 3 kap. 5 §' }
+      - { grade: related, document: 'SFS 2018:218', sourceRef: 'SFS 2018:218 3 kap. 10 §' }
       - {
+          grade: central,
           document: 'AD 1994 nr 79',
           sourceRef: 'AD 1994 nr 79, Parternas talan, Avslutande synpunkter (2), del 3/4',
         }
-      - { document: 'AD 1994 nr 79', sourceRef: 'AD 1994 nr 79, Domskäl, Tystnadsplikt, del 2/9' }
-      - { document: 'AD 2018 nr 48', sourceRef: 'AD 2018 nr 48, Domskäl, Tvisten, del 2/5' }
-      - { document: 'AD 2018 nr 48', sourceRef: 'AD 2018 nr 48, Domskäl, Tvisten, del 3/5' }
-      - { document: 'AD 2018 nr 48', sourceRef: 'AD 2018 nr 48, Domskäl, Tvisten, del 4/5' }
-      - { document: 'AD 2018 nr 48', sourceRef: 'AD 2018 nr 48, Domskäl, Tvisten, del 5/5' }
       - {
+          grade: related,
+          document: 'AD 1994 nr 79',
+          sourceRef: 'AD 1994 nr 79, Domskäl, Tystnadsplikt, del 2/9',
+        }
+      - {
+          grade: related,
+          document: 'AD 2018 nr 48',
+          sourceRef: 'AD 2018 nr 48, Domskäl, Tvisten, del 2/5',
+        }
+      - {
+          grade: related,
+          document: 'AD 2018 nr 48',
+          sourceRef: 'AD 2018 nr 48, Domskäl, Tvisten, del 3/5',
+        }
+      - {
+          grade: related,
+          document: 'AD 2018 nr 48',
+          sourceRef: 'AD 2018 nr 48, Domskäl, Tvisten, del 4/5',
+        }
+      - {
+          grade: related,
+          document: 'AD 2018 nr 48',
+          sourceRef: 'AD 2018 nr 48, Domskäl, Tvisten, del 5/5',
+        }
+      - {
+          grade: central,
           document: 'AD 2018 nr 48',
           sourceRef: 'AD 2018 nr 48, Domskäl, Har det funnits laga grund för avskedande?, del 2/2',
         }
       - {
+          grade: central,
           document: 'AD 2019 nr 38',
           sourceRef: 'AD 2019 nr 38, Bakgrund, Migrationsverkets databas Wilma, del 2/2',
         }
@@ -678,37 +862,44 @@ queries:
     kind: nda
     instruction: Sekretessavtal där skadestånd ska betalas om information röjs till en konkurrent.
     relevant:
-      - { document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 2 §' }
-      - { document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 3 §' }
-      - { document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 6 §' }
-      - { document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 7 §' }
-      - { document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 8 §' }
-      - { document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 11 §' }
+      - { grade: central, document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 2 §' }
+      - { grade: central, document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 3 §' }
+      - { grade: related, document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 6 §' }
+      - { grade: central, document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 7 §' }
+      - { grade: related, document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 8 §' }
+      - { grade: central, document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 11 §' }
       - {
+          grade: related,
           document: 'AD 2010 nr 27',
           sourceRef: 'AD 2010 nr 27, Domskäl, Allmänt skadestånd för brott mot lagen om skydd för företagshemligheter, del 1/2',
         }
       - {
+          grade: related,
           document: 'AD 2010 nr 27',
           sourceRef: 'AD 2010 nr 27, Domskäl, Allmänt skadestånd för brott mot lagen om skydd för företagshemligheter, del 2/2',
         }
       - {
+          grade: related,
           document: 'AD 2013 nr 24',
           sourceRef: 'AD 2013 nr 24, Domskäl, K.K:s skadeståndsansvar enligt företagshemlighetslagen, del 1/3',
         }
       - {
+          grade: related,
           document: 'AD 2016 nr 21',
           sourceRef: 'AD 2016 nr 21, Domskäl, Har ROL Retail en motfordran som ska kvittas?, del 2/3',
         }
       - {
+          grade: central,
           document: 'AD 2017 nr 12',
           sourceRef: 'AD 2017 nr 12, Domskäl, Ekonomiskt skadestånd enligt 7, 8 och 9 §§ företagshemlighetslagen',
         }
       - {
+          grade: central,
           document: 'AD 2017 nr 12',
           sourceRef: 'AD 2017 nr 12, Domskäl, Allmänt eller ideellt skadestånd',
         }
       - {
+          grade: central,
           document: 'AD 2020 nr 18',
           sourceRef: 'AD 2020 nr 18, Domskäl, Skadeståndets storlek, del 1/2',
         }
@@ -716,19 +907,22 @@ queries:
     kind: nda
     instruction: Sekretessavtal för en inhyrd konsult från ett bemanningsföretag.
     relevant:
-      - { document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 2 §' }
-      - { document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 6 §' }
-      - { document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 7 §' }
-      - { document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 8 §' }
+      - { grade: central, document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 2 §' }
+      - { grade: central, document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 6 §' }
+      - { grade: related, document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 7 §' }
+      - { grade: related, document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 8 §' }
       - {
+          grade: related,
           document: 'AD 2010 nr 90',
           sourceRef: 'AD 2010 nr 90, Inledning, Sekretess hos bolaget, del 1/3',
         }
       - {
+          grade: related,
           document: 'AD 2010 nr 90',
           sourceRef: 'AD 2010 nr 90, Inledning, Sekretess hos bolaget, del 2/3',
         }
       - {
+          grade: related,
           document: 'AD 2010 nr 90',
           sourceRef: 'AD 2010 nr 90, Inledning, Sekretess hos bolaget, del 3/3',
         }
@@ -736,32 +930,39 @@ queries:
     kind: nda
     instruction: Sekretessavtal om återlämnande och förstörelse av konfidentiella handlingar när uppdraget upphör.
     relevant:
-      - { document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 17 §' }
+      - { grade: central, document: 'SFS 2018:558', sourceRef: 'SFS 2018:558 17 §' }
       - {
+          grade: related,
           document: 'AD 2010 nr 42',
           sourceRef: 'AD 2010 nr 42, Domskäl, Mom 1 Förtroende och tystnadsplikt',
         }
       - {
+          grade: related,
           document: 'AD 2010 nr 90',
           sourceRef: 'AD 2010 nr 90, Inledning, Överföring av dokument, del 1/2',
         }
       - {
+          grade: related,
           document: 'AD 2010 nr 90',
           sourceRef: 'AD 2010 nr 90, Inledning, Sekretess hos bolaget, del 1/3',
         }
       - {
+          grade: related,
           document: 'AD 2010 nr 90',
           sourceRef: 'AD 2010 nr 90, Inledning, Överföring och radering av dokument, del 2/5',
         }
       - {
+          grade: central,
           document: 'AD 2017 nr 12',
           sourceRef: 'AD 2017 nr 12, Domskäl, Återlämnande av materialet, del 1/2',
         }
       - {
+          grade: related,
           document: 'AD 2017 nr 12',
           sourceRef: 'AD 2017 nr 12, Domskäl, Återlämnande av materialet, del 2/2',
         }
       - {
+          grade: central,
           document: 'AD 2020 nr 11',
           sourceRef: 'AD 2020 nr 11, Domskäl, Yrkande om att handlingar och föremål ska överlämnas eller förstöras',
         }

@@ -29,7 +29,9 @@ export function evalQueries(count = 20): EvalQuery[] {
       kind,
       instruction: `Instruktion ${i + 1}`,
       ...(i % 3 === 0 ? { template: kind } : {}),
-      relevant: [{ document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 7 §' }],
+      relevant: [
+        { document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 7 §', grade: 'central' as const },
+      ],
     };
   });
 }

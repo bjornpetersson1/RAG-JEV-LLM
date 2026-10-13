@@ -15,13 +15,13 @@ export interface RetrievalConfig {
 }
 
 /**
- * Reads `RETRIEVER` (`tags` by default), `RETRIEVE_CANDIDATES` (40), `RRF_K` (60) and
+ * Reads `RETRIEVER` (`tags` by default), `RETRIEVE_CANDIDATES` (20, from E7-4's sweep), `RRF_K` (60) and
  * `RRF_WEIGHT_DENSE` / `RRF_WEIGHT_LEXICAL` / `RRF_WEIGHT_TAGS` (1 each).
  */
 export function loadRetrievalConfig(env: Env): RetrievalConfig {
   return {
     retriever: readOneOf(env, 'RETRIEVER', RETRIEVERS, 'tags'),
-    candidates: readPositiveInteger(env, 'RETRIEVE_CANDIDATES', 40),
+    candidates: readPositiveInteger(env, 'RETRIEVE_CANDIDATES', 20),
     rrfK: readPositiveInteger(env, 'RRF_K', 60),
     weights: {
       dense: readShare(env, 'RRF_WEIGHT_DENSE', 1),

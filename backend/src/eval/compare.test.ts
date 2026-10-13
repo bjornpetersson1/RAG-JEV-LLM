@@ -7,7 +7,7 @@ import { createCompareSetup } from './compare-setup.js';
 import type { ResolvedQuery } from './queries.js';
 import { createEvalDatabase } from './test-helpers.js';
 
-/** Two queries; q1 has relevant chunks 1 and 2, q2 has relevant chunk 5. */
+/** Two queries; q1 has relevant chunks 1 (central) and 2 (related), q2 has central chunk 5. */
 const QUERIES: ResolvedQuery[] = [
   {
     id: 'q1',
@@ -15,8 +15,16 @@ const QUERIES: ResolvedQuery[] = [
     instruction: 'A',
     relevant: [],
     relevantIds: new Set(['1', '2']),
+    centralIds: new Set(['1']),
   },
-  { id: 'q2', kind: 'nda', instruction: 'B', relevant: [], relevantIds: new Set(['5']) },
+  {
+    id: 'q2',
+    kind: 'nda',
+    instruction: 'B',
+    relevant: [],
+    relevantIds: new Set(['5']),
+    centralIds: new Set(['5']),
+  },
 ];
 
 /** The retriever's order: relevant chunks late, so reranking can lift them. */
@@ -72,7 +80,10 @@ describe('compareRerankers', () => {
       retriever: 'bge',
       reranker: 'none',
       candidates: 5,
-      before: { '5': 0.5, '8': 1, '10': 1, candidates: 1 },
+      before: {
+        all: { '5': 0.5, '8': 1, '10': 1, candidates: 1, precision5: 0.1 },
+        central: { '5': 0.5, '8': 1, '10': 1, candidates: 1, precision5: 0.1 },
+      },
       queries: 2,
     });
     // After: q1 keeps 1, 2, 9, 6 (relevant at 0.5 and above); q2 keeps 5, 6.
@@ -81,12 +92,20 @@ describe('compareRerankers', () => {
       model: 'fake-model',
       dtype: 'int8',
       after: {
-        '5': 1,
-        '8': 1,
-        '10': 1,
-        candidates: 1,
-        precision5: expect.closeTo(0.3, 10),
-        precision10: expect.closeTo(0.15, 10),
+        all: {
+          '5': 1,
+          '8': 1,
+          '10': 1,
+          candidates: 1,
+          precision5: expect.closeTo(0.3, 10),
+          precision10: expect.closeTo(0.15, 10),
+        },
+        // Only chunk 1 of q1 is central, so q1's precision halves.
+        central: {
+          '5': 1,
+          precision5: expect.closeTo(0.2, 10),
+          precision10: expect.closeTo(0.1, 10),
+        },
       },
       rerankMs: { median: 40, p90: 40 },
       retrievalMs: { median: 10, p90: 10 },
@@ -186,7 +205,7 @@ describe('compareRerankers', () => {
     expect(order[0]).toBe('warm-up');
     expect(failures).toEqual(['q2 rerank fake: timeout']);
     // Only q1 was reranked, so "before" covers q1 alone: 1 and 2 are 7th and 8th.
-    expect(row).toMatchObject({ queries: 1, before: { '5': 0, '8': 1 }, failed: true });
+    expect(row).toMatchObject({ queries: 1, before: { all: { '5': 0, '8': 1 } }, failed: true });
     expect(row.notes).toEqual(['rerank failed for 1 queries']);
   });
 
@@ -272,8 +291,15 @@ describe('createCompareSetup', () => {
         kind: 'employment',
         template: 'employment',
         relevantIds: new Set(['11']),
+        centralIds: new Set(['11']),
       },
-      { ...query, id: 'q2', kind: 'nda', relevantIds: new Set(['11']) },
+      {
+        ...query,
+        id: 'q2',
+        kind: 'nda',
+        relevantIds: new Set(['11']),
+        centralIds: new Set(['11']),
+      },
     ];
     const setup = createCompareSetup(database.db, env, SILENT_LOGGER, {
       retrievers: ['tags'],

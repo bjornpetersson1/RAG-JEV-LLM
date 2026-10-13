@@ -10,19 +10,30 @@ export interface RunArgs {
 }
 
 /**
- * `run` arguments: none for E5-3's evaluation, or `--reranker <a,b>` with an optional
- * `--retriever <tags,bge,both>` for the comparison. Throws on a name it does not know.
+ * `run` arguments: none for E5-3's evaluation, `--reranker <a,b>` with an optional
+ * `--retriever <tags,bge,both>` for the comparison, or `--sweep` for E7-4's sweep. Throws on a name
+ * it does not know.
  */
 export function parseRunArgs(
   args: string[],
   rerankerNames: readonly string[],
-): RunArgs | undefined {
+): RunArgs | { sweep: true } | undefined {
   const { values, positionals } = parseArgs({
     args,
-    options: { reranker: { type: 'string' }, retriever: { type: 'string' } },
+    options: {
+      reranker: { type: 'string' },
+      retriever: { type: 'string' },
+      sweep: { type: 'boolean', default: false },
+    },
     allowPositionals: true,
   });
   if (positionals.length > 0) throw new Error(`Unexpected argument "${positionals[0]}"`);
+  if (values.sweep) {
+    if (values.reranker !== undefined || values.retriever !== undefined) {
+      throw new Error('--sweep runs on its own, with the configured reranker');
+    }
+    return { sweep: true };
+  }
   if (values.reranker === undefined) {
     if (values.retriever !== undefined) throw new Error('--retriever needs --reranker');
     return undefined;

@@ -25,12 +25,16 @@ import { benchCompare } from './bench-compare.js';
 import { parseBenchArgs, type BenchArgs } from './bench-compare-args.js';
 import { appendBenchToReport, benchTable } from './bench-compare-report.js';
 import { createBenchSetup } from './bench-compare-setup.js';
+import { chooseSetting, sweepCandidates } from './sweep.js';
+import { appendSweepToReport, sweepTable } from './sweep-report.js';
+import { createSweepSetup, SWEEP_BASELINES } from './sweep-setup.js';
 import { formatSeconds } from '../models/bench-args.js';
 
 const EVAL_QUERIES_PATH = join(REPO_ROOT, 'eval', 'queries.yaml');
 const DEFAULT_TEXT_CHARS = 300;
 const USAGE =
-  'Usage: eval <label <query id> [--chars <n>] | run [--reranker <names> [--retriever <names>]] | ' +
+  'Usage: eval <label <query id> [--chars <n>] | run [--reranker <names> [--retriever <names>] | ' +
+  '--sweep] | ' +
   'bench [--runs <n>] [--limit <n>] [--no-draft]>';
 
 // Every call and search logs at info level; only problems are worth showing during a long run.
@@ -46,8 +50,9 @@ try {
 async function run(args: string[]): Promise<number> {
   const [command, ...rest] = args;
   if (command === 'run') {
-    const compare = parseRunArgs(rest, Object.keys(RERANKERS));
-    return compare ? runComparison(compare) : runEval();
+    const runArgs = parseRunArgs(rest, Object.keys(RERANKERS));
+    if (!runArgs) return runEval();
+    return 'sweep' in runArgs ? runSweep() : runComparison(runArgs);
   }
   if (command === 'bench') return runBench(parseBenchArgs(rest));
   if (command === 'label') {
@@ -125,7 +130,7 @@ function runComparison({ rerankers, retrievers }: RunArgs): Promise<number> {
       onFailure: (step, query, error) => console.error(`${query.id}: ${step} failed: ${error}`),
     });
     const date = localDate();
-    const path = join(REPO_ROOT, 'eval', `report-${date}.md`);
+    const path = reportPath(date);
     appendToReport(path, rows, date);
     console.log(`\n${comparisonTable(rows, date)}\n\nAppended to ${path}`);
     return rows.some((row) => row.failed) ? 1 : 0;
@@ -155,10 +160,45 @@ function runBench({ runs, limit, draft }: BenchArgs): Promise<number> {
         console.error(`[run ${run + 1}/${runs}] ${query.id} ${flow} failed: ${error}`),
     });
     const date = localDate();
-    const path = join(REPO_ROOT, 'eval', `report-${date}.md`);
+    const path = reportPath(date);
     appendBenchToReport(path, summaries, date);
     console.log(`\n${benchTable(summaries, date)}\n\nAppended to ${path}`);
     return summaries.some((summary) => summary.failures > 0) ? 1 : 0;
+  });
+}
+
+/**
+ * `run --sweep`: candidate counts and top-k with the configured reranker (E7-4), printed with the
+ * setting the rule chooses per retriever and appended to `eval/report-<date>.md`.
+ */
+function runSweep(): Promise<number> {
+  const queries = readEvalQueries(EVAL_QUERIES_PATH);
+  return withDatabase(async (db) => {
+    const resolved = resolveEvalQueries(queries, db);
+    const setup = createSweepSetup(db, process.env, problemLogger);
+    let failures = 0;
+    await setup.warmUp();
+    const rows = await sweepCandidates(resolved, {
+      ...setup,
+      onQuery: (query, index, total) => console.log(`[${index + 1}/${total}] ${query.id}`),
+      onFailure: (step, query, error) => {
+        failures += 1;
+        console.error(`${query.id}: ${step} failed: ${error}`);
+      },
+    });
+    const choices = chooseSetting(rows, SWEEP_BASELINES);
+    const date = localDate();
+    const path = reportPath(date);
+    appendSweepToReport(path, rows, choices, setup.reranker.name, date);
+    console.log(`\n${sweepTable(rows, choices, setup.reranker.name, date)}\n`);
+    for (const { retriever, baseline, chosen } of choices) {
+      console.log(
+        `${retriever}: chosen ${chosen.candidates} candidates, top ${chosen.topK} ` +
+          `(central F1 ${chosen.scores.central.f1.toFixed(3)} against ${baseline.scores.central.f1.toFixed(3)})`,
+      );
+    }
+    console.log(`\nAppended to ${path}`);
+    return failures > 0 ? 1 : 0;
   });
 }
 
@@ -175,4 +215,9 @@ function printProgress(
         ? `, unknown ${unknown['tags+jev']} / ${unknown['tags+llm']}`
         : ''),
   );
+}
+
+/** That day's evaluation report, which the comparison, the benchmark and the sweep append to. */
+function reportPath(date: string): string {
+  return join(REPO_ROOT, 'eval', `report-${date}.md`);
 }

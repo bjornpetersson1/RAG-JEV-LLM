@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { loadRetrievalConfig } from './config.js';
 
 describe('loadRetrievalConfig', () => {
-  it('defaults to tag search, 40 candidates, k 60 and equal weights', () => {
+  it('defaults to tag search, 20 candidates, k 60 and equal weights', () => {
     expect(loadRetrievalConfig({})).toEqual({
       retriever: 'tags',
-      candidates: 40,
+      candidates: 20,
       rrfK: 60,
       weights: { dense: 1, lexical: 1, tags: 1 },
     });

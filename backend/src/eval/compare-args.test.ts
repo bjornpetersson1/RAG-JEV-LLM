@@ -30,4 +30,11 @@ describe('parseRunArgs', () => {
   ])('rejects %o', (args, message) => {
     expect(() => parseRunArgs(args, RERANKERS)).toThrow(message);
   });
+
+  it('reads --sweep, which runs on its own', () => {
+    expect(parseRunArgs(['--sweep'], ['bge'])).toEqual({ sweep: true });
+    expect(() => parseRunArgs(['--sweep', '--reranker', 'bge'], ['bge'])).toThrow(
+      '--sweep runs on its own',
+    );
+  });
 });

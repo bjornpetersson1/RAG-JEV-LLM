@@ -7,7 +7,7 @@ const QUERY: EvalQuery = {
   id: 'anst-03',
   kind: 'employment',
   instruction: 'Uppsägningstid tre månader',
-  relevant: [{ document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 11 §' }],
+  relevant: [{ document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 11 §', grade: 'central' as const }],
 };
 
 describe('labelCandidates', () => {

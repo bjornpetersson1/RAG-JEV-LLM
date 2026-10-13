@@ -12,7 +12,7 @@ queries:
     template: employment
     instruction: Anställningsavtal med konkurrensklausul.
     relevant:
-      - { document: "AD 2015 nr 8", sourceRef: "AD 2015 nr 8, Domskäl, del 1/5" }
+      - { document: "AD 2015 nr 8", sourceRef: "AD 2015 nr 8, Domskäl, del 1/5", grade: central }
   - id: nda-01
     kind: nda
     instruction: Sekretessavtal.
@@ -25,7 +25,13 @@ queries:
         kind: 'employment',
         template: 'employment',
         instruction: 'Anställningsavtal med konkurrensklausul.',
-        relevant: [{ document: 'AD 2015 nr 8', sourceRef: 'AD 2015 nr 8, Domskäl, del 1/5' }],
+        relevant: [
+          {
+            document: 'AD 2015 nr 8',
+            sourceRef: 'AD 2015 nr 8, Domskäl, del 1/5',
+            grade: 'central' as const,
+          },
+        ],
       },
       { id: 'nda-01', kind: 'nda', instruction: 'Sekretessavtal.', relevant: [] },
     ]);
@@ -40,6 +46,18 @@ queries:
       { kind: 'nda', instruction: 'x', relevant: [] },
       { id: 'f', kind: 'nda', instruction: 'x', relevant: [] },
       { id: 'f', kind: 'nda', instruction: 'y', relevant: [] },
+      {
+        id: 'g',
+        kind: 'nda',
+        instruction: 'x',
+        relevant: [{ document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 7 §', grade: 'maybe' }],
+      },
+      {
+        id: 'h',
+        kind: 'nda',
+        instruction: 'x',
+        relevant: [{ document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 7 §' }],
+      },
     ];
 
     expect(() => parseEvalQueries(stringify({ queries }))).toThrow(
@@ -50,6 +68,8 @@ queries:
         '  - query c: "template" must be the query\'s kind (nda) when given',
         '  - query d: every relevant chunk needs "document" and "sourceRef"',
         '  - query #5: missing "id"',
+        '  - query g: "grade" of SFS 1982:80 7 § must be central or related',
+        '  - query h: "grade" of SFS 1982:80 7 § must be central or related',
         '  - query f: the id is used twice',
       ].join('\n'),
     );
@@ -70,12 +90,14 @@ describe('resolveEvalQueries', () => {
     queries[0].relevant.push({
       document: 'AD 2015 nr 8',
       sourceRef: 'AD 2015 nr 8, Domskäl, del 1/5',
+      grade: 'related',
     });
 
     const resolved = resolveEvalQueries(queries, database.db);
 
     expect(resolved).toHaveLength(20);
     expect([...resolved[0].relevantIds]).toEqual(['11', '21']);
+    expect([...resolved[0].centralIds]).toEqual(['11']);
     expect([...resolved[1].relevantIds]).toEqual(['11']);
   });
 
@@ -83,7 +105,10 @@ describe('resolveEvalQueries', () => {
     const queries = evalQueries(19).map((query) => ({ ...query, kind: 'nda' as const }));
     queries.forEach((query) => delete query.template);
     queries[0].relevant = [];
-    queries[1].relevant = [{ document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 99 §' }];
+    queries[1].relevant = [
+      { document: 'SFS 1982:80', sourceRef: 'SFS 1982:80 99 §', grade: 'central' as const },
+    ];
+    queries[2].relevant = queries[2].relevant.map((ref) => ({ ...ref, grade: 'related' as const }));
 
     expect(() => resolveEvalQueries(queries, database.db)).toThrow(
       [
@@ -93,6 +118,7 @@ describe('resolveEvalQueries', () => {
         '  - expected at least 4 queries with a template, found 0',
         '  - query q1: no relevant chunk is marked',
         '  - query q2: no chunk "SFS 1982:80 99 §" in SFS 1982:80',
+        '  - query q3: no chunk is graded central',
       ].join('\n'),
     );
   });
