@@ -319,10 +319,10 @@ Checked on the Hugging Face model cards on 2026-10-11:
 
 ## Evaluation
 
-`eval/queries.yaml` holds 20 lawyer instructions (10 employment agreements, 10 NDAs, 6 with a template). Each lists the chunks relevant to it, by document identifier and stored source reference. Claude drafted the queries and marked the chunks from the candidates `eval:label` lists, and the owner reviews the file.
+`eval/queries.yaml` holds 20 lawyer instructions (10 employment agreements, 10 NDAs, 6 with a template). Each lists the chunks relevant to it, by document identifier and stored source reference. Claude drafted the queries and marked the chunks from the candidates `eval:label` lists, and the owner reviews the file. Since E7-10 `eval:label` also lists the reference RAG's dense candidates (the `MAX_CANDIDATES` chunks nearest the instruction, which needs `npm run index:embed`), and marks each candidate with every search that found it (`tags`, `fts`, `dense`), so a chunk only vector search finds gets labelled too.
 
 ```bash
-npm run eval:label -- anst-01 [--chars 300]   # candidates for one query: tag search, then full text
+npm run eval:label -- anst-01 [--chars 300]   # candidates for one query: tag search, full text, then vectors
 npm run eval:run                              # precision, recall and the threshold sweep
 ```
 

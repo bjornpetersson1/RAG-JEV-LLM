@@ -10,7 +10,7 @@ import { createConsoleLogger } from '../llm/console-logger.js';
 import { localDate, writeMarkdownReport } from '../reports.js';
 import { REPO_ROOT } from '../repo-root.js';
 import { REPORTS_DIR } from '../tagging/paths.js';
-import { formatCandidates, labelCandidates } from './label.js';
+import { createLabelDenseSearch, formatCandidates, labelCandidates } from './label.js';
 import { readEvalQueries, resolveEvalQueries } from './queries.js';
 import { formatAsMarkdown, formatForTerminal, formatScore } from './report.js';
 import { runEvaluation, type QueryOutcome } from './run.js';
@@ -85,7 +85,10 @@ function runLabel(queryId: string, textChars: number): Promise<number> {
   if (!query) throw new Error(`No query "${queryId}" in ${EVAL_QUERIES_PATH}`);
   return withDatabase(async (db) => {
     const setup = createSearchSetup(db, process.env, problemLogger);
-    console.log(formatCandidates(query, await labelCandidates(query, setup, db), textChars));
+    const dense = createLabelDenseSearch(db, process.env);
+    console.log(
+      formatCandidates(query, await labelCandidates(query, { ...setup, dense }, db), textChars),
+    );
     return 0;
   });
 }
