@@ -11,6 +11,7 @@ import { createConsoleLogger } from './llm/console-logger.js';
 import { loadLlmConfig } from './llm/config.js';
 import { resolvePort } from './port.js';
 import { loadQueryTranslatorConfig } from './query/config.js';
+import { loadReferenceTopK } from './reference/config.js';
 import { loadRerankerConfig } from './rerank/factory.js';
 import { loadSearchConfig, tagIndexBuilder } from './search/config.js';
 import { loadTagIndex } from './search/load-index.js';
@@ -65,12 +66,13 @@ function readStartupConfig(): {
 } {
   try {
     const port = resolvePort(process.env.PORT);
-    // Fail fast on every setting, also those of the reference RAG, which is built on first use,
-    // and also when there is no database and no flow is built.
+    // Fail fast on every setting, also the reference RAG's (a failed build of it is only reported
+    // when a query asks for it), and also when there is no database and no flow is built.
     loadLlmConfig(process.env);
     loadQueryTranslatorConfig(process.env);
     loadRerankerConfig(process.env);
     loadEmbedderConfig(process.env);
+    loadReferenceTopK(process.env);
     loadContextLimits(process.env);
     return {
       port,

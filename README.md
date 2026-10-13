@@ -240,6 +240,8 @@ TypeSafe does not document JEV's maximum state size, pricing or rate limits. `np
 
 bge-m3 (embeddings) and the rerankers mMiniLM-L12 (the default) and bge-reranker-v2-m3 run locally, in Node, through [transformers.js](https://github.com/huggingface/transformers.js) 3.x on onnxruntime-node, on the CPU. They are downloaded from Hugging Face on first use into `MODEL_CACHE_DIR` (default `data/models.nosync`, git-ignored; the `.nosync` suffix keeps iCloud Drive from uploading the models when the repo is in a synced folder such as `~/Documents`): about 0.6 GB per BGE model in int8 and 2.3 GB in fp32, and 0.1 GB (int8) or 0.5 GB (fp32) for mMiniLM. `EMBEDDER_DTYPE` picks the precision (`int8` by default). mMiniLM's int8 export is quantised per processor: the AVX2 one on x86, as on the demo machine, and the ARM one on Apple Silicon (not measured here).
 
+transformers.js stays on 3.x because 4.x's onnxruntime-node has no Intel macOS binary. Its image library `sharp`, which this app never uses, is pinned to 0.35.5 by `overrides` in the root `package.json`, which fixes the libvips advisories `npm audit` reported for 0.34. The remaining moderate advisories (`sprintf-js` and others, in onnxruntime-node's install-time downloader) are fixed only in 4.x.
+
 ```bash
 npm run embed:smoke                   # "7 § LAS" must be nearer LAS 7 § than Dataskyddslagen 1 kap. 7 §
 npm run models:bench -- --dtype int8  # load and run times, peak memory (once per precision)

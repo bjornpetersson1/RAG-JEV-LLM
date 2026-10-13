@@ -1,6 +1,7 @@
 // The flows the server's `POST /query` runs, built from `.env` and the database at startup. The
-// reference RAG is built on its first use, so a server without embeddings still answers the main
-// flow and reports the missing `npm run index:embed` only when the reference RAG is asked for.
+// reference RAG is built when the models warm up, or on its first use if that failed, so a server
+// without embeddings still answers the main flow and reports the missing `npm run index:embed`
+// only when the reference RAG is asked for.
 
 import { existsSync } from 'node:fs';
 import type { DatabaseSync } from 'node:sqlite';

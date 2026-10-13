@@ -6,6 +6,7 @@ Proof of concept: tag search or local bge-m3 hybrid retrieval, then a reranker (
 
 - Talk to the owner in **Swedish**.
 - Everything committed or posted is in **English**: code, comments, specs, commit messages, PR text, review comments.
+- Exception: text shown to the user in the UI is in **Swedish** (owner, E7-1).
 
 ## Workflow
 
