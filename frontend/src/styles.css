@@ -195,9 +195,19 @@ main {
   width: 40%;
 }
 
+.timing tr.total,
+.timing tr.sources {
+  font-weight: 600;
+}
+
 .timing tr.total {
   border-top: 1px solid #d1d9e0;
-  font-weight: 600;
+}
+
+/* Time to sources, the comparison's measure (E7-8). */
+
+.timing tr.sources .bar {
+  background: #1a7f37;
 }
 
 .timing .bar {

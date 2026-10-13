@@ -91,6 +91,9 @@ describe('runAndLog from the command line', () => {
         sourceAccuracy: result.draft?.check?.sourceAccuracy,
       },
     ]);
+    expect(logged[0].timings.sourcesMs).toBe(
+      result.timings.searchMs + (result.timings.judgingMs ?? 0),
+    );
     expect(flow.configuration).toMatchObject({
       retriever: 'tags',
       tagIndex: 'roaring',

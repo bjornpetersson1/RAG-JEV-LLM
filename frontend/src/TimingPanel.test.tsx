@@ -40,7 +40,13 @@ describe('TimingPanel', () => {
       result: queryResult({
         candidates: 40,
         judging: { cacheHits: 0, judgeCalls: 40, relevant: 8, unknown: 0 },
-        timings: { embeddingMs: 400, searchMs: 420, judgingMs: 4000, totalMs: 4500 },
+        timings: {
+          embeddingMs: 400,
+          searchMs: 420,
+          judgingMs: 4000,
+          sourcesMs: 4420,
+          totalMs: 4500,
+        },
       }),
     };
     render(<TimingPanel flows={{ main }} reference={false} running={false} />);
@@ -88,7 +94,7 @@ describe('TimingPanel', () => {
     ).toBeDefined();
   });
 
-  it('shows both flows side by side on one scale, and the difference in total', () => {
+  it('shows both flows side by side on one scale, with time to sources, tokens and both differences', () => {
     const main: FlowState = {
       planned: ['translation', 'search', 'rerank', 'generation'],
       steps: {},
@@ -97,10 +103,12 @@ describe('TimingPanel', () => {
           translationMs: 1000,
           searchMs: 10,
           judgingMs: 3000,
+          sourcesMs: 3010,
           generationMs: 6000,
           totalMs: 10_000,
         },
         judging: { cacheHits: 2, judgeCalls: 28, relevant: 8, unknown: 0 },
+        usage: { generation: { outputTokens: 1200 } },
       }),
     };
     const reference: FlowState = {
@@ -108,7 +116,13 @@ describe('TimingPanel', () => {
       steps: {},
       result: queryResult({
         flow: 'reference',
-        timings: { embeddingMs: 300, searchMs: 320, generationMs: 9680, totalMs: 20_000 },
+        timings: {
+          embeddingMs: 300,
+          searchMs: 320,
+          sourcesMs: 320,
+          generationMs: 9680,
+          totalMs: 20_000,
+        },
       }),
     };
     render(<TimingPanel flows={{ main, reference }} reference running={false} />);
@@ -121,7 +135,16 @@ describe('TimingPanel', () => {
     expect(row('Totalt')).toEqual(['10,0 s', '20,0 s']);
     expect(row('Rerank')[0]).toContain('2 cacheträffar');
     expect(row('Rerank')[1]).toBe('–');
-    expect(screen.getByText('Huvudflödet var 10,0 s snabbare än referens-RAG:en.')).toBeDefined();
+    expect(row('Tid till källor')).toEqual(['3,0 s', '320 ms']);
+    expect(row('Generering')[0]).toBe('6,0 s (1\u00a0200 tokens, 5 ms/token)');
+    expect(
+      screen.getByText(
+        'Huvudflödet hade sina källor 2,7 s efter referens-RAG:en utan översättningen, och 3,7 s efter med översättningen till taggar (1,0 s).',
+      ),
+    ).toBeDefined();
+    expect(
+      screen.getByText('Totalt var huvudflödet 10,0 s snabbare än referens-RAG:en.'),
+    ).toBeDefined();
     const bars = [...document.querySelectorAll<HTMLElement>('tr.total .bar')].map(
       (bar) => bar.style.width,
     );

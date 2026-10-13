@@ -56,13 +56,21 @@ export interface FlowSummary {
 
 export interface FlowMeasures {
   total: Latency;
+  /** The query translation, which time to sources leaves out; absent without one. */
+  translation?: Latency;
+  /** Time to sources: search plus rerank, without the translation (E7-8). */
+  sources: Latency;
   search: Latency;
   /** Absent when the instruction was never embedded (tag search). */
   embedding?: Latency;
   /** Absent for a flow without a rerank step. */
   rerank?: Latency;
-  /** Absent when no draft was written. */
+  /** Over the drafts written (with output tokens), like the two below; absent without any. */
   generation?: Latency;
+  /** Generation time per output token, so drafts of different length compare (E7-8). */
+  generationPerToken?: Latency;
+  /** The drafts' output tokens. */
+  outputTokens?: Latency;
   /** Query translation, generation, and a remote rerank. */
   llm: Latency;
   /** Of the chunks sent to the generator: per run a macro average over the queries, then the mean over the runs. */
@@ -150,16 +158,25 @@ function summarise(
 function measure(flow: BenchFlow, samples: readonly Sample[], runs: number): FlowMeasures {
   const results = samples.map(({ result }) => result);
   const checks = results.flatMap(({ draft }) => (draft?.check ? [draft.check] : []));
-  const optional = (step: 'embeddingMs' | 'judgingMs' | 'generationMs') => {
-    const times = results.flatMap(({ timings }) => timings[step] ?? []);
-    return times.length > 0 ? latencyOf(times) : undefined;
-  };
+  const latencyIfAny = (times: readonly number[]) =>
+    times.length > 0 ? latencyOf(times) : undefined;
+  const optional = (step: 'translationMs' | 'embeddingMs' | 'judgingMs') =>
+    latencyIfAny(results.flatMap(({ timings }) => timings[step] ?? []));
+  const drafts = results.flatMap(({ timings, usage }) =>
+    timings.generationMs !== undefined && usage.generation && usage.generation.outputTokens > 0
+      ? [{ ms: timings.generationMs, tokens: usage.generation.outputTokens }]
+      : [],
+  );
   return {
     total: latencyOf(results.map(({ timings }) => timings.totalMs)),
+    translation: optional('translationMs'),
+    sources: latencyOf(results.map(({ timings }) => timings.sourcesMs)),
     search: latencyOf(results.map(({ timings }) => timings.searchMs)),
     embedding: optional('embeddingMs'),
     rerank: optional('judgingMs'),
-    generation: optional('generationMs'),
+    generation: latencyIfAny(drafts.map(({ ms }) => ms)),
+    generationPerToken: latencyIfAny(drafts.map(({ ms, tokens }) => ms / tokens)),
+    outputTokens: latencyIfAny(drafts.map(({ tokens }) => tokens)),
     llm: latencyOf(results.map((result) => llmMs(result, flow.remoteRerank))),
     relevance: averageOverRuns(samples, runs),
     sourceAccuracy: sourceAccuracy(

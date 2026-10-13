@@ -131,6 +131,37 @@ describe('runQuery', () => {
     },
   );
 
+  it('reports the time to sources: search plus rerank, without the translation', async () => {
+    const { deps } = fakeFlow({ '1': 0.6, '2': 0.9, '3': 0.2 });
+    const steps: QueryStep[] = [];
+
+    const result = await runQuery({ instruction: 'Säljare', template: 'employment' }, deps, {
+      onStep: (step) => steps.push(step),
+    });
+
+    expect(result.timings.sourcesMs).toBe(result.timings.searchMs + 40);
+    expect(steps.find(({ step }) => step === 'search')?.timings.sourcesMs).toBeUndefined();
+    expect(steps.find(({ step }) => step === 'rerank')?.timings.sourcesMs).toBe(
+      result.timings.sourcesMs,
+    );
+  });
+
+  it('reports the time to sources at search for a flow without a rerank step', async () => {
+    const { deps } = fakeFlow({});
+    const steps: QueryStep[] = [];
+
+    const result = await runQuery(
+      { instruction: 'Säljare', template: 'employment' },
+      { ...deps, translate: undefined, rerank: undefined },
+      { onStep: (step) => steps.push(step) },
+    );
+
+    expect(result.timings.sourcesMs).toBe(result.timings.searchMs);
+    expect(steps.find(({ step }) => step === 'search')?.timings.sourcesMs).toBe(
+      result.timings.searchMs,
+    );
+  });
+
   it('reports each step as soon as it is done', async () => {
     const { deps } = fakeFlow({ '1': 0.6, '2': 0.9, '3': 0.2 });
     const steps: QueryStep[] = [];
