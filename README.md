@@ -415,6 +415,13 @@ The output has the main flow's format, without tags or judging, and the time for
 
 As each step finishes, the UI shows the tags (marked _mall_ for a preset, _översatt_ for a translated tag), the number of candidates and how many of them came from the full-text fallback, the number the reranker approved, and finally the draft. With the reference option, the reference RAG runs after the main flow, never at the same time, so neither distorts the other's timings. The UI texts are in Swedish, like the sources and drafts.
 
+When a flow is done, the result view (E7-2) shows its draft and sources:
+
+- **Draft.** The draft is rendered as Markdown (with `react-markdown`, raw HTML off), below a reminder that it is source material, not legal advice. Every `[K:<id>]` citation (each id of a group such as `[K:12, K:40]`) and every free-text reference the post-check matched to a sent chunk, such as "7 § LAS", is a link. Clicking it opens that chunk's text in the source list, scrolls to it and highlights it. A reference the post-check flagged is red with the reason as a tooltip. The source accuracy and the number of flags are shown above the draft, and "Kopiera utkastet" copies the Markdown as written.
+- **Sources.** The sources come in three groups: the sources the draft cites, those sent but not cited, and a collapsed list of the candidates that were not sent, i.e. turned down by the reranker or left out by the context limits. Each source shows its `source_ref`, the document's title, the reranker's score and name, where the candidate came from (_tagg_, _fritext_, _vektor_, _BM25_, _namngiven paragraf_), its text when opened, and a link to the original source when the document has a `source_url`.
+
+The result carries what this needs: `sources` lists every candidate with its document, origin, score and what became of it (`status`: `cited`, `sent`, `left-out` or `turned-down`), and the post-check returns its `matches` next to its `flags`.
+
 ### `POST /query`
 
 The body is `{ "template": "employment" | "nda", "instruction"?: string, "reference"?: boolean }`. An invalid body answers 400 with `{ "error": "…" }`. A query sent while another is running answers 409, because the flow uses every CPU core. Otherwise the answer is `application/x-ndjson`, one JSON event per line:

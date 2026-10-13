@@ -66,6 +66,7 @@ describe('checkDraft: source accuracy', () => {
   it('is null, not 100 %, for a draft without references', () => {
     expect(checkDraft('Inga hänvisningar alls.', [chunk('1')])).toEqual({
       flags: [],
+      matches: [],
       references: 0,
       valid: 0,
       sourceAccuracy: null,
@@ -198,5 +199,24 @@ describe('checkDraft: free-text references', () => {
 
   it('does not detect an abbreviation outside the table or a section without a law', () => {
     expect(findFreeTextReferences('Enligt 7 § XYZ och enligt 7 §. Se även LASER.')).toEqual([]);
+  });
+});
+
+describe('checkDraft: matches', () => {
+  it('links each valid citation, also in a group, and each matched free-text reference to its chunk', () => {
+    const text = 'Lön [K:1]. Uppsägning enligt 7 § LAS [K:2, K:9].';
+    const submitted = [
+      { id: '1', text: 'a', source: 'SFS 1982:80 11 §' },
+      { id: '2', text: 'b', source: 'SFS 1982:80 7 §' },
+    ];
+
+    const { matches, flags } = checkDraft(text, submitted);
+
+    expect(matches).toEqual([
+      { kind: 'citation', text: '[K:1]', start: 4, end: 9, chunkId: '1' },
+      { kind: 'free-text', text: '7 § LAS', start: 29, end: 36, chunkId: '2' },
+      { kind: 'citation', text: '[K:2, K:9]', start: 37, end: 47, chunkId: '2' },
+    ]);
+    expect(flags.map(({ chunkId }) => chunkId)).toEqual(['9']);
   });
 });

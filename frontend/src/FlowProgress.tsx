@@ -1,4 +1,5 @@
 import type { FlowName, QueryResult, QueryStep, QueryStepName } from './query';
+import { ResultView } from './ResultView';
 
 /** What one flow has reported so far. */
 export interface FlowState {
@@ -55,7 +56,7 @@ export function FlowProgress({ flow, state, active }: FlowProgressProps) {
           {RUNNING[pending]}
         </p>
       )}
-      {result && <Draft result={result} />}
+      {result && <ResultView flow={flow} result={result} />}
     </section>
   );
 }
@@ -68,12 +69,4 @@ function describeSearch(
   return fallback > 0
     ? `${candidates} kandidater, varav ${fallback} från fritextsökning`
     : `${candidates} kandidater`;
-}
-
-function Draft({ result }: { result: QueryResult }) {
-  if (!result.draft) return <p>Inget utkast skrevs: inga relevanta källor hittades.</p>;
-  if (result.draft.text === undefined) {
-    return <p>Inget utkast skrevs: inga godkända källor rymdes i kontextgränserna.</p>;
-  }
-  return <pre className="draft">{result.draft.text}</pre>;
 }

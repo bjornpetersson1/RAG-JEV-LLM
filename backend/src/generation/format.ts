@@ -66,11 +66,12 @@ function formatDraft(
   return lines;
 }
 
+// Whole percent from the counts, since e.g. 0.29 × 100 is 28.999… in floating point.
 function formatCheck({ flags, references, valid, sourceAccuracy }: PostCheck): string[] {
   const accuracy =
     sourceAccuracy === null
       ? '– (no references)'
-      : `${Math.floor(sourceAccuracy * 100)} % (${valid} of ${references} references)`;
+      : `${Math.floor((valid * 100) / references)} % (${valid} of ${references} references)`;
   return [
     `Source accuracy: ${accuracy}`,
     `Flagged references (${flags.length}):`,

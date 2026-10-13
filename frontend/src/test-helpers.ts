@@ -1,5 +1,5 @@
 import { vi } from 'vitest';
-import type { FlowName, QueryEvent, QueryStep } from './query';
+import type { Chunk, FlowName, QueryEvent, QueryResult, QueryStep } from './query';
 
 /** A streamed response whose JSON lines the test sends one at a time, and then ends. */
 export function controlledStream() {
@@ -35,4 +35,29 @@ export function stubFetch(query: () => Promise<Response>) {
   );
   vi.stubGlobal('fetch', fetchMock);
   return fetchMock;
+}
+
+/** A chunk from a document with this source reference; its text names the reference. */
+export function chunk(id: string, source: string, url?: string): Chunk {
+  return {
+    id,
+    text: `Text för ${source}.`,
+    source,
+    document: { title: `Dokument ${id}`, ...(url && { url }) },
+  };
+}
+
+/** A main-flow result with one cited chunk, overridden as a test needs. */
+export function queryResult(overrides: Partial<QueryResult> = {}): QueryResult {
+  const cited = chunk('11', 'SFS 1982:80 7 §');
+  return {
+    flow: 'main',
+    tags: ['anstallningsavtal'],
+    candidates: 30,
+    fallback: 6,
+    approved: [cited],
+    sources: [{ chunk: cited, status: 'cited', origin: 'tag', score: 0.9, reranker: 'bge' }],
+    draft: { text: '# Anställningsavtal\n\nText [K:11].', used: [cited], unused: [], leftOut: [] },
+    ...overrides,
+  };
 }

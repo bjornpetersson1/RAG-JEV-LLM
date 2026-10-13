@@ -41,6 +41,8 @@ export interface Chunk {
   source?: string;
   /** The heading path, e.g. "Lag (1982:80) om anställningsskydd › … › 7 §", for the local models. */
   context?: string;
+  /** The document the chunk is from, for the UI (E7-2): its title and original source. */
+  document?: { title: string; url?: string };
 }
 
 export interface JudgeScore {

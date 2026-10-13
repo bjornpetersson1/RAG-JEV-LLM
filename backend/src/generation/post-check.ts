@@ -21,9 +21,22 @@ export interface ReferenceFlag {
   chunkId?: string;
 }
 
+/** A reference that points to a submitted chunk, so the UI can link it to that chunk (E7-2). */
+export interface ReferenceMatch {
+  kind: ReferenceKind;
+  /** The reference as written in the draft. */
+  text: string;
+  /** Offsets in the draft (UTF-16 code units), end exclusive; a citation group shares one span. */
+  start: number;
+  end: number;
+  chunkId: string;
+}
+
 export interface PostCheck {
   /** References that match no submitted chunk, in text order. */
   flags: ReferenceFlag[];
+  /** References that match a submitted chunk, in text order. */
+  matches: ReferenceMatch[];
   /** Every `[K:]` citation and detected free-text reference, each occurrence counted. */
   references: number;
   valid: number;
@@ -41,32 +54,31 @@ export function checkDraft(
   citations: readonly FoundCitation[] = findCitations(text),
 ): PostCheck {
   const submittedIds = new Set(submitted.map((chunk) => chunk.id));
-  const sources = submitted.flatMap((chunk) => (chunk.source ? [parseSource(chunk.source)] : []));
+  const sources = submitted.flatMap((chunk) =>
+    chunk.source ? [{ chunkId: chunk.id, source: parseSource(chunk.source) }] : [],
+  );
   const freeText = findFreeTextReferences(maskCitations(text, citations));
-  const flags = [
-    ...citations
-      .filter(({ id }) => !submittedIds.has(id))
-      .map(({ id, start, end }) => ({
-        ...flag('citation', text, start, end, `chunk ${id} was not submitted`),
-        chunkId: id,
-      })),
-    ...freeText
-      .filter((reference) => !sources.some((source) => matches(reference, source)))
-      .map((reference) =>
-        flag(
-          'free-text',
-          text,
-          reference.start,
-          reference.end,
-          `no submitted chunk is from ${describe(reference)}`,
-        ),
-      ),
-  ].sort((a, b) => a.start - b.start);
+  const flags: ReferenceFlag[] = [];
+  const found: ReferenceMatch[] = [];
+  for (const { id, start, end } of citations) {
+    const at = span('citation', text, start, end);
+    if (submittedIds.has(id)) found.push({ ...at, chunkId: id });
+    else flags.push({ ...at, chunkId: id, reason: `chunk ${id} was not submitted` });
+  }
+  for (const reference of freeText) {
+    const at = span('free-text', text, reference.start, reference.end);
+    const source = sources.find(({ source }) => matches(reference, source));
+    if (source) found.push({ ...at, chunkId: source.chunkId });
+    else flags.push({ ...at, reason: `no submitted chunk is from ${describe(reference)}` });
+  }
+  flags.sort((a, b) => a.start - b.start);
+  found.sort((a, b) => a.start - b.start);
 
   const references = citations.length + freeText.length;
   const valid = references - flags.length;
   return {
     flags,
+    matches: found,
     references,
     valid,
     sourceAccuracy: sourceAccuracy(valid, references),
@@ -92,14 +104,14 @@ function maskCitations(text: string, citations: readonly FoundCitation[]): strin
   return pieces.join('');
 }
 
-function flag(
+/** Where a reference is in the draft, as written there. */
+function span(
   kind: ReferenceKind,
   text: string,
   start: number,
   end: number,
-  reason: string,
-): ReferenceFlag {
-  return { kind, text: text.slice(start, end), start, end, reason };
+): Pick<ReferenceMatch, 'kind' | 'text' | 'start' | 'end'> {
+  return { kind, text: text.slice(start, end), start, end };
 }
 
 function describe({ document, chapter, section }: LegalReference): string {
