@@ -21,6 +21,60 @@ export interface Chunk {
   id: string;
   text: string;
   source?: string;
+  document?: { title: string; url?: string };
+}
+
+/** Where a candidate came from. */
+export type Origin = 'tag' | 'fts' | 'dense' | 'lexical' | 'named';
+
+/** What became of a candidate (see the backend's `SourceStatus`). */
+export type SourceStatus = 'cited' | 'sent' | 'left-out' | 'turned-down';
+
+export interface QuerySource {
+  chunk: Chunk;
+  status: SourceStatus;
+  origin: Origin;
+  score?: number;
+  reranker?: string;
+}
+
+/** Where a reference is in the draft: offsets into the text as written, end exclusive. */
+interface ReferenceSpan {
+  kind: 'citation' | 'free-text';
+  text: string;
+  start: number;
+  end: number;
+}
+
+/** A reference in the draft that points to a submitted chunk. */
+export interface ReferenceMatch extends ReferenceSpan {
+  chunkId: string;
+}
+
+/** A reference in the draft that matches no submitted chunk. */
+export interface ReferenceFlag extends ReferenceSpan {
+  reason: string;
+  /** For a citation, the cited id. */
+  chunkId?: string;
+}
+
+export interface PostCheck {
+  flags: ReferenceFlag[];
+  matches: ReferenceMatch[];
+  references: number;
+  valid: number;
+  sourceAccuracy: number | null;
+}
+
+export interface Draft {
+  text?: string;
+  /** Sent chunks the draft cites, in order of first citation. */
+  used: Chunk[];
+  /** Sent chunks the draft does not cite. */
+  unused: Chunk[];
+  /** Approved chunks the context limits kept out. */
+  leftOut: Chunk[];
+  check?: PostCheck;
 }
 
 export type QueryStep =
@@ -38,7 +92,9 @@ export interface QueryResult {
   fallback: number;
   defaultInstruction?: string;
   approved: Chunk[];
-  draft?: { text?: string; used: Chunk[]; unused: Chunk[] };
+  /** Every candidate, in the retriever's order, with what became of it. */
+  sources: QuerySource[];
+  draft?: Draft;
 }
 
 export type QueryEvent =

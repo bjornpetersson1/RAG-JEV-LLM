@@ -88,6 +88,49 @@ describe('runQuery', () => {
     expect(result.timings.embeddingMs).toBe(25);
   });
 
+  it('lists every candidate as a source, with its origin and the reranker’s score', async () => {
+    const { deps } = fakeFlow({ '1': 0.6, '2': 0.9 });
+
+    const result = await runQuery({ instruction: 'Säljare', template: 'employment' }, deps);
+
+    // The fake generator cites every chunk it gets.
+    expect(result.sources).toEqual([
+      { chunk: CHUNKS['1'], status: 'cited', origin: 'tag', score: 0.6, reranker: 'fake' },
+      { chunk: CHUNKS['2'], status: 'cited', origin: 'tag', score: 0.9, reranker: 'fake' },
+      { chunk: CHUNKS['3'], status: 'turned-down', origin: 'tag' },
+    ]);
+  });
+
+  it.each([
+    ['a draft that cites one of two sent chunks', true, 20, 'Klausul [K:2].', ['sent', 'cited']],
+    [
+      'a draft that names the other in free text',
+      true,
+      20,
+      'Klausul [K:2]. Enligt 1 § LAS.',
+      ['cited', 'cited'],
+    ],
+    ['the context limit keeping one out', true, 1, 'Klausul [K:2].', ['left-out', 'cited']],
+    ['no draft asked for', false, 20, '', ['left-out', 'left-out']],
+  ])(
+    'gives each approved source its status after %s',
+    async (_case, draft, maxChunks, answer, expected) => {
+      const { deps } = fakeFlow({ '1': 0.6, '2': 0.9 });
+
+      const result = await runQuery(
+        { instruction: 'Säljare', template: 'employment' },
+        {
+          ...deps,
+          generator: createFakeGenerator(() => answer),
+          limits: { ...deps.limits, maxChunks },
+        },
+        { draft },
+      );
+
+      expect(result.sources.slice(0, 2).map(({ status }) => status)).toEqual(expected);
+    },
+  );
+
   it('reports each step as soon as it is done', async () => {
     const { deps } = fakeFlow({ '1': 0.6, '2': 0.9, '3': 0.2 });
     const steps: QueryStep[] = [];
@@ -262,6 +305,7 @@ describe('createQueryFlow', () => {
     expect(result.candidates).toBeGreaterThan(0);
     expect(result.draft?.used.map((c) => c.id)).toEqual(['11']);
     expect(result.draft?.used[0].source).toBe('SFS 1982:80 7 §');
+    expect(result.draft?.used[0].document).toEqual({ title: 'Lag (1982:80) om anställningsskydd' });
     expect(result.draft?.context.limits).toEqual({ maxChunks: 1, maxContextChars: 60_000 });
     expect(result.draft?.text).toContain('inte juridisk rådgivning');
     expect(result.draft?.check).toMatchObject({ flags: [], sourceAccuracy: 1 });

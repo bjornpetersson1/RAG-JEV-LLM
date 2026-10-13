@@ -55,17 +55,24 @@ export function createQueryServices(
   };
 }
 
-/** Loads the chunks with the given ids, in the given order; unknown ids are left out. */
+/**
+ * Loads the chunks with the given ids, in the given order, with their document's title and source
+ * URL; unknown ids are left out.
+ */
 export function createChunkLoader(db: DatabaseSync): (ids: readonly string[]) => Chunk[] {
   const selectChunks = db.prepare(
-    'SELECT id, text, source_ref, context FROM chunks WHERE id IN (SELECT value FROM json_each(?))',
+    `SELECT c.id, c.text, c.source_ref, c.context, d.title, d.source_url
+     FROM chunks c JOIN documents d ON d.id = c.document_id
+     WHERE c.id IN (SELECT value FROM json_each(?))`,
   );
   return (ids) => {
     const rows = selectChunks.all(JSON.stringify(ids.map(Number))) as unknown as ChunkRow[];
     const byId = new Map(rows.map((row) => [String(row.id), row]));
     return ids.flatMap((id): Chunk[] => {
       const row = byId.get(id);
-      return row ? [{ id, text: row.text, source: row.source_ref, context: row.context }] : [];
+      if (!row) return [];
+      const document = { title: row.title, ...(row.source_url && { url: row.source_url }) };
+      return [{ id, text: row.text, source: row.source_ref, context: row.context, document }];
     });
   };
 }
@@ -75,4 +82,6 @@ interface ChunkRow {
   text: string;
   source_ref: string;
   context: string;
+  title: string;
+  source_url: string | null;
 }

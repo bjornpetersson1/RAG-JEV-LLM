@@ -4,7 +4,7 @@
 - **Labels:** `E7 UI and measurement`
 - **Phase:** 5. UI and measurement
 - **Depends on:** E7-1 (#22), E6-3 (#21)
-- **Status:** Approved
+- **Status:** Implemented — all acceptance criteria verified (npm ci, lint, format:check, typecheck, 854 tests (811 backend, 43 frontend) and build exit 0; `npm run dev` with fake LLM roles and the real BGE reranker in headless Chrome: 10 reference links and 2 flags in the draft, the three source groups, and a click that opened, highlighted and scrolled to its source)
 
 ## Summary
 
@@ -46,13 +46,13 @@ The draft from E7-1's stream is rendered as Markdown with every source reference
 
 ## Tasks
 
-- [ ] Post-check: return matched free-text references (offset, text, chunk id) alongside the flags.
-- [ ] Result: E7-1's `result` event carries the whole `QueryResult`; it gains every candidate as a source (chunk text, document title and `source_url`, candidate origin, rerank score and reranker), so the cited, sent and turned-down groups come from one list, and the post-check gains its matches.
-- [ ] Add `react-markdown`; turn citations and matched references into links before parsing, flags into marked spans.
-- [ ] Source list component with the three groups, expand and highlight.
-- [ ] Disclaimer and copy-to-clipboard.
-- [ ] README: the result view.
-- [ ] Tests.
+- [x] Post-check: return matched free-text references (offset, text, chunk id) alongside the flags.
+- [x] Result: E7-1's `result` event carries the whole `QueryResult`; it gains every candidate as a source (chunk text, document title and `source_url`, candidate origin, rerank score and reranker), so the cited, sent and turned-down groups come from one list, and the post-check gains its matches.
+- [x] Add `react-markdown`; turn citations and matched references into links before parsing, flags into marked spans.
+- [x] Source list component with the three groups, expand and highlight.
+- [x] Disclaimer and copy-to-clipboard.
+- [x] README: the result view.
+- [x] Tests.
 
 ## Decisions
 
@@ -65,6 +65,31 @@ The draft from E7-1's stream is rendered as Markdown with every source reference
 - **The disclaimer is shown above the draft** (default), even though the template's last line also carries it.
 
 - **Builds on E7-1 and E5-4 as merged** (spec update before implementing): the stream sends the whole `QueryResult` in its `result` event, so the sources and the post-check's matches go into `QueryResult` instead of separate events. A source is every candidate the flow loaded, with its candidate origin, its document's title and `source_url` (loaded with the chunk), and the reranker's score where it scored one. Which group a source falls in follows from the draft (`used`, `unused`) and the approved chunks. The reference RAG has no rerank, so its sources have no score and none are turned down.
+
+- **Settled while implementing**:
+  - **Each chunk carries its document's title and `source_url`** (`Chunk.document`), loaded with the chunk; the generator and the reranker ignore it.
+  - **`QueryResult.sources`** lists every candidate in the retriever's order, with its origin, its status and, when scored, the reranker's score and name. The status says what became of it: `cited`, `sent` (but not cited), `left-out` (approved, but kept out by the context limits or with no draft written) or `turned-down`. The UI groups by it: cited and sent in the draft's order, the other two collapsed as not sent, each with its reason.
+  - **The post-check's matches** (`PostCheck.matches`) have the same shape as its flags, with the chunk the reference points to; a free-text reference links to the first sent chunk it matches.
+  - **References become Markdown links before parsing** (`frontend/src/references.ts`): the offsets are into the draft as written. A matched reference links to `#source-<id>`; a flagged one to `#flag` with the reason as the link title, which the link component renders as a red span with the reason as tooltip. A citation group gets one link per id in the order written; `[` and `]` in link text are escaped.
+  - **Selecting a source opens it and scrolls to it** each time it is clicked; its text stays open until it is closed.
+
+- **Clean code**:
+  - **The source's status comes from the backend** (`QuerySource.status`), set after generation, instead of the UI deriving the groups from the draft's lists; E7-3's counts can use it too.
+  - **The post-check sorts each reference into a flag or a match in one pass.**
+  - **A citation group links each `K:<id>` where it is written** (this also fixes ids such as `K:1` and `K:12` being found inside each other), and a flag carries its reason in the link's title instead of an index into the flags.
+  - **The Markdown is parsed once per draft** (`useMemo`), and a click opens and scrolls to its source directly; shared test fixtures in `frontend/src/test-helpers.ts`.
+- **Code review fixes**:
+  - **A citation group is read as the backend's `findCitations` reads it** (split on commas, `K:` optional after the first id), and an id without a reference stays in the draft as written instead of disappearing.
+  - **A chunk the draft names only in free text ("6 § LAS") counts as cited**, both in its status and in the list, since its reference links to it.
+  - **The groups come from the status alone**: cited in the order the draft first refers to them, the others in the retriever's order.
+  - **A reference link's `href` is its source entry's element id** (`#source-<flow>-<id>`), so a new tab or a copied link finds it, and the two flows' links differ.
+  - **The source accuracy is computed from the counts** (`valid × 100 / references`), in the UI and in `npm run query`'s output, since e.g. 0.29 × 100 is 28.999… in floating point.
+  - **A reference inside a code span or an existing link is left as written**, so the inserted link cannot break the Markdown.
+  - **The page scrolls to a source after it has opened**.
+- **Not changed (code review)**:
+  - **Sending each chunk's text once in the result**: `approved`, `sources` and the draft's lists repeat it, at most about 200 KB per flow over localhost; the shapes are the ones E6-2 and E7-1 settled.
+  - **Importing the backend's types in the frontend**: the backend modules reach Node-only modules the browser build cannot type-check (E7-1's decision).
+  - **Moving the document data off the LLM-layer `Chunk`** onto the source: the loader would have to return it separately, and the generator, reranker and judge already ignore it.
 
 ## Open Questions
 

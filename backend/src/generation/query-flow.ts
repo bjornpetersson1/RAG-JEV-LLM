@@ -67,6 +67,24 @@ export interface StepTimings {
   totalMs: number;
 }
 
+/**
+ * What became of a candidate: cited by the draft (by `[K:]` or a matched free-text reference), sent
+ * to the generator but not cited, approved but
+ * left out (by the context limits, or because no draft was written), or turned down by the reranker.
+ */
+export type SourceStatus = 'cited' | 'sent' | 'left-out' | 'turned-down';
+
+/** A candidate the flow loaded, for the source list (E7-2). */
+export interface QuerySource {
+  chunk: Chunk;
+  status: SourceStatus;
+  /** Where the candidate came from, e.g. `tag` or `fts`. */
+  origin: Candidate['origin'];
+  /** The reranker's score and name; absent without a rerank step or when it could not score it. */
+  score?: number;
+  reranker?: string;
+}
+
 export interface QueryResult {
   flow: QueryFlowName;
   /** Empty when the query was not translated. */
@@ -78,6 +96,8 @@ export interface QueryResult {
   defaultInstruction?: string;
   /** The chunks handed to the generator, best first: what the reranker kept, or every candidate. */
   approved: Chunk[];
+  /** Every candidate, in the retriever's order; those not approved were turned down. */
+  sources: QuerySource[];
   /** Absent without a rerank step; `approved` is at most `RERANK_TOP_K` of the `relevant` chunks. */
   judging?: Pick<RerankStats, 'cacheHits' | 'unknown' | 'relevant'> & { judgeCalls: number };
   /** Absent when nothing was approved, or no draft was asked for. */
@@ -178,6 +198,7 @@ export async function runQuery(
       ? await generateDraft({ ...request, instruction: question, chunks: approved }, deps)
       : undefined;
   if (draft) onStep?.({ step: 'generation', elapsedMs: draft.elapsedMs });
+  const sources = describeSources(candidates, chunks, reranked, statuses(approved, draft));
   return {
     flow: deps.flow ?? 'main',
     tags,
@@ -185,6 +206,7 @@ export async function runQuery(
     fallback,
     ...(defaultInstruction !== undefined && { defaultInstruction }),
     approved,
+    sources,
     ...(reranked && {
       judging: {
         relevant: reranked.stats.relevant,
@@ -208,4 +230,41 @@ export async function runQuery(
       generation: draft?.usage,
     },
   };
+}
+
+/** Each approved chunk's status; a chunk without one was turned down. */
+function statuses(
+  approved: readonly Chunk[],
+  draft: GenerationResult | undefined,
+): Map<string, SourceStatus> {
+  const status = new Map<string, SourceStatus>(approved.map(({ id }) => [id, 'left-out']));
+  for (const { id } of draft?.unused ?? []) status.set(id, 'sent');
+  // A chunk the draft refers to only in free text ("7 § LAS") is cited as much as one it cites [K:].
+  for (const { id } of draft?.used ?? []) status.set(id, 'cited');
+  for (const { chunkId } of draft?.check?.matches ?? []) status.set(chunkId, 'cited');
+  return status;
+}
+
+/** Each loaded candidate with its origin, its status and, when the reranker scored it, its score. */
+function describeSources(
+  candidates: readonly Candidate[],
+  chunks: readonly Chunk[],
+  reranked: RerankResult | undefined,
+  status: ReadonlyMap<string, SourceStatus>,
+): QuerySource[] {
+  const loaded = new Map(chunks.map((chunk) => [chunk.id, chunk]));
+  const scores = new Map(reranked?.scored.map((scored) => [scored.chunk.id, scored]));
+  return candidates.flatMap(({ chunkId, origin }): QuerySource[] => {
+    const chunk = loaded.get(String(chunkId));
+    if (!chunk) return [];
+    const scored = scores.get(chunk.id);
+    return [
+      {
+        chunk,
+        status: status.get(chunk.id) ?? 'turned-down',
+        origin,
+        ...(scored && { score: scored.score, reranker: scored.reranker }),
+      },
+    ];
+  });
 }

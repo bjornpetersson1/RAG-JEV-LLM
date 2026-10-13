@@ -1,17 +1,10 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
-import type { QueryResult, QueryStepName } from './query';
-import { controlledStream, stubFetch } from './test-helpers';
+import type { QueryStepName } from './query';
+import { controlledStream, queryResult, stubFetch } from './test-helpers';
 
-const RESULT: QueryResult = {
-  flow: 'main',
-  tags: ['anstallningsavtal', 'provanstallning'],
-  candidates: 30,
-  fallback: 6,
-  approved: [{ id: '11', text: 'a' }],
-  draft: { text: '# Anställningsavtal\n\nText [K:11].', used: [], unused: [] },
-};
+const RESULT = queryResult();
 
 const MAIN_STEPS: QueryStepName[] = ['translation', 'search', 'rerank', 'generation'];
 

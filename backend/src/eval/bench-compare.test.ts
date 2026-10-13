@@ -56,6 +56,7 @@ function fakeFlow(
         candidates: fake.ids.length,
         fallback: 0,
         approved: fake.ids.map(chunk),
+        sources: [],
         ...(reranked && { judging: { relevant: 0, cacheHits: 0, judgeCalls: 0, unknown: 0 } }),
         draft: references
           ? {
@@ -65,6 +66,7 @@ function fakeFlow(
               leftOut: fake.ids.filter((id) => !(fake.sent ?? fake.ids).includes(id)).map(chunk),
               check: {
                 flags: [],
+                matches: [],
                 valid: references[0],
                 references: references[1],
                 sourceAccuracy: null,
