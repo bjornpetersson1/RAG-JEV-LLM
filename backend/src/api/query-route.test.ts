@@ -316,6 +316,10 @@ describe('a client that goes away', () => {
     const generate = vi.spyOn(flow.generator, 'generate');
     app = appWith(flows(flow));
     const address = await app.listen({ port: 0, host: '127.0.0.1' });
+    const server = app.server;
+    const disconnected = new Promise((resolve) =>
+      server.once('connection', (socket) => socket.once('close', resolve)),
+    );
 
     // A local socket, not `fetch`, which the test setup blocks.
     const client = request(`${address}/query`, {
@@ -328,13 +332,16 @@ describe('a client that goes away', () => {
     client.end(JSON.stringify({ template: 'nda', instruction: 'Säljare' }));
     await firstLine;
     client.destroy();
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    // The server has seen the client go before the rerank returns, without guessing a delay.
+    await disconnected;
     release();
-    await new Promise((resolve) => setTimeout(resolve, 50));
 
-    expect(generate).not.toHaveBeenCalled();
-    const next = await app.inject({ method: 'POST', url: '/query', payload: { template: 'nda' } });
-    expect(next.statusCode).toBe(200);
+    // Accepted once the stopped query has ended (409 while it still runs).
+    const inject = () =>
+      app?.inject({ method: 'POST', url: '/query', payload: { template: 'nda' } });
+    await vi.waitFor(async () => expect((await inject())?.statusCode).toBe(200));
+    // Only that next query, without an instruction, reached the generator.
+    expect(generate.mock.calls.map(([input]) => input.instruction)).not.toContain('Säljare');
   });
 });
 

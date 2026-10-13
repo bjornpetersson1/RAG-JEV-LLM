@@ -4,6 +4,12 @@
 export type Template = 'employment' | 'nda';
 export type FlowName = 'main' | 'reference';
 
+/** The flows in the order they run, with their titles in the UI. */
+export const FLOWS: readonly { flow: FlowName; title: string }[] = [
+  { flow: 'main', title: 'Huvudflödet' },
+  { flow: 'reference', title: 'Referens-RAG' },
+];
+
 export interface QueryRequest {
   template: Template;
   /** May be empty: the template's preset tags and default instruction are used. */

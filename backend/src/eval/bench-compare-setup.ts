@@ -45,14 +45,14 @@ export function createBenchSetup(
       {
         name: 'main',
         configuration: formatConfiguration(main.configuration),
-        rerank: isRemoteReranker(main.reranker) ? 'remote' : 'local',
+        remoteRerank: isRemoteReranker(main.reranker),
         run: (query, options) =>
           runQuery(requestFor(query), withQueryTemplate(main, query), options),
       },
       {
         name: 'reference',
         configuration: formatConfiguration(reference.configuration),
-        rerank: 'none',
+        remoteRerank: false,
         run: (query, options) => runQuery(requestFor(query), reference, options),
       },
     ],

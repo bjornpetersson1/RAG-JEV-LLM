@@ -8,6 +8,7 @@ import { describeError } from '../errors.js';
 import { REPO_ROOT } from '../repo-root.js';
 import type { FlowConfiguration } from './flow-configuration.js';
 import {
+  flowName,
   runQuery,
   type QueryFlowDependencies,
   type QueryFlowName,
@@ -84,7 +85,7 @@ export async function runAndLog(
     timestamp: new Date().toISOString(),
     runId,
     source,
-    flow: deps.flow ?? 'main',
+    flow: flowName(deps),
     template: request.template,
     instruction: request.instruction,
     configuration: deps.configuration,

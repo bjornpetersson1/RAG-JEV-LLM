@@ -15,8 +15,8 @@ export interface BenchFlow {
   name: QueryFlowName;
   /** The configuration the flow runs with, for the table. */
   configuration: string;
-  /** A remote rerank (an LLM or JEV) counts as LLM time. */
-  rerank: 'none' | 'local' | 'remote';
+  /** Whether its rerank is remote (an LLM or JEV), whose time counts as LLM time. */
+  remoteRerank: boolean;
   run(query: ResolvedQuery, options: { draft: boolean }): Promise<QueryResult>;
 }
 
@@ -158,9 +158,9 @@ function measure(flow: BenchFlow, samples: readonly Sample[], runs: number): Flo
     total: latencyOf(results.map(({ timings }) => timings.totalMs)),
     search: latencyOf(results.map(({ timings }) => timings.searchMs)),
     embedding: optional('embeddingMs'),
-    rerank: flow.rerank === 'none' ? undefined : optional('judgingMs'),
+    rerank: optional('judgingMs'),
     generation: optional('generationMs'),
-    llm: latencyOf(results.map((result) => llmMs(result, flow.rerank === 'remote'))),
+    llm: latencyOf(results.map((result) => llmMs(result, flow.remoteRerank))),
     relevance: averageOverRuns(samples, runs),
     sourceAccuracy: sourceAccuracy(
       sum(checks.map(({ valid }) => valid)),

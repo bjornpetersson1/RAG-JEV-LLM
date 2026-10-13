@@ -69,7 +69,6 @@ export function createRetriever(config: RetrievalConfig, deps: RetrieverDependen
     // With the dense half switched off (weight 0), the instruction is never embedded.
     ...(weights.dense > 0 && { embedder }),
     async retrieve(instruction, tags) {
-      // With the dense half switched off (weight 0), the question is not embedded at all.
       const embedStarted = performance.now();
       const [query] = weights.dense > 0 ? await embedder.embed([instruction], 'query') : [];
       const embedMs = elapsedMs(embedStarted);

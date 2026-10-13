@@ -12,7 +12,7 @@ import { REPO_ROOT } from '../repo-root.js';
 import { REPORTS_DIR } from '../tagging/paths.js';
 import { formatCandidates, labelCandidates } from './label.js';
 import { readEvalQueries, resolveEvalQueries } from './queries.js';
-import { formatAsMarkdown, formatForTerminal } from './report.js';
+import { formatAsMarkdown, formatForTerminal, formatScore } from './report.js';
 import { runEvaluation, type QueryOutcome } from './run.js';
 import { createEvalSetup, createSearchSetup } from './setup.js';
 import { RERANKERS } from '../rerank/factory.js';
@@ -194,7 +194,7 @@ function runSweep(): Promise<number> {
     for (const { retriever, baseline, chosen } of choices) {
       console.log(
         `${retriever}: chosen ${chosen.candidates} candidates, top ${chosen.topK} ` +
-          `(central F1 ${chosen.scores.central.f1.toFixed(3)} against ${baseline.scores.central.f1.toFixed(3)})`,
+          `(central F1 ${formatScore(chosen.scores.central.f1)} against ${formatScore(baseline.scores.central.f1)})`,
       );
     }
     console.log(`\nAppended to ${path}`);

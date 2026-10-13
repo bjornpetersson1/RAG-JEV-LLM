@@ -92,7 +92,7 @@ describe('createReferenceFlow', () => {
       flow,
     );
 
-    expect(flow.topK).toBe(2);
+    expect(flow.configuration.topK).toBe(2);
     expect(result.approved).toHaveLength(2);
     expect(result.draft?.text).toContain('inte juridisk rådgivning');
   });

@@ -2,6 +2,7 @@ import { registerQueryRoute, type QueryFlows } from './api/query-route.js';
 import { createQueryFlows, openQueryDatabase } from './api/setup.js';
 import { buildApp } from './app.js';
 import { resolveDatabasePath } from './db/config.js';
+import { elapsedMs } from './http.js';
 import { loadEmbedderConfig } from './embedding/factory.js';
 import { describeError } from './errors.js';
 import { loadContextLimits } from './generation/config.js';
@@ -24,7 +25,7 @@ try {
   // Before listening, so the first query's timings do not include loading the local models.
   const warmUpStarted = performance.now();
   await flows?.warmUp?.();
-  app.log.info({ ms: Math.round(performance.now() - warmUpStarted) }, 'Local models warmed up');
+  app.log.info({ ms: elapsedMs(warmUpStarted) }, 'Local models warmed up');
   await app.listen({ port });
 } catch (error) {
   app.log.error(describeError(error));

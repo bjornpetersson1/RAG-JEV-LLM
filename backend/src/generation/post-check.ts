@@ -9,26 +9,25 @@ import { findCitations, type FoundCitation } from './templates.js';
 
 export type ReferenceKind = 'citation' | 'free-text';
 
-export interface ReferenceFlag {
+/** Where a reference is in the draft, as written there. */
+export interface ReferenceSpan {
   kind: ReferenceKind;
   /** The reference as written in the draft. */
   text: string;
   /** Offsets in the draft (UTF-16 code units, as JavaScript indexes strings), end exclusive. */
   start: number;
   end: number;
+}
+
+export interface ReferenceFlag extends ReferenceSpan {
   reason: string;
   /** For a citation, the cited id; a group such as `[K:11, K:99]` shares one span for all ids. */
   chunkId?: string;
 }
 
 /** A reference that points to a submitted chunk, so the UI can link it to that chunk (E7-2). */
-export interface ReferenceMatch {
-  kind: ReferenceKind;
-  /** The reference as written in the draft. */
-  text: string;
-  /** Offsets in the draft (UTF-16 code units), end exclusive; a citation group shares one span. */
-  start: number;
-  end: number;
+export interface ReferenceMatch extends ReferenceSpan {
+  /** A citation group such as `[K:11, K:12]` shares one span for all ids. */
   chunkId: string;
 }
 
@@ -104,13 +103,7 @@ function maskCitations(text: string, citations: readonly FoundCitation[]): strin
   return pieces.join('');
 }
 
-/** Where a reference is in the draft, as written there. */
-function span(
-  kind: ReferenceKind,
-  text: string,
-  start: number,
-  end: number,
-): Pick<ReferenceMatch, 'kind' | 'text' | 'start' | 'end'> {
+function span(kind: ReferenceKind, text: string, start: number, end: number): ReferenceSpan {
   return { kind, text: text.slice(start, end), start, end };
 }
 

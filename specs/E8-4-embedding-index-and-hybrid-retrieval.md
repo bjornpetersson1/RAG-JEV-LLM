@@ -58,7 +58,7 @@ Every chunk is embedded once with the configured `Embedder` and its vector cache
 - [x] Vector store: load into a contiguous `Float32Array` at startup, cosine top-N.
 - [x] Lexical half: FTS5 BM25 over `chunks_fts` with the instruction's words, its numbers (section numbers included) and law abbreviations replaced by their SFS number (`LAS` → `1982:80`) through `replaceLawAbbreviations`.
 - [x] RRF fusion with `RRF_K` and per-list weights; `both` fuses the tag ranking and the hybrid ranking the same way.
-- [x] Settings: `RETRIEVER` (default `tags`), `RETRIEVE_CANDIDATES` (default 40, 30–50 recommended), `RRF_K` (default 60), `RRF_WEIGHT_DENSE` / `RRF_WEIGHT_LEXICAL` / `RRF_WEIGHT_TAGS` (default 1); `.env.example`.
+- [x] Settings: `RETRIEVER` (default `tags`), `RETRIEVE_CANDIDATES` (default 40, 30–50 recommended; **superseded by E7-4**: default 20, from its sweep), `RRF_K` (default 60), `RRF_WEIGHT_DENSE` / `RRF_WEIGHT_LEXICAL` / `RRF_WEIGHT_TAGS` (default 1); `.env.example`.
 - [x] Query flow: candidates from the configured retriever; translation skipped for `bge`; candidate origin reported (`tag`, `fts`, `dense`, `lexical`).
 - [x] `retrieve` CLI.
 - [x] README: storage motivation and the retriever settings.

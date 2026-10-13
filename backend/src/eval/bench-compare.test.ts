@@ -36,13 +36,13 @@ function fakeFlow(
   name: QueryFlowName,
   runs: Record<string, FakeRun[]>,
   calls: string[],
-  rerank: BenchFlow['rerank'] = name === 'main' ? 'local' : 'none',
+  remoteRerank = false,
 ): BenchFlow {
   const seen = new Map<string, number>();
   return {
     name,
     configuration: `${name} config`,
-    rerank,
+    remoteRerank,
     async run(q, { draft }) {
       calls.push(`${name}:${q.id}`);
       const index = seen.get(q.id) ?? 0;
@@ -139,7 +139,7 @@ describe('benchCompare', () => {
         ],
       },
       [],
-      'remote',
+      true,
     );
 
     const [summary] = await benchCompare(QUERIES, [main], { runs: 3, draft: true });
