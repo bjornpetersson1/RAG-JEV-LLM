@@ -12,7 +12,9 @@ export function notImplementedReranker(name: string, model: string, plan: string
         model,
         rerank() {
           return Promise.reject(
-            new Error(`RERANKER=${name} is not implemented yet (${plan}); use bge, llm or jev`),
+            new Error(
+              `RERANKER=${name} is not implemented yet (${plan}); use minilm, bge, llm or jev`,
+            ),
           );
         },
       };

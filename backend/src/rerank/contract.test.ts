@@ -5,12 +5,18 @@ import { createTestDatabase } from '../db/test-helpers.js';
 import { loadLlmConfig } from '../llm/config.js';
 import { createCapturingLogger, messageResponse } from '../llm/test-helpers.js';
 import type { Chunk } from '../llm/types.js';
-import { createBgeReranker, loadBgeRerankerConfig } from './bge-reranker.js';
-import { createReranker } from './factory.js';
+import {
+  createCrossEncoderReranker,
+  loadCrossEncoderRerankerConfig,
+  thresholdVariable,
+} from './cross-encoder-reranker.js';
+import { createReranker, localCrossEncoders } from './factory.js';
 import { fakeRerankResult } from './test-helpers.js';
 import type { Reranker, RerankerDependencies } from './types.js';
 
 const JEV_URL = 'https://api.typesafe.ai/v1/systemone';
+
+const CROSS_ENCODERS = localCrossEncoders();
 
 /** Each chunk's score, from JEV and from the LLM alike; `d` is below the 0.5 threshold. */
 const SCORES: Record<string, number> = { a: 0.6, b: 0.95, c: 0.8, d: 0.1, e: 0.7 };
@@ -74,16 +80,17 @@ const RERANKERS: [string, () => Reranker, string][] = [
   ],
   ['llm', () => createReranker({ RERANKER: 'llm' }, deps()).reranker, 'claude-haiku-5-5'],
   // The model is faked: its logit for a chunk is the one whose sigmoid is the chunk's score.
-  [
-    'bge',
+  ...CROSS_ENCODERS.map((spec): [string, () => Reranker, string] => [
+    spec.name,
     () =>
-      createBgeReranker(
-        loadBgeRerankerConfig({ RERANK_THRESHOLD_BGE: '0.5' }),
+      createCrossEncoderReranker(
+        spec,
+        loadCrossEncoderRerankerConfig({ [thresholdVariable(spec.name)]: '0.5' }, spec.name),
         createCapturingLogger(),
         fakeCrossEncoder,
       ),
-    'onnx-community/bge-reranker-v2-m3-ONNX',
-  ],
+    spec.model.id,
+  ]),
   ['fake', () => fakeReranker, 'fake-model'],
 ];
 
@@ -104,9 +111,11 @@ describe.each(RERANKERS)('the %s reranker', (name, build, model) => {
 
     expect(result.ranked.map(({ chunk }) => chunk.id)).toEqual(['b', 'c', 'e', 'a']);
     const expected = [0.95, 0.8, 0.7, 0.6, 0.1];
-    // BGE's scores come back through a sigmoid of the fake logit, so they are equal to rounding.
+    // A cross-encoder's scores come back through a sigmoid of the fake logit, equal to rounding.
     expect(result.scored.map(({ score }) => score)).toEqual(
-      name === 'bge' ? expected.map((score) => expect.closeTo(score, 10)) : expected,
+      CROSS_ENCODERS.some((spec) => spec.name === name)
+        ? expected.map((score) => expect.closeTo(score, 10))
+        : expected,
     );
   });
 });
