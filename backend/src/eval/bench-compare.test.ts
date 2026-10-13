@@ -12,6 +12,7 @@ function query(id: string, relevant: string[]): ResolvedQuery {
     instruction: `Instruktion ${id}`,
     relevant: [],
     relevantIds: new Set(relevant),
+    centralIds: new Set(relevant),
   };
 }
 

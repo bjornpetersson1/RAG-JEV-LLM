@@ -2,7 +2,8 @@
 // in that day's `eval/report-<date>.md`. Every report uses the same columns, so rows from different
 // days can be put side by side.
 
-import type { ComparisonRow, RecallAt } from './compare.js';
+import type { ComparisonRow, ListMeasures } from './compare.js';
+import { GRADE_SCOPES } from './queries.js';
 import {
   appendToReportTable,
   formatLatency,
@@ -12,7 +13,11 @@ import {
 } from './report-file.js';
 import { formatScore } from './report.js';
 
-export const COMPARISON_HEADING = '## Retriever and reranker comparison';
+/**
+ * E7-4 added the grade and precision before rerank; reports from before keep their earlier table
+ * under `## Retriever and reranker comparison`.
+ */
+export const COMPARISON_HEADING = '## Retriever and reranker comparison, graded';
 
 const COMPARISON_TABLE: ReportTable = {
   heading: COMPARISON_HEADING,
@@ -20,8 +25,9 @@ const COMPARISON_TABLE: ReportTable = {
     'Rows from `npm run eval:run -- --reranker … --retriever …`, appended per run. "Before" is the',
     'retriever\'s own order; "after" is the reranker\'s order, keeping every relevant candidate.',
     'Recall and precision are macro averages over the evaluation queries; P@K is relevant chunks among',
-    'the first K divided by K. `tags` is tag search without the full-text fallback (E5-3), `fts` the',
-    'full-text baseline. The labels in `eval/queries.yaml` are not yet reviewed by the owner (#58).',
+    'the first K divided by K. Each pair has a row per grade: `central` counts the chunks the clause',
+    'rests on, `all` every graded chunk (E7-4). `tags` is tag search without the full-text fallback',
+    '(E5-3), `fts` the full-text baseline. The labels are not yet reviewed by the owner (#79).',
   ],
   columns: [
     'date',
@@ -30,10 +36,13 @@ const COMPARISON_TABLE: ReportTable = {
     'model',
     'dtype',
     'candidates',
+    'grade',
     'R@5 before',
     'R@8 before',
     'R@10 before',
     'R@cand before',
+    'P@5 before',
+    'P@10 before',
     'R@5 after',
     'R@8 after',
     'R@10 after',
@@ -47,29 +56,26 @@ const COMPARISON_TABLE: ReportTable = {
   ],
 };
 
-/** The rows as Markdown table lines, dated `date` (YYYY-MM-DD). */
+/** The rows as Markdown table lines, one per grade, dated `date` (YYYY-MM-DD). */
 export function comparisonRows(rows: readonly ComparisonRow[], date: string): string[] {
-  return rows.map((row) =>
-    tableRow([
-      date,
-      row.retriever,
-      row.reranker,
-      row.model,
-      row.dtype,
-      row.candidates.toFixed(1),
-      ...recallCells(row.before),
-      ...(row.after
-        ? [
-            ...recallCells(row.after),
-            formatScore(row.after.precision5),
-            formatScore(row.after.precision10),
-          ]
-        : Array.from({ length: 6 }, () => '–')),
-      row.rerankMs ? formatLatency(row.rerankMs) : '–',
-      formatLatency(row.retrievalMs),
-      String(row.queries),
-      row.notes.join('; '),
-    ]),
+  return rows.flatMap((row) =>
+    GRADE_SCOPES.map((grade) =>
+      tableRow([
+        date,
+        row.retriever,
+        row.reranker,
+        row.model,
+        row.dtype,
+        row.candidates.toFixed(1),
+        grade,
+        ...measureCells(row.before[grade]),
+        ...(row.after ? measureCells(row.after[grade]) : MEASURE_KEYS.map(() => '–')),
+        row.rerankMs ? formatLatency(row.rerankMs) : '–',
+        formatLatency(row.retrievalMs),
+        String(row.queries),
+        row.notes.join('; '),
+      ]),
+    ),
   );
 }
 
@@ -83,6 +89,9 @@ export function appendToReport(path: string, rows: readonly ComparisonRow[], dat
   appendToReportTable(path, COMPARISON_TABLE, comparisonRows(rows, date), date);
 }
 
-function recallCells(recall: RecallAt): string[] {
-  return [recall['5'], recall['8'], recall['10'], recall.candidates].map(formatScore);
+/** The columns of one list's measures, in table order. */
+const MEASURE_KEYS = ['5', '8', '10', 'candidates', 'precision5', 'precision10'] as const;
+
+function measureCells(measures: ListMeasures): string[] {
+  return MEASURE_KEYS.map((key) => formatScore(measures[key]));
 }

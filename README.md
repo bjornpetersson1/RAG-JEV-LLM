@@ -158,14 +158,14 @@ The benchmark generates the same seeded data every run (3–8 tags per chunk out
 
 Migration `0005_chunks_fts` adds an SQLite FTS5 index over each chunk's text, context and source reference, kept in step with `chunks` by triggers. Its tokenizer folds case but keeps å, ä and ö apart from a and o. The full-text query takes the words of the instruction and the chosen tags' labels, and drops common Swedish stop words and words shorter than 3 characters. Numbers must match exactly. Every other word becomes a prefix term, so inflected forms match: a word of 6 letters or more is first cut by up to 3 letters, keeping at least 5 (`uppsägningen` → `uppsägnin*`). The terms are joined with OR and ranked by bm25.
 
-Candidate search (`createCandidateSearch`; the query flow and `eval:run` use it through `RETRIEVER=tags` or `both`; no HTTP route uses it yet) takes the tag index's ranked hits. With fewer than `MIN_TAG_CANDIDATES` (default 10), full-text hits not already found are appended, up to `MAX_CANDIDATES` (default 30). Each candidate records whether it came from `tag` or `fts`, and every search logs whether the fallback ran and how many candidates it added. The modes `fts` (full text only) and `tags` (tags only) are baselines for the evaluation.
+Candidate search (`createCandidateSearch`; the query flow and `eval:run` use it through `RETRIEVER=tags` or `both`; no HTTP route uses it yet) takes the tag index's ranked hits. With fewer than `MIN_TAG_CANDIDATES` (default 10), full-text hits not already found are appended, up to `MAX_CANDIDATES` (default 30, confirmed by the sweep in [Precision and candidate counts](#precision-and-candidate-counts-e7-4)). Each candidate records whether it came from `tag` or `fts`, and every search logs whether the fallback ran and how many candidates it added. The modes `fts` (full text only) and `tags` (tags only) are baselines for the evaluation.
 
 ## Hybrid retrieval
 
 `RETRIEVER` picks where the reranker's candidates come from (E8-4):
 
 - `tags` (default): tag search with the full-text fallback, as above, up to `MAX_CANDIDATES`.
-- `bge`: bge-m3 hybrid search. Chunks of a provision the instruction names come first (see below). The instruction is embedded (law abbreviations spelled out, see [Local models](#local-models)) and compared with every chunk's vector by cosine similarity (the dense half). SQLite FTS5 ranks the chunks by BM25 for the instruction's words and numbers, with law abbreviations replaced by their SFS number so `7 § LAS` matches `SFS 1982:80 7 §` (the lexical half). The two rankings are fused by reciprocal rank fusion and the best `RETRIEVE_CANDIDATES` (default 40) go on. The query is not translated into tags.
+- `bge`: bge-m3 hybrid search. Chunks of a provision the instruction names come first (see below). The instruction is embedded (law abbreviations spelled out, see [Local models](#local-models)) and compared with every chunk's vector by cosine similarity (the dense half). SQLite FTS5 ranks the chunks by BM25 for the instruction's words and numbers, with law abbreviations replaced by their SFS number so `7 § LAS` matches `SFS 1982:80 7 §` (the lexical half). The two rankings are fused by reciprocal rank fusion and the best `RETRIEVE_CANDIDATES` (default 20, from the same sweep) go on. The query is not translated into tags.
 - `both`: the tag ranking fused with the two halves of `bge` the same way.
 
 Each ranking adds `weight / (RRF_K + rank)` to a chunk's score; `RRF_K` (default 60) and `RRF_WEIGHT_DENSE` / `RRF_WEIGHT_LEXICAL` / `RRF_WEIGHT_TAGS` (0–1, default 1) tune the fusion.
@@ -354,6 +354,27 @@ With `--reranker`, `eval:run` compares rerankers instead (E8-5). Every query goe
 3. Verify with `npm run retrieve -- "<question>"` (one question, the reranked chunks and their scores) or `npm run eval:run -- --reranker <name>` (the evaluation set).
 
 Nothing else changes: the query flow and `eval:run` only know the `Reranker` interface.
+
+### Precision and candidate counts (E7-4)
+
+Every relevant chunk in `eval/queries.yaml` has a grade:
+
+- `central`: the provision or a court's general statement of the rule the clause rests on.
+- `related`: other parts of the same law or case, such as background, one case's facts or neighbouring sections.
+
+Claude graded the 266 labels (131 central); the owner's review of them, and the JEV run with `JUDGE_THRESHOLD`, are [#79](https://github.com/bjornpetersson1/RAG-JEV-LLM/issues/79). `eval:run` reports every mode's precision, recall, F1 and P@5/P@10 against the central chunks and against all graded ones. The comparison (`--reranker`) gives each pair a row per grade, with P@5/P@10 also before rerank in the retriever's order.
+
+```bash
+npm run eval:run -- --sweep
+```
+
+`--sweep` tries 10, 20, 30, 40 and 50 candidates with top 5, 8, 10 and 12, for the retrievers `tags` and `both` and the configured reranker. For each count, the retriever gives the list it gives with that setting: `tags` with `MAX_CANDIDATES` = N, `both` with `RETRIEVE_CANDIDATES` = N over the configured tag search (a fused list of 10 is not the first 10 of one of 50). Each query's lists are reranked once together, without the cache, and each list keeps its chunks in that score order; since each chunk is scored on its own, that is what reranking the list alone gives. The rerank times are estimates from that one rerank. The table goes into that day's report, with the setting a rule picks per retriever: the highest central F1 among the settings whose central recall is at most 0.03 below the old defaults', and on a tie within 0.01 the fewest candidates, and of those the highest central F1.
+
+The first sweep (2026-10-13, `minilm`) set the defaults:
+
+- `MAX_CANDIDATES` stays 30: with top 8 it has the best central F1 with `tags` (0.221), and fewer candidates lose central recall.
+- `RETRIEVE_CANDIDATES` 40 → 20: with top 12, central F1 0.194 against 0.123 with `both`, at an estimated 1.8 s instead of 3.5 s.
+- `RERANK_TOP_K` stays 8: it is shared, so it follows the default retriever `tags`. With `RETRIEVER=both`, set `RERANK_TOP_K=12`.
 
 ### Main flow vs reference RAG
 
