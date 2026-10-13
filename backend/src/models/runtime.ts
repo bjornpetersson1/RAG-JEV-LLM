@@ -1,7 +1,8 @@
 // The local model runtime (E8-2): ONNX models run in Node through transformers.js on
 // onnxruntime-node, on the CPU. Models are downloaded from Hugging Face once into the model cache.
 // transformers.js 3.x is used because its onnxruntime-node (1.21) still ships an Intel macOS
-// binary, which the demo machine needs; 4.x's (1.30) has Apple Silicon only.
+// binary, which the demo machine needs; 4.x's (1.30) has Apple Silicon only. Its `sharp` (images,
+// never used here) is overridden to 0.35.5 in the root package.json for libvips CVEs fixed there.
 // The library is imported on first load, so code that never runs a model (the server, the tests)
 // does not load onnxruntime.
 
