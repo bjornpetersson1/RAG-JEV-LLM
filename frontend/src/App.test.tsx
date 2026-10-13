@@ -156,7 +156,7 @@ describe('the query form', () => {
     expect(screen.queryByText('Översätter frågan till taggar…')).toBeNull();
   });
 
-  it('says which instruction was used without free text, and shows the reference RAG after the main flow', async () => {
+  it('says which instruction was used without free text, and shows the reference RAG and its judge after the main flow', async () => {
     const stream = controlledStream();
     stubFetch(() => Promise.resolve(stream.response));
     render(<App />);
@@ -169,9 +169,25 @@ describe('the query form', () => {
         flow: 'main',
         result: { ...RESULT, defaultInstruction: 'Anställningsavtal' },
       });
-      stream.send({ type: 'start', flow: 'reference', steps: ['search', 'generation'] });
+      stream.send({
+        type: 'start',
+        flow: 'reference',
+        steps: ['search', 'rerank', 'generation'],
+      });
       stream.step(
-        { step: 'search', candidates: 8, fallback: 0, timings: { searchMs: 400 } },
+        { step: 'search', candidates: 30, fallback: 0, timings: { searchMs: 400 } },
+        'reference',
+      );
+      stream.step(
+        {
+          step: 'rerank',
+          candidates: 30,
+          judged: true,
+          relevant: 6,
+          unknown: 0,
+          approved: 6,
+          timings: { judgingMs: 2500, sourcesMs: 2900 },
+        },
         'reference',
       );
     });
@@ -183,7 +199,8 @@ describe('the query form', () => {
     ).toBeDefined();
     expect(screen.queryByText('Förbereder referens-RAG…')).toBeNull();
     const reference = screen.getByRole('region', { name: 'Referens-RAG' });
-    expect(reference.textContent).toContain('8 närmaste chunkar skickas till generatorn');
+    expect(reference.textContent).toContain('30 kandidater');
+    expect(reference.textContent).toContain('6 bedömda som relevanta av 30');
     expect(reference.textContent).toContain('Skriver utkast…');
   });
 

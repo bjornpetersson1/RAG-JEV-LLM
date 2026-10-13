@@ -110,6 +110,12 @@ The reference RAG gets the same steps as the main flow: vector search, then the 
   - **Not changed: `ConfiguredQueryFlows`.** It lets a test check that the API server's wiring shares the judge; a `createReferenceFlow` test alone cannot see that wiring.
   - **The benchmark run started before these two fixes.** The definitions only differ when a draft had no text or a candidate did not load.
 
+- **PR review:**
+  - **The App test starts the reference with its rerank step** and asserts the judge's line, instead of the old search-then-generation shape.
+  - **The README says the UI's timing comparison is a demo**: with the judge cache on, the reference can get cache hits from the main flow, and `bench:compare` (cache off) is the measured result.
+  - **The `bench:compare` setup's header names the shared LLM judge.**
+  - **Clean code after the review: reviewed inline, without simplify's four agents.** The diff was 24 lines of test fixture, comment and README.
+
 ## Open Questions
 
 - None.

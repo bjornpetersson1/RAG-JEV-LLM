@@ -1,5 +1,6 @@
 // Builds `bench:compare`'s two flows from `.env` and the database (E5-4): the main flow as `.env`
-// configures it, and the reference RAG, sharing one load of the embedder and vectors.
+// configures it, and the reference RAG, sharing one load of the embedder and vectors and, with
+// `RERANKER=llm`, one LLM judge (E7-9).
 
 import type { DatabaseSync } from 'node:sqlite';
 import { createEmbedder } from '../embedding/factory.js';
