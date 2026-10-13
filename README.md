@@ -1,6 +1,6 @@
 # RAG-JEV-LLM
 
-Legal RAG proof of concept: tag search or local bge-m3 hybrid retrieval, followed by a reranker (local BGE by default, JEV or an LLM optional), find relevant Swedish laws and rulings, and an LLM drafts employment agreements and NDAs from them.
+Legal RAG proof of concept: tag search or local bge-m3 hybrid retrieval, followed by a reranker (the small local mMiniLM by default; BGE, JEV or an LLM optional), find relevant Swedish laws and rulings, and an LLM drafts employment agreements and NDAs from them.
 
 ## Prerequisites
 
@@ -203,7 +203,8 @@ Choosing a template (`employment` or `nda`) adds its preset tags from `sources/t
 
 The relevance step sits behind one `Reranker` interface (`backend/src/rerank/`). `RERANKER` in `.env` picks the implementation, and nothing else in the code branches on it:
 
-- `bge` (default): the local cross-encoder bge-reranker-v2-m3 (see [Local models](#local-models)). It scores each chunk's heading path and text against the instruction and turns the logit into a score with a sigmoid. Pairs over 1,024 tokens are cut at the end of the chunk, with a warning. Its scores are not calibrated like JEV's or the LLM's, so it has its own threshold, `RERANK_THRESHOLD_BGE` (default 0: only `RERANK_TOP_K` cuts); `RERANKER_DTYPE` (`int8` default, or `fp32`) and `RERANKER_BATCH_SIZE` (default 8) tune it. Nothing is cached.
+- `bge`: the local cross-encoder bge-reranker-v2-m3 (see [Local models](#local-models)). It scores each chunk's heading path and text against the instruction and turns the logit into a score with a sigmoid. Pairs over 1,024 tokens are cut at the end of the chunk, with a warning. Its scores are not calibrated like JEV's or the LLM's, so it has its own threshold, `RERANK_THRESHOLD_BGE` (default 0: only `RERANK_TOP_K` cuts); `RERANKER_DTYPE` (`int8` default, or `fp32`) and `RERANKER_BATCH_SIZE` (default 8) tune it. Nothing is cached.
+- `minilm` (default): the small local cross-encoder mMiniLM-L12 (E7-5, about 118M parameters, a fifth of BGE's size), run the same way as `bge` with pairs of at most 512 tokens. It has its own threshold, `RERANK_THRESHOLD_MINILM` (default 0), and shares `RERANKER_DTYPE` and `RERANKER_BATCH_SIZE`; in int8 it runs the AVX2-quantised export. See [Small reranker (E7-5)](#small-reranker-e7-5).
 - `llm`: the judge's LLM (`LLM_JUDGE_PROVIDER`/`LLM_JUDGE_MODEL`), asked for the probability that the answer is yes.
 - `jev`: JEV, with the chunk as the state and the question as one Noul question. When a JEV call fails (timeout, network or HTTP error, malformed answer), the judge's LLM answers that chunk instead, and a warning names the chunk and the cause. Needs `JEV_API_KEY`; without it the server refuses to start.
 - `qwen3`: a placeholder for a later experiment.
@@ -237,7 +238,7 @@ TypeSafe does not document JEV's maximum state size, pricing or rate limits. `np
 
 ## Local models
 
-bge-m3 (embeddings) and bge-reranker-v2-m3 (reranking) run locally, in Node, through [transformers.js](https://github.com/huggingface/transformers.js) 3.x on onnxruntime-node, on the CPU. They are downloaded from Hugging Face on first use into `MODEL_CACHE_DIR` (default `data/models.nosync`, git-ignored; the `.nosync` suffix keeps iCloud Drive from uploading the models when the repo is in a synced folder such as `~/Documents`): about 0.6 GB per model in int8 and 2.3 GB in fp32. `EMBEDDER_DTYPE` picks the precision (`int8` by default).
+bge-m3 (embeddings) and the rerankers mMiniLM-L12 (the default) and bge-reranker-v2-m3 run locally, in Node, through [transformers.js](https://github.com/huggingface/transformers.js) 3.x on onnxruntime-node, on the CPU. They are downloaded from Hugging Face on first use into `MODEL_CACHE_DIR` (default `data/models.nosync`, git-ignored; the `.nosync` suffix keeps iCloud Drive from uploading the models when the repo is in a synced folder such as `~/Documents`): about 0.6 GB per BGE model in int8 and 2.3 GB in fp32, and 0.1 GB (int8) or 0.5 GB (fp32) for mMiniLM. `EMBEDDER_DTYPE` picks the precision (`int8` by default). mMiniLM's int8 export is quantised per processor: the AVX2 one on x86, as on the demo machine, and the ARM one on Apple Silicon (not measured here).
 
 ```bash
 npm run embed:smoke                   # "7 § LAS" must be nearer LAS 7 § than Dataskyddslagen 1 kap. 7 §
@@ -270,7 +271,7 @@ Run-to-run variation on this laptop is large: earlier runs, with other work on t
 
 ### Rerank latency (E8-3)
 
-`npm run bench:rerank -- --dtype int8|fp32` reranks 30 and 50 real chunks (spread over the corpus, 1,033 characters on average) against a Swedish instruction on the demo machine, 5 runs each, in batches of 8 pairs of similar length:
+`npm run bench:rerank -- --reranker bge --dtype int8|fp32` reranks 30 and 50 real chunks (spread over the corpus, 1,033 characters on average) against a Swedish instruction on the demo machine, 5 runs each, in batches of 8 pairs of similar length:
 
 | dtype | 30 chunks (median of 5) | 50 chunks (median of 5) | model load |
 | ----- | ----------------------- | ----------------------- | ---------- |
@@ -279,14 +280,32 @@ Run-to-run variation on this laptop is large: earlier runs, with other work on t
 
 Measured with a 1-minute load average of 3.9 at the start (iCloud Drive was still syncing); the model load includes scoring one pair. Batching pairs of similar length made this about 15–20 % faster than batching in candidate order (35.9 s and 64.6 s in int8). int8 is about 30 % faster than fp32 here. At about 1 s per chunk, reranking 30 candidates takes about half a minute per query on this laptop.
 
+### Small reranker (E7-5)
+
+`npm run bench:rerank -- --reranker minilm|bge --dtype int8|fp32` (without `--reranker`, the default reranker) on the demo machine on 2026-10-13, under the same conditions for both models (30 and 50 real chunks of 1,006 characters on average, 5 runs each, batches of 8 pairs of similar length):
+
+| reranker | dtype | 30 chunks (median of 5) | 50 chunks (median of 5) | per chunk | model load |
+| -------- | ----- | ----------------------- | ----------------------- | --------- | ---------- |
+| minilm   | int8  | 2.69 s                  | 4.39 s                  | 0.09 s    | 1.57 s     |
+| minilm   | fp32  | 3.08 s                  | 4.94 s                  | 0.10 s    | 2.64 s     |
+| bge      | int8  | 22.89 s                 | 37.68 s                 | 0.75 s    | 3.06 s     |
+| bge      | fp32  | 39.13 s                 | 55.25 s                 | 1.11 s    | 8.60 s     |
+
+mMiniLM is about 8–9 times faster than BGE in int8. Its position limit is 512 tokens, so the longest chunks are cut at the end (with a warning); BGE takes 1,024.
+
+The default rule (spec E7-5): `minilm` becomes the default when its recall@8 after rerank is at most 0.03 below BGE's with both `tags` and `both`, and its median rerank time at most a third of BGE's. On the evaluation set (`eval/report-2026-10-13.md`): with `tags`, recall@8 is 0.234 against 0.256 (−0.022) at 3.0 s against 27.7 s; with `both`, 0.211 against 0.230 (−0.019) at 4.5 s against 36.6 s. Both conditions hold, so **`RERANKER` defaults to `minilm`**; `RERANKER=bge` brings the larger model back.
+
+`gte-multilingual-reranker-base`, the other candidate, does not run: transformers.js (3.8.1, and the newest 4.3.1) does not support its model type (`new`).
+
 ### Licences
 
 Checked on the Hugging Face model cards on 2026-10-11:
 
-| Model              | Repository used                                                                                                                                                                                    | Licence                                                                                            |
-| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| bge-m3             | [`Xenova/bge-m3`](https://huggingface.co/Xenova/bge-m3) (ONNX), from [`BAAI/bge-m3`](https://huggingface.co/BAAI/bge-m3)                                                                           | MIT (both)                                                                                         |
-| bge-reranker-v2-m3 | [`onnx-community/bge-reranker-v2-m3-ONNX`](https://huggingface.co/onnx-community/bge-reranker-v2-m3-ONNX) (ONNX), from [`BAAI/bge-reranker-v2-m3`](https://huggingface.co/BAAI/bge-reranker-v2-m3) | Apache-2.0 (BAAI); the ONNX repackaging states no licence of its own and inherits the base model's |
+| Model                | Repository used                                                                                                                                                                                    | Licence                                                                                                                                 |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| bge-m3               | [`Xenova/bge-m3`](https://huggingface.co/Xenova/bge-m3) (ONNX), from [`BAAI/bge-m3`](https://huggingface.co/BAAI/bge-m3)                                                                           | MIT (both)                                                                                                                              |
+| bge-reranker-v2-m3   | [`onnx-community/bge-reranker-v2-m3-ONNX`](https://huggingface.co/onnx-community/bge-reranker-v2-m3-ONNX) (ONNX), from [`BAAI/bge-reranker-v2-m3`](https://huggingface.co/BAAI/bge-reranker-v2-m3) | Apache-2.0 (BAAI); the ONNX repackaging states no licence of its own and inherits the base model's                                      |
+| mMiniLM-L12 reranker | [`cross-encoder/mmarco-mMiniLMv2-L12-H384-v1`](https://huggingface.co/cross-encoder/mmarco-mMiniLMv2-L12-H384-v1), its own ONNX files (`onnx/model.onnx`, `onnx/model_quint8_avx2.onnx`)           | Apache-2.0 (checked 2026-10-13); its base model, `nreimers/mMiniLMv2-L12-H384-distilled-from-XLMR-Large`, states no licence on its card |
 
 ## Evaluation
 
@@ -330,8 +349,8 @@ With `--reranker`, `eval:run` compares rerankers instead (E8-5). Every query goe
 
 ### Switch reranker in three steps
 
-1. Set `RERANKER=` in `.env`: `bge` (local, default), `llm`, `jev` or `qwen3` (not implemented yet).
-2. Fill in what it needs: `JEV_API_KEY` for `jev`; the judge's LLM settings for `llm`; nothing for `bge`, whose model downloads into `MODEL_CACHE_DIR` on first use (`RERANKER_DTYPE` picks int8 or fp32).
+1. Set `RERANKER=` in `.env`: `minilm` (local, default), `bge` (local, larger), `llm`, `jev` or `qwen3` (not implemented yet).
+2. Fill in what it needs: `JEV_API_KEY` for `jev`; the judge's LLM settings for `llm`; nothing for `minilm` or `bge`, whose models download into `MODEL_CACHE_DIR` on first use (`RERANKER_DTYPE` picks int8 or fp32).
 3. Verify with `npm run retrieve -- "<question>"` (one question, the reranked chunks and their scores) or `npm run eval:run -- --reranker <name>` (the evaluation set).
 
 Nothing else changes: the query flow and `eval:run` only know the `Reranker` interface.

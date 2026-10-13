@@ -3,6 +3,7 @@ import type { Env } from '../env.js';
 import type { LlmLogger, LlmUsage } from '../llm/client.js';
 import type { LlmConfig } from '../llm/config.js';
 import type { ModelDtype } from '../models/config.js';
+import type { CrossEncoderModel } from '../models/catalog.js';
 import type { Chunk, JudgeScore } from '../llm/types.js';
 
 /** A chunk with its relevance score; the same shape whichever reranker produced it. */
@@ -60,9 +61,17 @@ export interface RerankerDependencies {
 }
 
 /** One `RERANKER` value: adding a reranker is a new file with one of these plus a registry entry. */
+/** A local cross-encoder reranker: its name (its `RERANKER` value) and the model it runs. */
+export interface CrossEncoderSpec {
+  name: string;
+  model: CrossEncoderModel;
+}
+
 export interface RerankerEntry {
   /** Whether it calls a remote model (an LLM or JEV): its time then counts as LLM time. */
   remote: boolean;
+  /** For a local cross-encoder: its name and model, so `bench:rerank` can build it directly. */
+  crossEncoder?: CrossEncoderSpec;
   /** Reads the reranker's own settings from `env` and throws on an invalid or missing one. */
   validate(env: Env): void;
   create(env: Env, deps: RerankerDependencies): Reranker;

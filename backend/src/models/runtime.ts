@@ -5,15 +5,18 @@
 // The library is imported on first load, so code that never runs a model (the server, the tests)
 // does not load onnxruntime.
 
+import type { CrossEncoderModel } from './catalog.js';
 import type { ModelDtype } from './config.js';
 
 /** Raw [CLS] vectors, one per text, not normalised. */
 export type EncodeTexts = (texts: readonly string[]) => Promise<Float32Array[]>;
 
-/** One raw relevance logit per (query, passage) pair, and whether the pair was cut to fit. */
+/**
+ * One raw relevance logit per (query, passage) pair, and whether the pair was cut to fit the
+ * model's `maxTokens`.
+ */
 export type ScorePairs = (
   pairs: readonly { query: string; passage: string }[],
-  maxTokens: number,
 ) => Promise<{ logit: number; truncated: boolean }[]>;
 
 /** `load` runs on the first call and is reused; a failure is not kept, so the next call retries. */
@@ -62,45 +65,44 @@ export async function loadTextEncoder(
   };
 }
 
-/** Loads a cross-encoder, e.g. bge-reranker-v2-m3. */
+/** Loads a cross-encoder, e.g. bge-reranker-v2-m3, from its ONNX file for `dtype`. */
 export async function loadCrossEncoder(
-  model: string,
+  model: CrossEncoderModel,
   dtype: ModelDtype,
   cacheDir: string,
 ): Promise<ScorePairs> {
   const { env, AutoModelForSequenceClassification, AutoTokenizer } =
     await import('@huggingface/transformers');
   env.cacheDir = cacheDir;
-  const tokenizer = await AutoTokenizer.from_pretrained(model);
-  const classifier = await AutoModelForSequenceClassification.from_pretrained(model, {
-    dtype,
+  const tokenizer = await AutoTokenizer.from_pretrained(model.id);
+  const file = model.files?.[dtype];
+  const classifier = await AutoModelForSequenceClassification.from_pretrained(model.id, {
+    // A file of its own is named in full: `dtype` 'fp32' only stops transformers.js from adding a
+    // precision suffix to the name, whatever the file's precision is.
+    ...(file ? { model_file_name: file, dtype: 'fp32' } : { dtype }),
     device: 'cpu',
-    // The fp32 weights are in a separate `.onnx_data` file, which this model's config does not
-    // declare, so transformers.js would not download it.
-    use_external_data_format: dtype === 'fp32',
+    use_external_data_format: dtype === 'fp32' && (model.fp32ExternalData ?? false),
   });
+  const { maxTokens } = model;
   // The separators the model puts around a pair, e.g. `<s> … </s></s> … </s>` for XLM-RoBERTa.
   const pairSpecialTokens = tokenizer.encode('', { text_pair: '' }).length;
 
   /** At most half the pair, so a very long instruction still leaves room for the passage. */
-  function maxQueryTokens(maxTokens: number): number {
-    return Math.floor((maxTokens - pairSpecialTokens) / 2);
-  }
+  const maxQueryTokens = Math.floor((maxTokens - pairSpecialTokens) / 2);
 
   /** The query, cut to `maxQueryTokens` when longer, with its token count. */
-  function fitQuery(query: string, maxTokens: number) {
+  function fitQuery(query: string) {
     const ids = tokenizer.encode(query, { add_special_tokens: false });
-    const limit = maxQueryTokens(maxTokens);
-    if (ids.length <= limit) return { query, tokens: ids.length, cut: false };
-    const cut = tokenizer.decode(ids.slice(0, limit), { skip_special_tokens: true });
-    return { query: cut, tokens: limit, cut: true };
+    if (ids.length <= maxQueryTokens) return { query, tokens: ids.length, cut: false };
+    const cut = tokenizer.decode(ids.slice(0, maxQueryTokens), { skip_special_tokens: true });
+    return { query: cut, tokens: maxQueryTokens, cut: true };
   }
 
   /**
    * The pair with its passage cut so the pair fits `maxTokens`. The tokenizer's own truncation cuts
    * the pair's end, which drops the closing separator the model was trained with.
    */
-  function fit(query: string, queryTokens: number, passage: string, maxTokens: number) {
+  function fit(query: string, queryTokens: number, passage: string) {
     const passageIds = tokenizer.encode(passage, { add_special_tokens: false });
     const budget = maxTokens - queryTokens - pairSpecialTokens;
     if (passageIds.length <= budget) return { query, passage, truncated: false };
@@ -110,13 +112,13 @@ export async function loadCrossEncoder(
     return { query, passage: cut, truncated: true };
   }
 
-  return async (pairs, maxTokens) => {
+  return async (pairs) => {
     // The pairs of one call usually share their query, so each query is fitted once.
     const queries = new Map<string, { query: string; tokens: number; cut: boolean }>();
     const fitted = pairs.map(({ query, passage }) => {
-      if (!queries.has(query)) queries.set(query, fitQuery(query, maxTokens));
+      if (!queries.has(query)) queries.set(query, fitQuery(query));
       const fittedQuery = queries.get(query)!;
-      const pair = fit(fittedQuery.query, fittedQuery.tokens, passage, maxTokens);
+      const pair = fit(fittedQuery.query, fittedQuery.tokens, passage);
       return { ...pair, truncated: pair.truncated || fittedQuery.cut };
     });
     const inputs = tokenizer(

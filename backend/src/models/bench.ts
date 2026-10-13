@@ -6,7 +6,7 @@
 import { withDatabase } from '../db/with-database.js';
 import { describeError } from '../errors.js';
 import { elapsedMs } from '../http.js';
-import { BGE_M3_MODEL, BGE_RERANKER_MAX_TOKENS, BGE_RERANKER_MODEL } from './catalog.js';
+import { BGE_M3_MODEL, BGE_RERANKER } from './catalog.js';
 import { formatSeconds, parseDtypeArg } from './bench-args.js';
 import { loadLocalModelConfig, type ModelDtype } from './config.js';
 import { BENCH_INSTRUCTION, loadSamplePassages } from './passages.js';
@@ -35,14 +35,11 @@ async function run(dtype: ModelDtype, passages: string[]): Promise<void> {
   const embedMs = elapsedMs(started);
 
   started = performance.now();
-  const score = await loadCrossEncoder(BGE_RERANKER_MODEL, dtype, cacheDir);
+  const score = await loadCrossEncoder(BGE_RERANKER, dtype, cacheDir);
   const rerankerLoadMs = elapsedMs(started);
   started = performance.now();
   for (const batch of inBatches(passages, rerankBatchSize)) {
-    await score(
-      batch.map((passage) => ({ query: BENCH_INSTRUCTION, passage })),
-      BGE_RERANKER_MAX_TOKENS,
-    );
+    await score(batch.map((passage) => ({ query: BENCH_INSTRUCTION, passage })));
   }
   const scoreMs = elapsedMs(started);
   // The process's peak, including activations freed after each batch; in kilobytes.
