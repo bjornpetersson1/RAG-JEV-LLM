@@ -65,6 +65,13 @@ A timing panel in the UI shows the time of each step and the total for the main 
 - **One line per flow run** (default): a run with the reference RAG gives two lines with a shared run id, so either flow can be read alone.
 - **Precision and recall are not logged** (default): a UI query has no labels; `bench:compare` reports them for the evaluation queries.
 
+- **Builds on E7-1, E7-2, E5-4 and E7-5 as merged** (spec update before implementing):
+  - **The timings are `QueryResult.timings`** (E5-4/E7-1): each step's time, absent when the step did not run, so the panel shows `–` for it. The step events already carry each step's time as it finishes.
+  - **"Per chunk" is the rerank time divided by the candidates it scored**, an average: the rerank stats hold the total time, not one time per chunk. Cache hits come from the rerank stats (`judging.cacheHits`).
+  - **The configuration travels with the flow**: each flow's steps carry a description (retriever, reranker with model and dtype, query translator, generator, tag index; for the reference RAG the embedder and k), sent in the stream's `start` event and kept in the result and the log.
+  - **One runner logs both callers**: a wrapper around `runQuery` collects the step events, then appends the run's line (or, on failure, the error and the timings it reached); the route and `npm run query` both use it.
+  - **The counts come from the sources' status** (E7-2): sent is `cited` + `sent`, cited is `cited`. The default reranker is now `minilm` (E7-5).
+
 ## Open Questions
 
 - None.
