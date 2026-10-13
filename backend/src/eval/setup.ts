@@ -9,7 +9,7 @@ import { loadLlmConfig, roleLabel, type LlmConfig } from '../llm/config.js';
 import { createQueryServices } from '../query/services.js';
 import { translateToSlugs } from '../query/translate-query.js';
 import type { CandidateSearch } from '../search/candidate-search.js';
-import { createReranker } from '../rerank/factory.js';
+import { createReranker, loadRerankerConfig } from '../rerank/factory.js';
 import type { Reranker } from '../rerank/types.js';
 import {
   byJudgeMode,
@@ -76,6 +76,7 @@ export function createEvalSetup(db: DatabaseSync, env: Env, logger: LlmLogger): 
       return rerankers[mode].rerank(instruction, chunks, chunks.length);
     },
     judges: byJudgeMode((mode) => ({ name: rerankers[mode].name, model: rerankers[mode].model })),
+    topK: loadRerankerConfig(env).topK,
   };
 }
 

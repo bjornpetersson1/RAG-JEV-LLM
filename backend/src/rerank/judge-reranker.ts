@@ -37,6 +37,7 @@ function judgeReranker(impl: JudgeImpl): RerankerEntry {
           // judgeAll has applied JUDGE_THRESHOLD.
           const relevant = new Set(judged.relevant);
           return {
+            judged: true,
             ranked: scored.filter(({ chunk }) => relevant.has(chunk)).slice(0, topK),
             scored,
             stats: {

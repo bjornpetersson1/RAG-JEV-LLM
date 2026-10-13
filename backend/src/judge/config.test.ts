@@ -36,7 +36,7 @@ describe('loadJudgeConfig', () => {
   });
 
   it('needs no JEV key for the LLM', () => {
-    expect(loadJudgeConfig({}, 'llm')).toEqual({ impl: 'llm', threshold: 0.5 });
+    expect(loadJudgeConfig({}, 'llm')).toEqual({ impl: 'llm', threshold: 0.8 });
   });
 
   it.each([

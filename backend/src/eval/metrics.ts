@@ -81,14 +81,24 @@ export interface ScoredQuery {
   relevant: ReadonlySet<string>;
 }
 
-/** Precision, recall and F1 when each threshold decides relevance, from the scores already given. */
-export function sweepThresholds(queries: readonly ScoredQuery[]): SweepRow[] {
+/**
+ * Precision, recall and F1 when each threshold decides relevance, from the scores already given,
+ * keeping at most `topK` per query, best first, as the query flow's rerank does (E7-7).
+ */
+export function sweepThresholds(
+  queries: readonly ScoredQuery[],
+  topK = Number.POSITIVE_INFINITY,
+): SweepRow[] {
   return SWEEP_THRESHOLDS.map((threshold) => ({
     threshold,
     ...averageOver(
       queries.map(({ scores, relevant }) =>
         precisionRecall(
-          scores.filter(({ score }) => score >= threshold).map(({ chunkId }) => chunkId),
+          scores
+            .filter(({ score }) => score >= threshold)
+            .sort((a, b) => b.score - a.score)
+            .slice(0, topK)
+            .map(({ chunkId }) => chunkId),
           relevant,
         ),
       ),

@@ -49,6 +49,8 @@ export interface EvalDependencies extends SearchDependencies {
   judge(mode: JudgeMode, instruction: string, chunks: readonly Chunk[]): Promise<RerankResult>;
   /** The judge each judge mode was configured with, for the report. */
   judges: Record<JudgeMode, RerankerIdentity>;
+  /** `RERANK_TOP_K`: the threshold sweep keeps at most this many per query, as the query flow does. */
+  topK: number;
   /** Called after each query, for progress output. */
   onQuery?(outcome: QueryOutcome, index: number, total: number): void;
   onFailure?(failure: FailedQuery, index: number, total: number): void;
@@ -82,8 +84,12 @@ export interface EvalResult {
   failed: FailedQuery[];
   /** Macro averages over the queries, per grade scope. */
   modes: Record<EvalMode, Record<GradeScope, RankedScores>>;
-  sweeps: Record<JudgeMode, SweepRow[]>;
+  /** Each judge mode's threshold sweep against the central chunks and against every graded chunk. */
+  sweeps: Record<JudgeMode, Record<GradeScope, SweepRow[]>>;
+  /** The central sweep's best row (E7-7: the central chunks are what a clause rests on). */
   recommended: Record<JudgeMode, SweepRow>;
+  /** The sweep's cap per query, `RERANK_TOP_K`. */
+  topK: number;
   judges: Record<JudgeMode, RerankerIdentity>;
   /** Judgements per judge over the whole run. */
   answeredBy: Record<JudgeMode, AnsweredBy>;
@@ -109,8 +115,14 @@ export async function runEvaluation(
   }
 
   const sweeps = byJudgeMode((mode) =>
-    sweepThresholds(
-      outcomes.map(({ query, scores }) => ({ scores: scores[mode], relevant: query.relevantIds })),
+    byGradeScope((scope) =>
+      sweepThresholds(
+        outcomes.map(({ query, scores }) => ({
+          scores: scores[mode],
+          relevant: relevantFor(query, scope),
+        })),
+        deps.topK,
+      ),
     ),
   );
   return {
@@ -120,7 +132,8 @@ export async function runEvaluation(
       byGradeScope((scope) => averageRanked(outcomes.map((o) => o.relevance[mode][scope]))),
     ),
     sweeps,
-    recommended: byJudgeMode((mode) => recommendThreshold(sweeps[mode])),
+    recommended: byJudgeMode((mode) => recommendThreshold(sweeps[mode].central)),
+    topK: deps.topK,
     judges: deps.judges,
     answeredBy: byJudgeMode((mode) => ({
       jev: sum(outcomes.map((o) => o.answeredBy[mode].jev)),

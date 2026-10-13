@@ -87,7 +87,17 @@ export interface Draft {
 export type QueryStep = (
   | { step: 'translation'; tags: QueryTag[] }
   | { step: 'search'; candidates: number; fallback: number }
-  | { step: 'rerank'; approved: number; relevant: number }
+  | {
+      step: 'rerank';
+      /** The candidates given to the reranker. */
+      candidates: number;
+      /** Whether a threshold decided relevance (a judge), or only `RERANK_TOP_K` cut (a ranker). */
+      judged: boolean;
+      relevant: number;
+      /** Candidates that could not be scored (a failed or timed-out call); not relevant. */
+      unknown: number;
+      approved: number;
+    }
   | { step: 'generation' }
 ) & { timings: Partial<StepTimings> };
 

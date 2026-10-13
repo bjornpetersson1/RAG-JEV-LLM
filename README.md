@@ -1,6 +1,6 @@
 # RAG-JEV-LLM
 
-Legal RAG proof of concept: tag search or local bge-m3 hybrid retrieval, followed by a reranker (the small local mMiniLM by default; BGE, JEV or an LLM optional), find relevant Swedish laws and rulings, and an LLM drafts employment agreements and NDAs from them.
+Legal RAG proof of concept: tag search or local bge-m3 hybrid retrieval, followed by a judge (an LLM judge by default until JEV can be used; JEV, or the local mMiniLM and BGE rankers, optional), find relevant Swedish laws and rulings, and an LLM drafts employment agreements and NDAs from them.
 
 ## Prerequisites
 
@@ -201,17 +201,17 @@ Choosing a template (`employment` or `nda`) adds its preset tags from `sources/t
 
 ## Reranking
 
-The relevance step sits behind one `Reranker` interface (`backend/src/rerank/`). `RERANKER` in `.env` picks the implementation, and nothing else in the code branches on it:
+The relevance step sits behind one `Reranker` interface (`backend/src/rerank/`). `RERANKER` in `.env` picks the implementation, and nothing else in the code branches on it. A judge (`llm`, `jev`) says yes or no per chunk against `JUDGE_THRESHOLD`, as the requirements' query flow has it, so a query with no relevant candidate gets no draft. The cross-encoders (`minilm`, `bge`) only rank: at threshold 0 every scored chunk counts and only `RERANK_TOP_K` cuts, so they always pass the best few on. The UI says which: "N bedömda som relevanta av M" for a judge, "N högst rankade av M" for a ranker.
 
 - `bge`: the local cross-encoder bge-reranker-v2-m3 (see [Local models](#local-models)). It scores each chunk's heading path and text against the instruction and turns the logit into a score with a sigmoid. Pairs over 1,024 tokens are cut at the end of the chunk, with a warning. Its scores are not calibrated like JEV's or the LLM's, so it has its own threshold, `RERANK_THRESHOLD_BGE` (default 0: only `RERANK_TOP_K` cuts); `RERANKER_DTYPE` (`int8` default, or `fp32`) and `RERANKER_BATCH_SIZE` (default 8) tune it. Nothing is cached.
-- `minilm` (default): the small local cross-encoder mMiniLM-L12 (E7-5, about 118M parameters, a fifth of BGE's size), run the same way as `bge` with pairs of at most 512 tokens. It has its own threshold, `RERANK_THRESHOLD_MINILM` (default 0), and shares `RERANKER_DTYPE` and `RERANKER_BATCH_SIZE`; in int8 it runs the AVX2-quantised export. See [Small reranker (E7-5)](#small-reranker-e7-5).
-- `llm`: the judge's LLM (`LLM_JUDGE_PROVIDER`/`LLM_JUDGE_MODEL`), asked for the probability that the answer is yes.
+- `minilm`: the small local cross-encoder mMiniLM-L12 (E7-5, about 118M parameters, a fifth of BGE's size), run the same way as `bge` with pairs of at most 512 tokens. It has its own threshold, `RERANK_THRESHOLD_MINILM` (default 0), and shares `RERANKER_DTYPE` and `RERANKER_BATCH_SIZE`; in int8 it runs the AVX2-quantised export. See [Small reranker (E7-5)](#small-reranker-e7-5).
+- `llm` (default, until JEV can be used; E7-7): the judge's LLM (`LLM_JUDGE_PROVIDER`/`LLM_JUDGE_MODEL`, Haiku in `.env.example`), asked for the probability that the answer is yes.
 - `jev`: JEV, with the chunk as the state and the question as one Noul question. When a JEV call fails (timeout, network or HTTP error, malformed answer), the judge's LLM answers that chunk instead, and a warning names the chunk and the cause. Needs `JEV_API_KEY`; without it the server refuses to start.
 - `qwen3`: a placeholder for a later experiment.
 
 `JUDGE_IMPL` was replaced by `RERANKER`; a `.env` that still sets it fails at startup. A reranker scores every candidate, drops those below the threshold and unknown chunks, and returns the best `RERANK_TOP_K` (default 8), best first. Every reranker returns the same shape: the chunk, a score from 0 to 1, the reranker and its model. Adding one is a new file with a `RerankerEntry` and one entry in `RERANKERS` (`backend/src/rerank/factory.ts`).
 
-The `jev` and `llm` rerankers ask the same question about the same text: the chunk's source reference and text, "Är texten relevant för följande uppdrag: <instruktion>?". A chunk is relevant when its score reaches `JUDGE_THRESHOLD` (default 0.5).
+The `jev` and `llm` rerankers ask the same question about the same text: the chunk's source reference and text, "Är texten relevant för följande uppdrag: <instruktion>?". A chunk is relevant when its score reaches `JUDGE_THRESHOLD`. Its default is per judge: 0.8 for `llm`, from E7-7's sweep with the Haiku judge (see [The judge step (E7-7)](#the-judge-step-e7-7)), and 0.5 for `jev` until #79 measures JEV.
 
 An `Embedder` interface (`backend/src/embedding/`, `EMBEDDER=bge`) gives the local bge-m3 embeddings (see [Local models](#local-models)); `npm run index:embed` and `RETRIEVER=bge`/`both` use it (see [Hybrid retrieval](#hybrid-retrieval)).
 
@@ -238,7 +238,7 @@ TypeSafe does not document JEV's maximum state size, pricing or rate limits. `np
 
 ## Local models
 
-bge-m3 (embeddings) and the rerankers mMiniLM-L12 (the default) and bge-reranker-v2-m3 run locally, in Node, through [transformers.js](https://github.com/huggingface/transformers.js) 3.x on onnxruntime-node, on the CPU. They are downloaded from Hugging Face on first use into `MODEL_CACHE_DIR` (default `data/models.nosync`, git-ignored; the `.nosync` suffix keeps iCloud Drive from uploading the models when the repo is in a synced folder such as `~/Documents`): about 0.6 GB per BGE model in int8 and 2.3 GB in fp32, and 0.1 GB (int8) or 0.5 GB (fp32) for mMiniLM. `EMBEDDER_DTYPE` picks the precision (`int8` by default). mMiniLM's int8 export is quantised per processor: the AVX2 one on x86, as on the demo machine, and the ARM one on Apple Silicon (not measured here).
+bge-m3 (embeddings) and the rerankers mMiniLM-L12 and bge-reranker-v2-m3 run locally, in Node, through [transformers.js](https://github.com/huggingface/transformers.js) 3.x on onnxruntime-node, on the CPU. They are downloaded from Hugging Face on first use into `MODEL_CACHE_DIR` (default `data/models.nosync`, git-ignored; the `.nosync` suffix keeps iCloud Drive from uploading the models when the repo is in a synced folder such as `~/Documents`): about 0.6 GB per BGE model in int8 and 2.3 GB in fp32, and 0.1 GB (int8) or 0.5 GB (fp32) for mMiniLM. `EMBEDDER_DTYPE` picks the precision (`int8` by default). mMiniLM's int8 export is quantised per processor: the AVX2 one on x86, as on the demo machine, and the ARM one on Apple Silicon (not measured here).
 
 transformers.js stays on 3.x because 4.x's onnxruntime-node has no Intel macOS binary. Its image library `sharp`, which this app never uses, is pinned to 0.35.5 by `overrides` in the root `package.json`, which fixes the libvips advisories `npm audit` reported for 0.34. The remaining moderate advisories (`sprintf-js` and others, in onnxruntime-node's install-time downloader) are fixed only in 4.x.
 
@@ -284,7 +284,7 @@ Measured with a 1-minute load average of 3.9 at the start (iCloud Drive was stil
 
 ### Small reranker (E7-5)
 
-`npm run bench:rerank -- --reranker minilm|bge --dtype int8|fp32` (without `--reranker`, the default reranker) on the demo machine on 2026-10-13, under the same conditions for both models (30 and 50 real chunks of 1,006 characters on average, 5 runs each, batches of 8 pairs of similar length):
+`npm run bench:rerank -- --reranker minilm|bge --dtype int8|fp32` (without `--reranker`, minilm) on the demo machine on 2026-10-13, under the same conditions for both models (30 and 50 real chunks of 1,006 characters on average, 5 runs each, batches of 8 pairs of similar length):
 
 | reranker | dtype | 30 chunks (median of 5) | 50 chunks (median of 5) | per chunk | model load |
 | -------- | ----- | ----------------------- | ----------------------- | --------- | ---------- |
@@ -295,9 +295,17 @@ Measured with a 1-minute load average of 3.9 at the start (iCloud Drive was stil
 
 mMiniLM is about 8–9 times faster than BGE in int8. Its position limit is 512 tokens, so the longest chunks are cut at the end (with a warning); BGE takes 1,024.
 
-The default rule (spec E7-5): `minilm` becomes the default when its recall@8 after rerank is at most 0.03 below BGE's with both `tags` and `both`, and its median rerank time at most a third of BGE's. On the evaluation set (`eval/report-2026-10-13.md`): with `tags`, recall@8 is 0.234 against 0.256 (−0.022) at 3.0 s against 27.7 s; with `both`, 0.211 against 0.230 (−0.019) at 4.5 s against 36.6 s. Both conditions hold, so **`RERANKER` defaults to `minilm`**; `RERANKER=bge` brings the larger model back.
+The default rule (spec E7-5): `minilm` becomes the default when its recall@8 after rerank is at most 0.03 below BGE's with both `tags` and `both`, and its median rerank time at most a third of BGE's. On the evaluation set (`eval/report-2026-10-13.md`): with `tags`, recall@8 is 0.234 against 0.256 (−0.022) at 3.0 s against 27.7 s; with `both`, 0.211 against 0.230 (−0.019) at 4.5 s against 36.6 s. Both conditions hold, so `RERANKER` defaulted to `minilm` until E7-7 (below); `RERANKER=bge` brings the larger model back.
+
+E7-7 then made the LLM judge the default again: minilm only ranks (threshold 0), so with it the main flow had no relevance judgement. minilm stays the fastest option in `.env`.
 
 `gte-multilingual-reranker-base`, the other candidate, does not run: transformers.js (3.8.1, and the newest 4.3.1) does not support its model type (`new`).
+
+### The judge step (E7-7)
+
+The requirements' query flow has a judge that says yes or no per candidate, so `RERANKER=llm` is the default until JEV can be used, with Haiku as the judge (`LLM_JUDGE_MODEL`). The LLM judge's default `JUDGE_THRESHOLD` is 0.8, the highest F1 on the central chunks in a sweep with that judge (`eval/report-2026-10-13.md`, "Judge threshold"). `eval:run` now sweeps the threshold against the central chunks and against all graded ones, keeps at most `RERANK_TOP_K` per query as the query flow does, and recommends by the central F1. A blank `LLM_JUDGE_MODEL` means Haiku, not `LLM_MODEL`.
+
+Measured without drafts (`bench:compare -- --runs 1 --no-draft`, judge cache off), the main flow has its sources in 35 s with the judge (27 s of it judging, through the Claude Code CLI) and 11 s with minilm; the reference RAG in 50 ms. The judge gives the most relevant sources (precision 0.44 against 0.35 and 0.29) and can return none, in which case no draft is written. JEV (#79) is the intended faster judge.
 
 ### Licences
 
@@ -351,7 +359,7 @@ With `--reranker`, `eval:run` compares rerankers instead (E8-5). Every query goe
 
 ### Switch reranker in three steps
 
-1. Set `RERANKER=` in `.env`: `minilm` (local, default), `bge` (local, larger), `llm`, `jev` or `qwen3` (not implemented yet).
+1. Set `RERANKER=` in `.env`: `llm` (default), `jev`, `minilm` (local, fast), `bge` (local, larger) or `qwen3` (not implemented yet).
 2. Fill in what it needs: `JEV_API_KEY` for `jev`; the judge's LLM settings for `llm`; nothing for `minilm` or `bge`, whose models download into `MODEL_CACHE_DIR` on first use (`RERANKER_DTYPE` picks int8 or fp32).
 3. Verify with `npm run retrieve -- "<question>"` (one question, the reranked chunks and their scores) or `npm run eval:run -- --reranker <name>` (the evaluation set).
 
@@ -370,7 +378,7 @@ Claude graded the 266 labels (131 central); the owner's review of them, and the 
 npm run eval:run -- --sweep
 ```
 
-`--sweep` tries 10, 20, 30, 40 and 50 candidates with top 5, 8, 10 and 12, for the retrievers `tags` and `both` and the configured reranker. For each count, the retriever gives the list it gives with that setting: `tags` with `MAX_CANDIDATES` = N, `both` with `RETRIEVE_CANDIDATES` = N over the configured tag search (a fused list of 10 is not the first 10 of one of 50). Each query's lists are reranked once together, without the cache, and each list keeps its chunks in that score order; since each chunk is scored on its own, that is what reranking the list alone gives. The rerank times are estimates from that one rerank. The table goes into that day's report, with the setting a rule picks per retriever: the highest central F1 among the settings whose central recall is at most 0.03 below the old defaults', and on a tie within 0.01 the fewest candidates, and of those the highest central F1.
+`--sweep` tries 10, 20, 30, 40 and 50 candidates with top 5, 8, 10 and 12, for the retrievers `tags` and `both` and the reranker `RERANKER` names (minilm when it is not set, since the default LLM judge would make thousands of uncached calls). For each count, the retriever gives the list it gives with that setting: `tags` with `MAX_CANDIDATES` = N, `both` with `RETRIEVE_CANDIDATES` = N over the configured tag search (a fused list of 10 is not the first 10 of one of 50). Each query's lists are reranked once together, without the cache, and each list keeps its chunks in that score order; since each chunk is scored on its own, that is what reranking the list alone gives. The rerank times are estimates from that one rerank. The table goes into that day's report, with the setting a rule picks per retriever: the highest central F1 among the settings whose central recall is at most 0.03 below the old defaults', and on a tie within 0.01 the fewest candidates, and of those the highest central F1.
 
 The first sweep (2026-10-13, `minilm`) set the defaults:
 

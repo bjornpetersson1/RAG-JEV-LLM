@@ -19,7 +19,7 @@ function issuesFor(env: Record<string, string | undefined>): string[] {
 }
 
 describe('loadLlmConfig', () => {
-  it('applies the default provider and model to every role', () => {
+  it('applies the default provider to every role, and the default model to all but the judge (Haiku)', () => {
     const config = loadLlmConfig(VALID);
 
     const anthropic = { provider: 'anthropic', model: 'model-a', apiKey: 'key' };
@@ -27,7 +27,7 @@ describe('loadLlmConfig', () => {
       roles: {
         tagger: anthropic,
         queryTranslator: anthropic,
-        judge: anthropic,
+        judge: { ...anthropic, model: 'claude-haiku-5-5' },
         generator: anthropic,
       },
       timeoutMs: DEFAULT_TIMEOUT_MS,
@@ -119,7 +119,8 @@ describe('loadLlmConfig', () => {
   it('reports every problem at once in a readable message', () => {
     const env = { LLM_PROVIDER: 'anthropic', LLM_TIMEOUT_MS: 'x' };
 
-    expect(issuesFor(env)).toHaveLength(6);
+    // Every role but the judge, which has a default model, misses one.
+    expect(issuesFor(env)).toHaveLength(5);
     expect(() => loadLlmConfig(env)).toThrow(
       /^Invalid LLM configuration in \.env:\n {2}- LLM_TAGGER_MODEL or LLM_MODEL is required/,
     );

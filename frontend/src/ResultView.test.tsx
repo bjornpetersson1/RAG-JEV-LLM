@@ -190,4 +190,17 @@ describe('ResultView', () => {
     expect(screen.getByText('Inget utkast skrevs: inga relevanta källor hittades.')).toBeDefined();
     expect(screen.getByText('Inte skickade till generatorn (5)')).toBeDefined();
   });
+
+  it('says how many candidates could not be judged when nothing was found relevant', () => {
+    const judging = { cacheHits: 0, judgeCalls: 5, relevant: 0, unknown: 5 };
+    render(
+      <ResultView flow="main" result={{ ...RESULT, approved: [], judging, draft: undefined }} />,
+    );
+
+    expect(
+      screen.getByText(
+        'Inget utkast skrevs: inga källor bedömdes som relevanta, och 5 kunde inte bedömas.',
+      ),
+    ).toBeDefined();
+  });
 });

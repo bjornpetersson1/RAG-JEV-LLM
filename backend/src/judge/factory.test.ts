@@ -183,7 +183,7 @@ describe('createJudge', () => {
     expect(jev).toMatchObject({ primary: { impl: 'jev', model: 'jev-latest' }, threshold: 0.6 });
     expect(llm).toMatchObject({
       primary: { impl: 'llm', model: 'claude-haiku-5-5' },
-      threshold: 0.5,
+      threshold: 0.8,
     });
     await expect(llm.judge.judge('x', CHUNK)).resolves.toMatchObject({
       score: 0.4,

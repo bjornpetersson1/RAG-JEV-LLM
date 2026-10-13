@@ -20,6 +20,8 @@ const CROSS_ENCODERS = localCrossEncoders();
 
 /** Each chunk's score, from JEV and from the LLM alike; `d` is below the 0.5 threshold. */
 const SCORES: Record<string, number> = { a: 0.6, b: 0.95, c: 0.8, d: 0.1, e: 0.7 };
+/** The judge rerankers' threshold these scores were chosen for (the default was 0.5 before E7-7). */
+const AT_HALF = { JUDGE_THRESHOLD: '0.5' };
 const CHUNKS: Chunk[] = Object.keys(SCORES).map((id) => ({ id, text: `Text ${id}` }));
 
 /** The score of the chunk whose text the request body mentions. */
@@ -75,10 +77,14 @@ const fakeReranker: Reranker = {
 const RERANKERS: [string, () => Reranker, string][] = [
   [
     'jev',
-    () => createReranker({ RERANKER: 'jev', JEV_API_KEY: 'k' }, deps()).reranker,
+    () => createReranker({ RERANKER: 'jev', JEV_API_KEY: 'k', ...AT_HALF }, deps()).reranker,
     'jev-latest',
   ],
-  ['llm', () => createReranker({ RERANKER: 'llm' }, deps()).reranker, 'claude-haiku-5-5'],
+  [
+    'llm',
+    () => createReranker({ RERANKER: 'llm', ...AT_HALF }, deps()).reranker,
+    'claude-haiku-5-5',
+  ],
   // The model is faked: its logit for a chunk is the one whose sigmoid is the chunk's score.
   ...CROSS_ENCODERS.map((spec): [string, () => Reranker, string] => [
     spec.name,
@@ -123,7 +129,7 @@ describe.each(RERANKERS)('the %s reranker', (name, build, model) => {
 describe('the judge-based rerankers', () => {
   it('report the calls and which judge answered', async () => {
     const { reranker } = createReranker(
-      { RERANKER: 'jev', JEV_API_KEY: 'k', JUDGE_CACHE: 'off' },
+      { RERANKER: 'jev', JEV_API_KEY: 'k', ...AT_HALF, JUDGE_CACHE: 'off' },
       deps(),
     );
 
@@ -134,7 +140,7 @@ describe('the judge-based rerankers', () => {
   });
 
   it('reuse cached scores on a second rerank', async () => {
-    const { reranker } = createReranker({ RERANKER: 'llm' }, deps());
+    const { reranker } = createReranker({ RERANKER: 'llm', ...AT_HALF }, deps());
 
     await reranker.rerank('Anställningsavtal', CHUNKS, 8);
     const again = await reranker.rerank('Anställningsavtal', CHUNKS, 8);
@@ -149,7 +155,7 @@ describe('the judge-based rerankers', () => {
         ? new Response('down', { status: 500 })
         : fakeFetch(url, init)) as typeof globalThis.fetch;
     const { reranker } = createReranker(
-      { RERANKER: 'jev', JEV_API_KEY: 'k' },
+      { RERANKER: 'jev', JEV_API_KEY: 'k', ...AT_HALF },
       { ...deps(), fetch: failingJev },
     );
 
@@ -163,7 +169,7 @@ describe('the judge-based rerankers', () => {
   });
 
   it('count the relevant chunks before topK cuts them', async () => {
-    const { reranker } = createReranker({ RERANKER: 'llm' }, deps());
+    const { reranker } = createReranker({ RERANKER: 'llm', ...AT_HALF }, deps());
 
     const result = await reranker.rerank('Anställningsavtal', CHUNKS, 2);
 

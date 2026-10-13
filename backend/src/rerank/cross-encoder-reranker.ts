@@ -134,6 +134,7 @@ export function createCrossEncoderReranker(
       );
       const relevant = scored.filter(({ score }) => isRelevant(score, config.threshold));
       return {
+        judged: config.threshold > 0,
         ranked: relevant.slice(0, topK),
         scored,
         stats: {
