@@ -81,6 +81,7 @@
   - **Not changed: `eval:label` fails when the chunks are not embedded.** Acceptance criterion 1 asks for that: a listing without the dense half would hide exactly the candidates this issue is about. The error names `npm run index:embed`.
   - **Not changed: a shared reference-search builder.** Both paths already share `loadRetrievalResources`, `createDenseSearch` and `MAX_CANDIDATES`; a builder in `reference/setup.ts` would either bring back the judge validation (the first fix) or split `loadReferenceConfig`, outside this spec.
   - **Follow-up for the owner:** reviewing the tag-only candidates with today's translation would remove the remaining bias. It is not part of this issue (Non-goals); the report names it.
+- **PR review:** the report says the before-the-judge numbers come from the E7-10 listings, which are not kept, and that a new listing translates the query again, so a re-run will not give exactly the same numbers. Clean code after the review was reviewed inline (a one-sentence report change).
 
 ## Open Questions
 
