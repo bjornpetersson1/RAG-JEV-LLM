@@ -397,14 +397,19 @@ npm run bench:compare [-- --runs 5] [--limit <n>] [--no-draft]
 - total time;
 - query translation (main flow only), and time to sources (E7-8): search plus rerank, without the translation; this is the measure the comparison is about, since the drafts' length weighs on the total;
 - search time: retrieval and loading the chunks, embedding the instruction included, and the embedding time on its own (`–` for tag search, which embeds nothing);
-- rerank time (main flow only) and generation time over the drafts written, also per output token (`ms/token`, one decimal) with the drafts' output tokens, so a longer draft does not read as a slower flow;
+- rerank time, with the median number of candidates the rerank judged (`judged`) and the candidates it could not score over every run (`unknown`, a failed or timed-out call);
+- generation time, also per output token (`ms/token`, one decimal) with the drafts' output tokens, so a longer draft does not read as a slower flow;
 - LLM time: query translation, generation and, for `llm` or `jev`, the rerank (a local reranker such as `bge` is not LLM time);
-- precision and recall of the chunks sent to the generator (the main flow's approved chunks, the reference RAG's top k, in both cases those that fit the context limits when a draft is written), macro averages over the queries, averaged over the runs;
-- source accuracy: valid references / all references over every draft (E6-3).
+- precision and recall of the chunks sent to the generator (each flow's approved chunks, those that fit the context limits when a draft is written), macro averages over the queries, averaged over the runs;
+- source accuracy: valid references / all references (E6-3).
 
-The table is printed and appended to the "Main flow vs reference RAG: time to sources" table (before E7-8, without those columns, "Main flow vs reference RAG") in that day's `eval/report-<date>.md`. `--limit <n>` runs only the first n queries and `--no-draft` measures retrieval and rerank without generation. A query that fails in a run is listed, and that query and run is left out of both flows, so the rows are compared on the same samples (the `samples` column counts them); a flow with no measured sample shows `–`. The command then exits non-zero.
+A judge can approve nothing, and then no draft is written, so the flows can write drafts for different queries. Generation, ms/token, output tokens and source accuracy are therefore computed only over the query and run pairs where both flows wrote a draft, and `without draft` counts each flow's pairs with none.
+
+The table is printed and appended to the "Main flow vs reference RAG: the same judge" table (E7-9; before it, "Main flow vs reference RAG: time to sources", and before E7-8, "Main flow vs reference RAG") in that day's `eval/report-<date>.md`. `--limit <n>` runs only the first n queries and `--no-draft` measures retrieval and rerank without generation. A query that fails in a run is listed, and that query and run is left out of both flows, so the rows are compared on the same samples (the `samples` column counts them); a flow with no measured sample shows `–`. The command then exits non-zero.
 
 The first full run (2026-10-12, in `eval/report-2026-10-12.md`, 84 of 100 query and run pairs after the subscription's session limit stopped some calls): the reference RAG took a median 29.5 s against the main flow's 71.8 s with `RERANKER=bge`, almost all of the difference being the BGE rerank (37.0 s); the main flow sent better chunks (precision 0.398 against 0.302, recall 0.254 against 0.208); source accuracy was about equal (0.917 and 0.914).
+
+With the same LLM judge in both flows (E7-9, 2026-10-13, one run with drafts on Haiku, in `eval/report-2026-10-13.md`), both have their sources in about 26.5 s. The judge takes that long in both, and tag search beats vector search by only 53 ms (2 ms against 55 ms). Counting the 7.4 s translation into tags, the main flow has its sources 7.2 s later. It sends better chunks (precision 0.516 against 0.419, recall 0.279 against 0.204), with about the same source accuracy (0.973 and 0.954). The labels were made from tag and full-text candidates, which favours the main flow; #95 labels the chunks only vector search finds.
 
 The full run (20 queries × 5 runs × 2 flows, each with a draft) takes about three hours, and a long run can reach the subscription's session limit: those calls fail and their query and run pairs are left out of both rows. To run it on the Claude Code subscription instead of the paid API:
 
@@ -449,13 +454,13 @@ The token line shows the normally billed input plus cache writes and reads (e.g.
 
 ## Reference RAG
 
-A plain RAG to measure the main flow against (E5-4): it embeds the instruction with the configured `EMBEDDER`, takes the `REFERENCE_TOP_K` (default 8) chunks most similar to it by cosine similarity over the `index:embed` vectors, and drafts with the same generator, template, context limits and post-check as the main flow. There is no query translation, lexical search or rerank. It needs `npm run index:embed`.
+The "100 % LLM" counterpart of the main flow, to measure it against (E5-4, E7-9): it does the same steps, but finds its candidates with vector search instead of tags. It embeds the instruction with the configured `EMBEDDER` and takes the `MAX_CANDIDATES` (default 30) chunks most similar to it by cosine similarity over the `index:embed` vectors. The LLM judge then scores them as in the main flow, at `JUDGE_THRESHOLD`, keeping at most `RERANK_TOP_K`, and the same generator, template, context limits and post-check write and check the draft. The reference always judges with the LLM, whatever `RERANKER` the main flow uses; with `RERANKER=llm` both flows share one judge. When the judge approves nothing, no draft is written. There is no query translation or lexical search. It needs `npm run index:embed`.
 
 ```bash
 npm run query -- "Anställningsavtal för en säljare med sex månaders provanställning" --template employment --reference
 ```
 
-The output has the main flow's format, without tags or judging, and the time for embedding the instruction, search (embedding included), generation and in total. `npm run bench:compare` compares the two flows on the evaluation queries (see [Main flow vs reference RAG](#main-flow-vs-reference-rag)).
+The output has the main flow's format, without tags, and the time for embedding the instruction, search (embedding included), judging, generation and in total. `npm run bench:compare` compares the two flows on the evaluation queries (see [Main flow vs reference RAG](#main-flow-vs-reference-rag)).
 
 ## Web UI
 
@@ -473,7 +478,7 @@ When a flow is done, the result view (E7-2) shows its draft and sources:
 
 The result carries what this needs: `sources` lists every candidate with its document, origin, score and what became of it (`status`: `cited`, `sent`, `left-out` or `turned-down`), and the post-check returns its `matches` next to its `flags`.
 
-Above the results, the timing panel (E7-3) shows each step's time and the total for both flows, side by side, with a bar per flow on one shared scale. The steps are query translation, search (with the time spent embedding the instruction), rerank (with the average per candidate the reranker scored, and the judge cache hits), time to sources (E7-8: search plus rerank, without the translation), generation (with the draft's output tokens and ms per token) and the total. A step appears as soon as it finishes, a step still running shows `…`, and a step the flow does not run shows `–`. When both flows are done, the panel says how much sooner or later the main flow had its sources, once without and once with the query translation (whose time it names), and then how much faster or slower it was in total. A line per flow names its configuration: retriever, tag index, query translator, reranker with model and precision, `RERANK_TOP_K` and generator. The reference RAG option is on by default. Without it, the panel says the reference was not run.
+Above the results, the timing panel (E7-3) shows each step's time and the total for both flows, side by side, with a bar per flow on one shared scale. The steps are query translation, search (with the time spent embedding the instruction), rerank (with the average per candidate the reranker scored, and the judge cache hits), time to sources (E7-8: search plus rerank, without the translation), generation (with the draft's output tokens and ms per token) and the total. A step appears as soon as it finishes, a step still running shows `…`, and a step the flow does not run shows `–`. The UI keeps the judge cache on, and the reference runs after the main flow on the same question, so a chunk both flows found is a cache hit for the reference: its judge time and time to sources can come out lower than a fresh run's. The panel's comparison is therefore a demo; `bench:compare`, which runs with the cache off, is the measured result. When both flows are done, the panel says how much sooner or later the main flow had its sources, once without and once with the query translation (whose time it names), and then how much faster or slower it was in total. A line per flow names its configuration: retriever, tag index, query translator, reranker with model and precision, `RERANK_TOP_K` and generator. The reference RAG option is on by default. Without it, the panel says the reference was not run.
 
 ### Run log
 
@@ -503,6 +508,7 @@ Every run of a flow, from the UI or `npm run query`, is appended as one JSON lin
     "totalMs": 28712
   },
   "counts": { "tags": 12, "candidates": 30, "fallback": 0, "approved": 8, "sent": 8, "cited": 7 },
+  "judging": { "relevant": 9, "cacheHits": 0, "judgeCalls": 30, "unknown": 0 },
   "sourceAccuracy": 0.92
 }
 ```
@@ -512,6 +518,7 @@ The fields:
 - `runId` is shared by the flows of one request.
 - `instruction` is the free text as written; with a template alone it is empty, and `defaultInstruction` holds the instruction the flow used instead.
 - `counts` holds the query's tags and the candidates, those from the full-text fallback, those approved, those sent to the generator and those the draft cites.
+- `judging` holds the rerank's relevant chunks, cache hits, scoring calls and the chunks it could not score; it is absent for a flow without a rerank step.
 - A run that fails has an `error` and the timings of the steps it finished, and no counts.
 - A log line that cannot be written is a warning; the query itself goes on.
 
@@ -520,7 +527,7 @@ The fields:
 The body is `{ "template": "employment" | "nda", "instruction"?: string, "reference"?: boolean }`. An invalid body answers 400 with `{ "error": "…" }`. A query sent while another is running answers 409, because the flow uses every CPU core. Otherwise the answer is `application/x-ndjson`, one JSON event per line:
 
 - `{ "type": "start", "flow": "main" | "reference", "steps": [...], "configuration": {...} }` when a flow begins, with its configuration and the steps it will run in order, e.g. `["search", "rerank", "generation"]` with `RETRIEVER=bge`. The UI shows the next of these as running.
-- `{ "type": "step", "flow", "step": "translation" | "search" | "rerank" | "generation", "timings", … }` when a step finishes: the translation's `tags`, the search's `candidates` and `fallback`, the rerank's `approved` and `relevant`, and each step's part of the result's `timings` (`translationMs`, `searchMs` and `embeddingMs`, `judgingMs`, `generationMs`). A flow without a step, e.g. the reference RAG without translation and rerank, sends no event for it.
+- `{ "type": "step", "flow", "step": "translation" | "search" | "rerank" | "generation", "timings", … }` when a step finishes: the translation's `tags`, the search's `candidates` and `fallback`, the rerank's `approved` and `relevant`, and each step's part of the result's `timings` (`translationMs`, `searchMs` and `embeddingMs`, `judgingMs`, `generationMs`). A flow without a step, e.g. the reference RAG without translation, sends no event for it.
 - `{ "type": "result", "flow", "result" }` with the flow's whole result: tags, counts, approved chunks, draft with post-check, timings and tokens.
 - `{ "type": "skipped", "flow", "reason" }` for a flow that cannot be built, e.g. the reference RAG before `npm run index:embed`. The stream goes on, and the panel says why the flow was not run.
 - `{ "type": "error", "flow", "message" }` when a flow fails while running, which ends the stream.

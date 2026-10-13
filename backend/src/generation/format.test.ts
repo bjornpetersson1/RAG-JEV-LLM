@@ -209,19 +209,20 @@ describe('formatQueryResult', () => {
     expect(formatQueryResult(REQUEST, embedded)).toContain('search 415 (embedding 400)');
   });
 
-  it('prints the reference RAG without tags or judging, and its own steps', () => {
+  it('prints the reference RAG without tags, with its judging and its own steps', () => {
     const reference: QueryResult = {
       ...result(DRAFT),
       flow: 'reference',
       tags: [],
-      candidates: 8,
-      judging: undefined,
+      candidates: 30,
+      judging: { relevant: 3, cacheHits: 0, judgeCalls: 30, unknown: 0 },
       timings: {
         embeddingMs: 400,
         searchMs: 410,
-        sourcesMs: 410,
+        judgingMs: 2000,
+        sourcesMs: 2410,
         generationMs: 900,
-        totalMs: 1310,
+        totalMs: 3310,
       },
       usage: { generation: DRAFT.usage },
     };
@@ -229,13 +230,12 @@ describe('formatQueryResult', () => {
     const output = formatQueryResult(REQUEST, reference);
 
     expect(output).toContain(
-      'Reference RAG: the 8 chunks most similar to the instruction (no tags, no rerank)',
+      'Reference RAG: the 30 chunks most similar to the instruction (no tags)',
     );
     expect(output).not.toContain('Tags:');
-    expect(output).not.toContain('judge calls');
+    expect(output).toContain('judge calls: 30');
     expect(output).toContain(
-      'Time (ms): search 410 (embedding 400) · sources 410 · generation 900 · total 1310\n' +
-        'Tokens: generation in 5000 / out 1200',
+      'Time (ms): search 410 (embedding 400) · judging 2000 · sources 2410 · generation 900 · total 3310',
     );
   });
 

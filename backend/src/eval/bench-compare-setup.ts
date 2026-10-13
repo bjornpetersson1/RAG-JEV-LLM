@@ -1,5 +1,6 @@
 // Builds `bench:compare`'s two flows from `.env` and the database (E5-4): the main flow as `.env`
-// configures it, and the reference RAG, sharing one load of the embedder and vectors.
+// configures it, and the reference RAG, sharing one load of the embedder and vectors and, with
+// `RERANKER=llm`, one LLM judge (E7-9).
 
 import type { DatabaseSync } from 'node:sqlite';
 import { createEmbedder } from '../embedding/factory.js';
@@ -38,7 +39,7 @@ export function createBenchSetup(
   // Loaded once and shared, so the model loads once and the vectors are read once.
   const resources = loadRetrievalResources(db, benchEnv, embedder);
   const main = createQueryFlow(db, benchEnv, logger, {}, resources);
-  const reference = createReferenceFlow(db, benchEnv, logger, {}, resources);
+  const reference = createReferenceFlow(db, benchEnv, logger, {}, resources, main.reranker);
 
   return {
     flows: [
@@ -52,7 +53,7 @@ export function createBenchSetup(
       {
         name: 'reference',
         configuration: formatConfiguration(reference.configuration),
-        remoteRerank: false,
+        remoteRerank: isRemoteReranker(reference.reranker),
         run: (query, options) => runQuery(requestFor(query), reference, options),
       },
     ],

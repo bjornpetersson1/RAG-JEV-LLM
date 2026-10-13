@@ -91,7 +91,7 @@ function describeSearch(
   planned: readonly QueryStepName[],
   { candidates, fallback }: Extract<QueryStep, { step: 'search' }>,
 ): string {
-  // Without a rerank step every candidate goes to the generator (the reference RAG).
+  // Without a rerank step every candidate goes to the generator.
   if (!planned.includes('rerank')) return `${candidates} närmaste chunkar skickas till generatorn`;
   return fallback > 0
     ? `${candidates} kandidater, varav ${fallback} från fritextsökning`

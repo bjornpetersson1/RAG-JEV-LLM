@@ -11,7 +11,7 @@ import { createConsoleLogger } from './llm/console-logger.js';
 import { loadLlmConfig } from './llm/config.js';
 import { resolvePort } from './port.js';
 import { loadQueryTranslatorConfig } from './query/config.js';
-import { loadReferenceTopK } from './reference/config.js';
+import { loadReferenceConfig } from './reference/config.js';
 import { loadRerankerConfig } from './rerank/factory.js';
 import { loadSearchConfig, tagIndexBuilder } from './search/config.js';
 import { loadTagIndex } from './search/load-index.js';
@@ -72,7 +72,7 @@ function readStartupConfig(): {
     loadQueryTranslatorConfig(process.env);
     loadRerankerConfig(process.env);
     loadEmbedderConfig(process.env);
-    loadReferenceTopK(process.env);
+    loadReferenceConfig(process.env);
     loadContextLimits(process.env);
     return {
       port,

@@ -94,7 +94,7 @@ describe('TimingPanel', () => {
     ).toBeDefined();
   });
 
-  it('shows both flows side by side on one scale, with time to sources, tokens and both differences', () => {
+  it('shows both flows side by side on one scale, with both judges, time to sources, tokens and both differences', () => {
     const main: FlowState = {
       planned: ['translation', 'search', 'rerank', 'generation'],
       steps: {},
@@ -112,17 +112,19 @@ describe('TimingPanel', () => {
       }),
     };
     const reference: FlowState = {
-      planned: ['search', 'generation'],
+      planned: ['search', 'rerank', 'generation'],
       steps: {},
       result: queryResult({
         flow: 'reference',
         timings: {
           embeddingMs: 300,
           searchMs: 320,
-          sourcesMs: 320,
+          judgingMs: 2500,
+          sourcesMs: 2820,
           generationMs: 9680,
           totalMs: 20_000,
         },
+        judging: { cacheHits: 5, judgeCalls: 25, relevant: 6, unknown: 0 },
       }),
     };
     render(<TimingPanel flows={{ main, reference }} reference running={false} />);
@@ -134,12 +136,12 @@ describe('TimingPanel', () => {
     ]);
     expect(row('Totalt')).toEqual(['10,0 s', '20,0 s']);
     expect(row('Rerank')[0]).toContain('2 cacheträffar');
-    expect(row('Rerank')[1]).toBe('–');
-    expect(row('Tid till källor')).toEqual(['3,0 s', '320 ms']);
+    expect(row('Rerank')[1]).toBe('2,5 s (100 ms per bedömd kandidat · 5 cacheträffar)');
+    expect(row('Tid till källor')).toEqual(['3,0 s', '2,8 s']);
     expect(row('Generering')[0]).toBe('6,0 s (1\u00a0200 tokens, 5 ms/token)');
     expect(
       screen.getByText(
-        'Huvudflödet hade sina källor 2,7 s efter referens-RAG:en utan översättningen, och 3,7 s efter med översättningen till taggar (1,0 s).',
+        'Huvudflödet hade sina källor 190 ms efter referens-RAG:en utan översättningen, och 1,2 s efter med översättningen till taggar (1,0 s).',
       ),
     ).toBeDefined();
     expect(

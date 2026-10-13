@@ -56,8 +56,8 @@ export interface QueryFlowDependencies extends GenerationDependencies {
   ): Promise<{ candidates: readonly Candidate[]; embedMs?: number }>;
   loadChunks(ids: readonly string[]): Chunk[];
   /**
-   * The configured reranker with `RERANK_TOP_K`: the relevant chunks, best first. Absent for the
-   * reference RAG, which hands every candidate to the generator.
+   * The reranker with `RERANK_TOP_K`: the relevant chunks, best first. Absent, every candidate goes
+   * to the generator.
    */
   rerank?(instruction: string, chunks: readonly Chunk[]): Promise<RerankResult>;
 }
