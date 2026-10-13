@@ -4,7 +4,7 @@
 - **Labels:** `E7 UI and measurement`
 - **Phase:** 5. UI and measurement
 - **Depends on:** E7-9 (#94) (related: E7-6 (#79))
-- **Status:** Approved
+- **Status:** Implemented — all acceptance criteria verified (npm ci, lint, format:check, typecheck, 937 tests (878 backend, 59 frontend; `npm test` offline under sandbox-exec, loopback only) and build exit 0; `eval:label` run for all 20 queries; `bench:compare -- --runs 1` with drafts, 20 queries, no failures, in `eval/report-2026-10-13.md`)
 
 ## Summary
 
@@ -48,13 +48,13 @@
 
 ## Tasks
 
-- [ ] `labelCandidates`: add the dense search; mark each candidate with every search that found it.
-- [ ] `formatCandidates`: the per-search marks and counts.
-- [ ] `eval:label` CLI: build the dense search from `EMBEDDER`, its vectors and `MAX_CANDIDATES`.
-- [ ] Tests with a fake embedder and vector index.
-- [ ] Run `eval:label` for the 20 queries; add and grade the relevant dense candidates, with `# E7-10` comments and a header note.
-- [ ] Re-run `bench:compare -- --runs 1` with drafts and write the report section.
-- [ ] README's evaluation section: `eval:label` lists dense candidates.
+- [x] `labelCandidates`: add the dense search; mark each candidate with every search that found it.
+- [x] `formatCandidates`: the per-search marks and counts.
+- [x] `eval:label` CLI: build the dense search from `EMBEDDER`, its vectors and `MAX_CANDIDATES`.
+- [x] Tests with a fake embedder and vector index.
+- [x] Run `eval:label` for the 20 queries; add and grade the relevant dense candidates, with `# E7-10` comments and a header note.
+- [x] Re-run `bench:compare -- --runs 1` with drafts and write the report section.
+- [x] README's evaluation section: `eval:label` lists dense candidates.
 
 ## Decisions
 
@@ -64,6 +64,23 @@
 - **Re-run only `bench:compare -- --runs 1` with drafts** (owner). The same run as E7-9, so every column is compared on the new labels. No `eval:run` or sweep.
 - **The dense candidate count is `MAX_CANDIDATES`** (issue): what the reference RAG gives its judge.
 - **Only dense candidates not already marked are reviewed** (default). Tag and full-text candidates were reviewed in E5-3 and E7-4.
+
+- **Settled while implementing:**
+  - **`createLabelDenseSearch` builds the dense half from `EMBEDDER`, its stored vectors and the reference's `MAX_CANDIDATES`** (`loadReferenceConfig`), with the reference's own `createDenseSearch`, so the listing finds what the reference RAG finds. The test passes a fake embedder whose vectors `index:embed` stored in a test database.
+  - **The candidate count line gives the count per search and how many only vectors found**, e.g. `73 candidates (tags 30, fts 30, dense 30; 22 only dense)`. Every query had 30 dense candidates, 10–26 of them found only by vectors (400 in all).
+  - **Every unmarked dense candidate was read, including those tags or full text also found.** The query translation varies between runs, so a chunk `tags+dense` today may not have been in E5-3's listing.
+  - **149 labels were added (24 central, 125 related)**: 415 labels in all, 155 central. Generic sections that vector search finds for many queries (e.g. LAS 4 §, 5 §, bemanningslagen 12 a §, MBL's collective-agreement rules) were left out where they do not bear on the instruction, as in E5-3.
+  - **The report also compares the candidates before the judge, on old and new labels** (the share of each search's 30 candidates labelled relevant, from the same `eval:label` listings). `bench:compare` keeps no per-query chunk ids, so E7-9's run cannot be re-scored on the new labels; the candidate table separates the labels' effect from run-to-run noise.
+  - **The new rows sit under the existing "the same judge" table**, as `bench:compare` appends them; the report section says they are the second row pair dated 2026-10-13.
+  - **The run was made with `ANTHROPIC_API_KEY=sk-ant-invalid-test`**, so every LLM call (query translation in `eval:label`, and all roles in `bench:compare`) went through the subscription.
+- **Clean code:** reviewed inline, without simplify's four agents (about 130 lines of code, as in E7-9). `foundByLabel` names the `tags+dense` label that the listing printed and measured twice.
+- **Code review (high):**
+  - **Fixed: the dense count comes from `loadSearchConfig` (`MAX_CANDIDATES`)**, not `loadReferenceConfig`, so `eval:label` does not validate an LLM judge it never uses.
+  - **Fixed: the dense search runs while the query is translated** (`Promise.all`), and each search's ids are a `Set`.
+  - **Fixed: the report no longer calls the reversal a result.** The labels no longer favour tags but may favour vectors, since the tag-only candidates were not reviewed again; the report says vectors are at least as good as tags, not better. It says every query had 30 tag hits (no full-text fill), so the tag row is what the main flow's judge saw, and that the slower embedding is unexplained rather than noise.
+  - **Not changed: `eval:label` fails when the chunks are not embedded.** Acceptance criterion 1 asks for that: a listing without the dense half would hide exactly the candidates this issue is about. The error names `npm run index:embed`.
+  - **Not changed: a shared reference-search builder.** Both paths already share `loadRetrievalResources`, `createDenseSearch` and `MAX_CANDIDATES`; a builder in `reference/setup.ts` would either bring back the judge validation (the first fix) or split `loadReferenceConfig`, outside this spec.
+  - **Follow-up for the owner:** reviewing the tag-only candidates with today's translation would remove the remaining bias. It is not part of this issue (Non-goals); the report names it.
 
 ## Open Questions
 
