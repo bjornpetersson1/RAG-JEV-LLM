@@ -5,9 +5,10 @@
 import type { DatabaseSync } from 'node:sqlite';
 import type { Embedder } from '../embedding/types.js';
 import { loadContextLimits, type ContextLimits } from '../generation/config.js';
+import { modelLabel, type FlowConfiguration } from '../generation/flow-configuration.js';
 import type { QueryFlowDependencies } from '../generation/query-flow.js';
 import type { LlmLogger } from '../llm/client.js';
-import { loadLlmConfig } from '../llm/config.js';
+import { loadLlmConfig, roleLabel } from '../llm/config.js';
 import { createLlmRoles } from '../llm/factory.js';
 import { createChunkLoader } from '../query/services.js';
 import { loadRetrievalResources, type RetrievalSource } from '../retrieval/setup.js';
@@ -18,6 +19,7 @@ import { createDenseSearch } from './dense-search.js';
 export interface ReferenceFlow extends QueryFlowDependencies {
   embedder: Embedder;
   topK: number;
+  configuration: FlowConfiguration;
 }
 
 /** Fails, naming `npm run index:embed`, when the chunks are not embedded with this embedder. */
@@ -31,13 +33,20 @@ export function createReferenceFlow(
 ): ReferenceFlow {
   const resources = loadRetrievalResources(db, env, retrieval);
   const topK = loadReferenceTopK(env);
+  const llmConfig = loadLlmConfig(env);
+  const { embedder } = resources;
   return {
     flow: 'reference',
     search: createDenseSearch(resources.embedder, resources.vectorIndex, topK),
     loadChunks: createChunkLoader(db),
-    generator: createLlmRoles(loadLlmConfig(env), { logger }).generator,
+    generator: createLlmRoles(llmConfig, { logger }).generator,
     limits: { ...loadContextLimits(env), ...limits },
-    embedder: resources.embedder,
+    embedder,
     topK,
+    configuration: {
+      retriever: `dense (${modelLabel(embedder)})`,
+      generator: roleLabel(llmConfig, 'generator'),
+      topK,
+    },
   };
 }

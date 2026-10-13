@@ -40,8 +40,9 @@ describe('createBenchSetup', () => {
 
     expect(embedded[indexed]).toBe('uppvärmning');
     expect(flows.map(({ configuration }) => configuration)).toEqual([
-      'retriever tags · reranker llm fake · top 8 · generator fake fake',
-      'dense fake-embedder int8 · top 2 · generator fake fake',
+      'retriever tags · tag index roaring · translator fake fake · reranker llm fake · top 8 · ' +
+        'generator fake fake',
+      'retriever dense (fake-embedder int8) · top 2 · generator fake fake',
     ]);
     expect(main).toMatchObject({ flow: 'main', queries: 2, runs: 2, failures: 0 });
     expect(reference).toMatchObject({ flow: 'reference', queries: 2, drafts: 4, failures: 0 });

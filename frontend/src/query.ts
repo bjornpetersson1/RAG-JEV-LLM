@@ -77,13 +77,36 @@ export interface Draft {
   check?: PostCheck;
 }
 
-export type QueryStep =
-  | { step: 'translation'; tags: QueryTag[]; elapsedMs: number }
-  | { step: 'search'; candidates: number; fallback: number; embeddingMs?: number; searchMs: number }
-  | { step: 'rerank'; approved: number; relevant: number; elapsedMs: number }
-  | { step: 'generation'; elapsedMs: number };
+/** One finished step, with its part of the result's `timings`. */
+export type QueryStep = (
+  | { step: 'translation'; tags: QueryTag[] }
+  | { step: 'search'; candidates: number; fallback: number }
+  | { step: 'rerank'; approved: number; relevant: number }
+  | { step: 'generation' }
+) & { timings: Partial<StepTimings> };
 
 export type QueryStepName = QueryStep['step'];
+
+/** Each step's time in ms; a step that did not run is absent. */
+export interface StepTimings {
+  translationMs?: number;
+  /** Part of `searchMs`. */
+  embeddingMs?: number;
+  searchMs: number;
+  judgingMs?: number;
+  generationMs?: number;
+  totalMs: number;
+}
+
+/** What a flow runs with (see the backend's `FlowConfiguration`). */
+export interface FlowConfiguration {
+  retriever: string;
+  reranker?: string;
+  translator?: string;
+  generator: string;
+  tagIndex?: string;
+  topK: number;
+}
 
 export interface QueryResult {
   flow: FlowName;
@@ -94,18 +117,23 @@ export interface QueryResult {
   approved: Chunk[];
   /** Every candidate, in the retriever's order, with what became of it. */
   sources: QuerySource[];
+  /** Absent without a rerank step. */
+  judging?: { cacheHits: number; judgeCalls: number; relevant: number; unknown: number };
   draft?: Draft;
+  timings: StepTimings;
 }
 
 export type QueryEvent =
-  | { type: 'start'; flow: FlowName; steps: QueryStepName[] }
+  | { type: 'start'; flow: FlowName; steps: QueryStepName[]; configuration?: FlowConfiguration }
   | ({ type: 'step'; flow: FlowName } & QueryStep)
   | { type: 'result'; flow: FlowName; result: QueryResult }
   | { type: 'error'; flow: FlowName; message: string }
+  /** A flow the backend could not build, e.g. the reference RAG before `npm run index:embed`. */
+  | { type: 'skipped'; flow: FlowName; reason: string }
   | { type: 'done' };
 
 /** What a flow reports while it runs: its plan, its finished steps and its result. */
-export type ProgressEvent = Extract<QueryEvent, { type: 'start' | 'step' | 'result' }>;
+export type ProgressEvent = Extract<QueryEvent, { type: 'start' | 'step' | 'result' | 'skipped' }>;
 
 /** A failed query, with a message for the user. */
 export class QueryError extends Error {}

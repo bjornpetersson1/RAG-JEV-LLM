@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { FlowProgress, type FlowState } from './FlowProgress';
 import { QueryForm } from './QueryForm';
+import { TimingPanel } from './TimingPanel';
 import { fetchHealthStatus } from './health';
 import {
   QueryError,
@@ -17,6 +18,8 @@ const FLOW_ORDER: FlowName[] = ['main', 'reference'];
 
 interface Run {
   flows: Partial<Record<FlowName, FlowState>>;
+  /** Why a flow the backend could not build was skipped. */
+  skipped: Partial<Record<FlowName, string>>;
   /** Whether the reference RAG was asked for; it starts after the main flow. */
   reference: boolean;
   running: boolean;
@@ -40,10 +43,16 @@ export function App() {
   }, []);
 
   async function submit(request: QueryRequest) {
-    setRun({ flows: {}, reference: request.reference, running: true });
+    setRun({ flows: {}, skipped: {}, reference: request.reference, running: true });
     try {
       await streamQuery(request, (event) =>
-        setRun((current) => current && { ...current, flows: apply(current.flows, event) }),
+        setRun(
+          (current) =>
+            current &&
+            (event.type === 'skipped'
+              ? { ...current, skipped: { ...current.skipped, [event.flow]: event.reason } }
+              : { ...current, flows: apply(current.flows, event) }),
+        ),
       );
       setRun((current) => current && { ...current, running: false });
     } catch (error) {
@@ -61,6 +70,14 @@ export function App() {
         <p className="error" role="alert">
           {run.error}
         </p>
+      )}
+      {run && (
+        <TimingPanel
+          flows={run.flows}
+          reference={run.reference}
+          skipped={run.skipped.reference}
+          running={run.running}
+        />
       )}
       {run && preparingReference(run) && (
         <p className="pending" role="status">
@@ -88,16 +105,24 @@ export function App() {
  * Between the main flow's result and the reference RAG's start, the server may still be loading the
  * embedder and vectors for it.
  */
-function preparingReference({ flows, reference, running }: Run): boolean {
-  return running && reference && flows.main?.result !== undefined && !flows.reference;
+function preparingReference({ flows, skipped, reference, running }: Run): boolean {
+  return (
+    running &&
+    reference &&
+    flows.main?.result !== undefined &&
+    !flows.reference &&
+    !skipped.reference
+  );
 }
 
 function apply(
   flows: Partial<Record<FlowName, FlowState>>,
-  event: ProgressEvent,
+  event: Exclude<ProgressEvent, { type: 'skipped' }>,
 ): Partial<Record<FlowName, FlowState>> {
-  if (event.type === 'start')
-    return { ...flows, [event.flow]: { planned: event.steps, steps: {} } };
+  if (event.type === 'start') {
+    const { steps: planned, configuration } = event;
+    return { ...flows, [event.flow]: { planned, configuration, steps: {} } };
+  }
   const state = flows[event.flow];
   if (!state) return flows;
   if (event.type === 'result')

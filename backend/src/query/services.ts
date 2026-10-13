@@ -25,6 +25,8 @@ export interface QueryServices {
   loadChunks(ids: readonly string[]): Chunk[];
   /** E.g. `jev` or `claude-code claude-haiku-5-5`, for reports. */
   translatorLabel: string;
+  /** The tag index in use, e.g. `roaring`, for reports. */
+  tagIndexLabel: string;
 }
 
 export function createQueryServices(
@@ -52,6 +54,7 @@ export function createQueryServices(
     loadChunks: createChunkLoader(db),
     translatorLabel:
       translatorConfig.impl === 'jev' ? 'jev' : roleLabel(llmConfig, 'queryTranslator'),
+    tagIndexLabel: index.description.implementation,
   };
 }
 

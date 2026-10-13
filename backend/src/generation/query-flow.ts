@@ -5,6 +5,7 @@ import type { QueryInput, QueryTag, QueryTags } from '../query/translate-query.j
 import type { RerankResult, RerankStats } from '../rerank/types.js';
 import type { Candidate } from '../search/candidate-search.js';
 import { assertTemplate, type Template } from '../tagging/vocabulary.js';
+import type { FlowConfiguration } from './flow-configuration.js';
 import {
   generateDraft,
   type DraftRequest,
@@ -39,6 +40,8 @@ export type QueryFlowName = 'main' | 'reference';
 export interface QueryFlowDependencies extends GenerationDependencies {
   /** Default `main`. */
   flow?: QueryFlowName;
+  /** What the steps are, for the timing panel and the run log (E7-3). */
+  configuration?: FlowConfiguration;
   /** Absent when the retriever uses no tags (`RETRIEVER=bge`, the reference RAG). */
   translate?(query: QueryInput): Promise<QueryTags>;
   /** The candidates, best first, and the time spent embedding the instruction, if it was. */
@@ -106,18 +109,16 @@ export interface QueryResult {
   usage: { translation?: LlmUsage; judging?: LlmUsage; generation?: LlmUsage };
 }
 
-/** One finished step, reported as soon as it is done (E7-1 streams them to the UI). */
-export type QueryStep =
-  | { step: 'translation'; tags: QueryTag[]; elapsedMs: number }
-  | {
-      step: 'search';
-      candidates: number;
-      fallback: number;
-      embeddingMs?: number;
-      searchMs: number;
-    }
-  | { step: 'rerank'; approved: number; relevant: number; elapsedMs: number }
-  | { step: 'generation'; elapsedMs: number };
+/**
+ * One finished step, reported as soon as it is done (E7-1 streams them to the UI), with its part of
+ * the result's `timings`.
+ */
+export type QueryStep = (
+  | { step: 'translation'; tags: QueryTag[] }
+  | { step: 'search'; candidates: number; fallback: number }
+  | { step: 'rerank'; approved: number; relevant: number }
+  | { step: 'generation' }
+) & { timings: Partial<StepTimings> };
 
 export type QueryStepName = QueryStep['step'];
 
@@ -143,6 +144,8 @@ export interface QueryOptions {
   onStep?(step: QueryStep): void;
   /** Stops the flow before its next step, e.g. when the client went away. */
   signal?: AbortSignal;
+  /** Filled with each step's time as it finishes, so a caller has them also when the flow fails. */
+  reached?: Partial<StepTimings>;
 }
 
 /**
@@ -152,17 +155,26 @@ export interface QueryOptions {
 export async function runQuery(
   request: QueryRequest,
   deps: QueryFlowDependencies,
-  { draft: drafting = true, onStep, signal }: QueryOptions = {},
+  { draft: drafting = true, onStep, signal, reached = {} }: QueryOptions = {},
 ): Promise<QueryResult> {
   const started = performance.now();
   const { instruction, template } = request;
   const defaultInstruction =
     instruction.trim() === '' ? DEFAULT_INSTRUCTIONS[assertTemplate(template)] : undefined;
   const question = defaultInstruction ?? instruction;
+  // Each step's time, collected as the steps report, so the result has the same times they sent.
+  const report = (step: QueryStep) => {
+    Object.assign(reached, step.timings);
+    onStep?.(step);
+  };
 
   const translation = await deps.translate?.({ instruction, template });
   if (translation) {
-    onStep?.({ step: 'translation', tags: translation.tags, elapsedMs: translation.elapsedMs });
+    report({
+      step: 'translation',
+      tags: translation.tags,
+      timings: { translationMs: translation.elapsedMs },
+    });
   }
   const tags = translation?.tags.map((tag) => tag.slug) ?? [];
   signal?.throwIfAborted();
@@ -172,23 +184,22 @@ export async function runQuery(
   const chunks = deps.loadChunks(candidates.map((candidate) => String(candidate.chunkId)));
   const searchMs = elapsedMs(searchStarted);
   const fallback = candidates.filter(({ origin }) => origin === 'fts').length;
-  onStep?.({
+  report({
     step: 'search',
     candidates: candidates.length,
     fallback,
-    embeddingMs: embedMs,
-    searchMs,
+    timings: { searchMs, ...(embedMs !== undefined && { embeddingMs: embedMs }) },
   });
   signal?.throwIfAborted();
 
   const reranked = await deps.rerank?.(question, chunks);
   const approved = reranked ? reranked.ranked.map(({ chunk }) => chunk) : chunks;
   if (reranked) {
-    onStep?.({
+    report({
       step: 'rerank',
       approved: approved.length,
       relevant: reranked.stats.relevant,
-      elapsedMs: reranked.stats.elapsedMs,
+      timings: { judgingMs: reranked.stats.elapsedMs },
     });
   }
 
@@ -197,7 +208,7 @@ export async function runQuery(
     drafting && approved.length > 0
       ? await generateDraft({ ...request, instruction: question, chunks: approved }, deps)
       : undefined;
-  if (draft) onStep?.({ step: 'generation', elapsedMs: draft.elapsedMs });
+  if (draft) report({ step: 'generation', timings: { generationMs: draft.elapsedMs } });
   const sources = describeSources(candidates, chunks, reranked, statuses(approved, draft));
   return {
     flow: deps.flow ?? 'main',
@@ -216,14 +227,7 @@ export async function runQuery(
       },
     }),
     draft,
-    timings: {
-      translationMs: translation?.elapsedMs,
-      embeddingMs: embedMs,
-      searchMs,
-      judgingMs: reranked?.stats.elapsedMs,
-      generationMs: draft?.elapsedMs,
-      totalMs: elapsedMs(started),
-    },
+    timings: { ...reached, searchMs, totalMs: elapsedMs(started) },
     usage: {
       translation: translation?.usage,
       judging: reranked?.stats.usage,

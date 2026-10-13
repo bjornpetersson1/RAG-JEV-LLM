@@ -4,7 +4,7 @@
 - **Labels:** `E7 UI and measurement`
 - **Phase:** 5. UI and measurement
 - **Depends on:** E7-1 (#22), E5-4 (#18); after E7-5 (#78), so the panel shows the fast reranker
-- **Status:** Approved
+- **Status:** Implemented — all acceptance criteria verified (npm ci, lint, format:check, typecheck, 880 tests (827 backend, 53 frontend) and build exit 0; `npm run dev` with fake LLM roles and the real minilm reranker and bge-m3 in headless Chrome: both flows in the panel with bars, the difference and the configuration lines, and two lines with one run id in `logs/runs.jsonl`)
 
 ## Summary
 
@@ -47,13 +47,13 @@ A timing panel in the UI shows the time of each step and the total for the main 
 
 ## Tasks
 
-- [ ] Shared timing and configuration shapes for both flows; per-chunk median and cache hits from the rerank stats.
-- [ ] Configuration summary from `.env` (retriever, reranker and model/dtype, translator, generator model, tag index).
-- [ ] Run logger: append JSON lines, create `logs/`, warn on failure; used by the API route and `npm run query`.
-- [ ] `.gitignore`: `/logs/`.
-- [ ] Timing panel component with bars and the configuration line; reference option on by default.
-- [ ] README: the panel and the log format.
-- [ ] Tests.
+- [x] Shared timing and configuration shapes for both flows; per-chunk median and cache hits from the rerank stats.
+- [x] Configuration summary from `.env` (retriever, reranker and model/dtype, translator, generator model, tag index).
+- [x] Run logger: append JSON lines, create `logs/`, warn on failure; used by the API route and `npm run query`.
+- [x] `.gitignore`: `/logs/`.
+- [x] Timing panel component with bars and the configuration line; reference option on by default.
+- [x] README: the panel and the log format.
+- [x] Tests.
 
 ## Decisions
 
@@ -67,10 +67,27 @@ A timing panel in the UI shows the time of each step and the total for the main 
 
 - **Builds on E7-1, E7-2, E5-4 and E7-5 as merged** (spec update before implementing):
   - **The timings are `QueryResult.timings`** (E5-4/E7-1): each step's time, absent when the step did not run, so the panel shows `–` for it. The step events already carry each step's time as it finishes.
-  - **"Per chunk" is the rerank time divided by the candidates it scored**, an average: the rerank stats hold the total time, not one time per chunk. Cache hits come from the rerank stats (`judging.cacheHits`).
+  - **"Per chunk" is the rerank time divided by the candidates it scored** (`judging.judgeCalls`), an average: the rerank stats hold the total time, not one time per chunk. Cache hits come from the rerank stats (`judging.cacheHits`).
   - **The configuration travels with the flow**: each flow's steps carry a description (retriever, reranker with model and dtype, query translator, generator, tag index; for the reference RAG the embedder and k), sent in the stream's `start` event and kept in the result and the log.
   - **One runner logs both callers**: a wrapper around `runQuery` collects the step events, then appends the run's line (or, on failure, the error and the timings it reached); the route and `npm run query` both use it.
   - **The counts come from the sources' status** (E7-2): sent is `cited` + `sent`, cited is `cited`. The default reranker is now `minilm` (E7-5).
+
+- **Settled while implementing**:
+  - **`FlowConfiguration`** (`generation/flow-configuration.ts`) is built with each flow (`createQueryFlow`, `createReferenceFlow`), sent in the `start` event and kept in the log, and formatted once for the benchmark's table (`formatConfiguration`), which replaced its own strings. A retriever that embeds names its embedder. (The result does not repeat it: nothing reads it there.)
+  - **Each step event carries its part of the result's `timings`** (clean code): `runQuery` collects the result's times from the same slices it reports, `runAndLog` merges the slices a failed run reached, and the panel merges them while a flow runs, so the step-to-time mapping lives in one place per package.
+  - **`runAndLog`** (`generation/run-log.ts`) wraps `runQuery` for the route (`source: 'api'`, one `runId` per request) and `npm run query` (`source: 'cli'`). A flow that cannot even be built (the reference RAG without embeddings) is not a run and is not logged; the stream reports it.
+  - **The panel is a table**: one row per step, one column per flow, the time over a bar whose width is the time divided by the largest time shown, so both flows share one scale. Times under a second are in ms, others in seconds with one decimal and a decimal comma.
+  - **`…` for a step still running, `–` for one the flow does not run** (from the backend's plan) or skipped (a result without its time).
+
+- **Code review fixes**:
+  - **After the query ends, a step without a time shows `–`**: a failed or broken-off run no longer leaves `…` behind.
+  - **The server loads the local models before it listens** (`QueryFlows.warmUp`): the reranker, and the embedder and vectors when the reference RAG can be built, so the first query's timings, and the panel's difference, do not include a model load.
+  - **A flow that cannot be built is skipped, not failed** (`{ type: 'skipped' }`): with the reference RAG on by default and no embeddings yet, the main flow's result stands and the panel says why the reference was not run, instead of an error alert on every query.
+  - **The rerank's per-candidate time is per candidate scored** (`judgeCalls`, cache hits left out), shown as `<1 ms` when it rounds to nothing.
+  - **The run log**: a finished run is logged once, outside the error path; `defaultInstruction` is logged when it was used; the folder is created on the first write. `RunLog.append` must not throw (`createRunLog` warns).
+  - **`runQuery` fills a caller's `reached` timings** (`QueryOptions.reached`), so `runAndLog` needs no second mapping from step events.
+  - **The configuration names the embedder only when the dense half runs**, and the tag index's label comes from the index in use.
+- **Not changed (code review)**: **an asynchronous log write**: one line of about a kilobyte per run, written synchronously after a query that takes seconds.
 
 ## Open Questions
 

@@ -10,7 +10,8 @@ import {
   type QueryFlowDependencies,
   type QueryRequest,
 } from '../generation/query-flow.js';
-import { createQueryFlow, type ConfiguredQueryFlow } from '../generation/setup.js';
+import { formatConfiguration } from '../generation/flow-configuration.js';
+import { createQueryFlow } from '../generation/setup.js';
 import type { LlmLogger } from '../llm/client.js';
 import { warmUpLocalModels } from '../models/warm-up.js';
 import { createReferenceFlow } from '../reference/setup.js';
@@ -43,34 +44,20 @@ export function createBenchSetup(
     flows: [
       {
         name: 'main',
-        configuration: mainConfiguration(main, embedder),
+        configuration: formatConfiguration(main.configuration),
         rerank: isRemoteReranker(main.reranker) ? 'remote' : 'local',
         run: (query, options) =>
           runQuery(requestFor(query), withQueryTemplate(main, query), options),
       },
       {
         name: 'reference',
-        configuration:
-          `dense ${embedder.model} ${embedder.dtype} · top ${reference.topK} · ` +
-          `generator ${main.generatorLabel}`,
+        configuration: formatConfiguration(reference.configuration),
         rerank: 'none',
         run: (query, options) => runQuery(requestFor(query), reference, options),
       },
     ],
     warmUp: () => warmUpLocalModels(db, embedder, [main.reranker]),
   };
-}
-
-function mainConfiguration(
-  { retriever, reranker, topK, generatorLabel }: ConfiguredQueryFlow,
-  embedder: Embedder,
-): string {
-  const model = [reranker.model, reranker.dtype].filter(Boolean).join(' ');
-  const embedding = retriever === 'tags' ? '' : ` (${embedder.model} ${embedder.dtype})`;
-  return (
-    `retriever ${retriever}${embedding} · reranker ${reranker.name} ${model} · top ${topK} · ` +
-    `generator ${generatorLabel}`
-  );
 }
 
 /**

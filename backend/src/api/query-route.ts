@@ -4,31 +4,43 @@
 // client that goes away stops the query before its next step, which frees the server again.
 
 import type { FastifyInstance } from 'fastify';
+import { randomUUID } from 'node:crypto';
 import { PassThrough } from 'node:stream';
 import { describeError } from '../errors.js';
+import type { FlowConfiguration } from '../generation/flow-configuration.js';
 import {
   plannedSteps,
-  runQuery,
   type QueryFlowDependencies,
   type QueryFlowName,
   type QueryResult,
   type QueryStep,
   type QueryStepName,
 } from '../generation/query-flow.js';
+import { runAndLog, type RunLog } from '../generation/run-log.js';
 import { isTemplate, TEMPLATES, type Template } from '../tagging/vocabulary.js';
 
 /**
  * Each flow's steps, built when first asked for: the reference RAG needs `npm run index:embed`,
  * and building it throws when that has not been run.
  */
-export type QueryFlows = Record<QueryFlowName, () => QueryFlowDependencies>;
+export interface QueryFlows extends Record<QueryFlowName, () => QueryFlowDependencies> {
+  /** Loads the local models before the first query, so its timings do not include a load. */
+  warmUp?(): Promise<void>;
+}
 
 /** One line of the response stream. */
 export type QueryEvent =
-  | { type: 'start'; flow: QueryFlowName; steps: QueryStepName[] }
+  | {
+      type: 'start';
+      flow: QueryFlowName;
+      steps: QueryStepName[];
+      configuration?: FlowConfiguration;
+    }
   | ({ type: 'step'; flow: QueryFlowName } & QueryStep)
   | { type: 'result'; flow: QueryFlowName; result: QueryResult }
   | { type: 'error'; flow: QueryFlowName; message: string }
+  /** A flow that cannot be built, e.g. the reference RAG before `npm run index:embed`. */
+  | { type: 'skipped'; flow: QueryFlowName; reason: string }
   | { type: 'done' };
 
 interface QueryBody {
@@ -37,7 +49,8 @@ interface QueryBody {
   reference: boolean;
 }
 
-export function registerQueryRoute(app: FastifyInstance, flows: QueryFlows): void {
+/** Registers `POST /query`; each flow run is appended to `log` (E7-3). */
+export function registerQueryRoute(app: FastifyInstance, flows: QueryFlows, log: RunLog): void {
   let running = false;
 
   app.post('/query', async (request, reply) => {
@@ -52,7 +65,7 @@ export function registerQueryRoute(app: FastifyInstance, flows: QueryFlows): voi
     reply.raw.on('close', () => {
       if (!reply.raw.writableFinished) abort.abort();
     });
-    void runFlows(body, flows, write, abort.signal).finally(() => {
+    void runFlows(body, flows, write, { log, signal: abort.signal }).finally(() => {
       running = false;
       stream.end();
     });
@@ -61,21 +74,32 @@ export function registerQueryRoute(app: FastifyInstance, flows: QueryFlows): voi
 }
 
 /**
- * The main flow, then the reference RAG if asked, each announced with the steps it will run; a
- * flow that fails ends the stream with an error.
+ * The main flow, then the reference RAG if asked, each announced with the steps it will run. A
+ * flow that cannot be built is skipped; one that fails while running ends the stream with an error.
  */
 async function runFlows(
   { template, instruction, reference }: QueryBody,
   flows: QueryFlows,
   write: (event: QueryEvent) => void,
-  signal: AbortSignal,
+  { log, signal }: { log: RunLog; signal: AbortSignal },
 ): Promise<void> {
   const names: QueryFlowName[] = reference ? ['main', 'reference'] : ['main'];
+  const runId = randomUUID();
   for (const flow of names) {
+    let deps: QueryFlowDependencies;
     try {
-      const deps = flows[flow]();
-      write({ type: 'start', flow, steps: plannedSteps(deps) });
-      const result = await runQuery({ template, instruction }, deps, {
+      deps = flows[flow]();
+    } catch (error) {
+      // A flow that cannot be built is skipped, not failed: the main flow's result still stands.
+      write({ type: 'skipped', flow, reason: describeError(error) });
+      continue;
+    }
+    try {
+      write({ type: 'start', flow, steps: plannedSteps(deps), configuration: deps.configuration });
+      const result = await runAndLog({ template, instruction }, deps, {
+        log,
+        source: 'api',
+        runId,
         onStep: (step) => write({ type: 'step', flow, ...step }),
         signal,
       });

@@ -441,17 +441,60 @@ When a flow is done, the result view (E7-2) shows its draft and sources:
 
 The result carries what this needs: `sources` lists every candidate with its document, origin, score and what became of it (`status`: `cited`, `sent`, `left-out` or `turned-down`), and the post-check returns its `matches` next to its `flags`.
 
+Above the results, the timing panel (E7-3) shows each step's time and the total for both flows, side by side, with a bar per flow on one shared scale. The steps are query translation, search (with the time spent embedding the instruction), rerank (with the average per candidate the reranker scored, and the judge cache hits), generation and the total. A step appears as soon as it finishes, a step still running shows `…`, and a step the flow does not run shows `–`. When both flows are done, the panel says how much faster or slower the main flow was. A line per flow names its configuration: retriever, tag index, query translator, reranker with model and precision, `RERANK_TOP_K` and generator. The reference RAG option is on by default. Without it, the panel says the reference was not run.
+
+### Run log
+
+Every run of a flow, from the UI or `npm run query`, is appended as one JSON line to `logs/runs.jsonl` (git-ignored; the folder is created when missing):
+
+```json
+{
+  "timestamp": "2026-10-13T12:00:00.000Z",
+  "runId": "…",
+  "source": "api",
+  "flow": "main",
+  "template": "employment",
+  "instruction": "…",
+  "configuration": {
+    "retriever": "tags",
+    "tagIndex": "roaring",
+    "translator": "…",
+    "reranker": "minilm … int8",
+    "generator": "…",
+    "topK": 8
+  },
+  "timings": {
+    "translationMs": 800,
+    "searchMs": 12,
+    "judgingMs": 2900,
+    "generationMs": 25000,
+    "totalMs": 28712
+  },
+  "counts": { "tags": 12, "candidates": 30, "fallback": 0, "approved": 8, "sent": 8, "cited": 7 },
+  "sourceAccuracy": 0.92
+}
+```
+
+The fields:
+
+- `runId` is shared by the flows of one request.
+- `instruction` is the free text as written; with a template alone it is empty, and `defaultInstruction` holds the instruction the flow used instead.
+- `counts` holds the query's tags and the candidates, those from the full-text fallback, those approved, those sent to the generator and those the draft cites.
+- A run that fails has an `error` and the timings of the steps it finished, and no counts.
+- A log line that cannot be written is a warning; the query itself goes on.
+
 ### `POST /query`
 
 The body is `{ "template": "employment" | "nda", "instruction"?: string, "reference"?: boolean }`. An invalid body answers 400 with `{ "error": "…" }`. A query sent while another is running answers 409, because the flow uses every CPU core. Otherwise the answer is `application/x-ndjson`, one JSON event per line:
 
-- `{ "type": "start", "flow": "main" | "reference", "steps": [...] }` when a flow begins, with the steps it will run in order, e.g. `["search", "rerank", "generation"]` with `RETRIEVER=bge`. The UI shows the next of these as running.
-- `{ "type": "step", "flow", "step": "translation", "tags", "elapsedMs" }`, then `"search"` (`candidates`, `fallback`, `embeddingMs`, `searchMs`), `"rerank"` (`approved`, `relevant`, `elapsedMs`) and `"generation"` (`elapsedMs`). A flow without a step, e.g. the reference RAG without translation and rerank, sends no event for it.
+- `{ "type": "start", "flow": "main" | "reference", "steps": [...], "configuration": {...} }` when a flow begins, with its configuration and the steps it will run in order, e.g. `["search", "rerank", "generation"]` with `RETRIEVER=bge`. The UI shows the next of these as running.
+- `{ "type": "step", "flow", "step": "translation" | "search" | "rerank" | "generation", "timings", … }` when a step finishes: the translation's `tags`, the search's `candidates` and `fallback`, the rerank's `approved` and `relevant`, and each step's part of the result's `timings` (`translationMs`, `searchMs` and `embeddingMs`, `judgingMs`, `generationMs`). A flow without a step, e.g. the reference RAG without translation and rerank, sends no event for it.
 - `{ "type": "result", "flow", "result" }` with the flow's whole result: tags, counts, approved chunks, draft with post-check, timings and tokens.
-- `{ "type": "error", "flow", "message" }` when a flow fails, which ends the stream. An example is the reference RAG before `npm run index:embed`.
+- `{ "type": "skipped", "flow", "reason" }` for a flow that cannot be built, e.g. the reference RAG before `npm run index:embed`. The stream goes on, and the panel says why the flow was not run.
+- `{ "type": "error", "flow", "message" }` when a flow fails while running, which ends the stream.
 - `{ "type": "done" }` after the last flow.
 
-The server builds the main flow at startup on the existing database, sharing the server's tag index. It builds the reference RAG the first time a query asks for it, and the two flows share one load of the embedder and vectors. Without a database, or with migrations pending, the server still starts, without this route, and logs a warning naming the command to run; it never creates or migrates the database. If the main flow cannot be built, e.g. with `RETRIEVER=bge` before `npm run index:embed`, the server exits with the reason. If the client goes away, e.g. a closed tab, the query stops before its next step, and the server takes new queries once the current step is done.
+The server builds the main flow at startup on the existing database, sharing the server's tag index, and loads the local models (the reranker, and the embedder when there are embeddings) before it listens, so the first query's timings do not include a model load. It builds the reference RAG the first time a query asks for it, and the two flows share one load of the embedder and vectors. Without a database, or with migrations pending, the server still starts, without this route, and logs a warning naming the command to run; it never creates or migrates the database. If the main flow cannot be built, e.g. with `RETRIEVER=bge` before `npm run index:embed`, the server exits with the reason. If the client goes away, e.g. a closed tab, the query stops before its next step, and the server takes new queries once the current step is done.
 
 ## LLM configuration
 

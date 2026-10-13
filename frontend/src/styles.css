@@ -165,3 +165,55 @@ main {
   white-space: pre-wrap;
   margin: 0.5rem 0;
 }
+
+.timing {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  background: #fff;
+  border: 1px solid #d1d9e0;
+  border-radius: 0.5rem;
+}
+
+.timing h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.125rem;
+}
+
+.timing table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.timing th,
+.timing td {
+  padding: 0.25rem 0.5rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.timing td {
+  width: 40%;
+}
+
+.timing tr.total {
+  border-top: 1px solid #d1d9e0;
+  font-weight: 600;
+}
+
+.timing .bar {
+  display: block;
+  height: 0.5rem;
+  margin-top: 0.125rem;
+  background: #0969da;
+  border-radius: 0.25rem;
+}
+
+.timing .detail,
+.timing .configuration {
+  color: #59636e;
+  font-size: 0.875rem;
+}
+
+.timing .difference {
+  font-weight: 600;
+}

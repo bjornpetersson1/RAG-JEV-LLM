@@ -10,6 +10,7 @@ import type { Chunk } from '../llm/types.js';
 import { fakeRerankResult } from '../rerank/test-helpers.js';
 import { indexEmbeddings } from '../retrieval/index-embeddings.js';
 import { createFakeEmbedder, FAKE_IDENTITY } from '../retrieval/test-helpers.js';
+import type { RunLogEntry } from '../generation/run-log.js';
 import { registerQueryRoute, type QueryEvent, type QueryFlows } from './query-route.js';
 import { createQueryFlows } from './setup.js';
 
@@ -55,9 +56,13 @@ function flows(main: QueryFlowDependencies, reference?: () => QueryFlowDependenc
   };
 }
 
+/** The run log's lines, as the route appends them. */
+const logged: RunLogEntry[] = [];
+
 function appWith(queryFlows: QueryFlows) {
   const app = buildApp({ logger: false });
-  registerQueryRoute(app, queryFlows);
+  logged.length = 0;
+  registerQueryRoute(app, queryFlows, { append: (entry) => logged.push(entry) });
   return app;
 }
 
@@ -152,16 +157,66 @@ describe('POST /query', () => {
     expect(lines.at(-1)).toEqual({ type: 'done' });
   });
 
-  it('ends the stream with an error event when a flow fails', async () => {
+  it('logs each flow of a request as one line, with a shared run id', async () => {
+    const reference = {
+      ...fakeFlow(),
+      flow: 'reference' as const,
+      translate: undefined,
+      rerank: undefined,
+    };
+    app = appWith(flows(fakeFlow(), () => reference));
+
+    await post(app, { template: 'nda', instruction: 'Säljare', reference: true });
+
+    expect(logged.map(({ flow, source }) => `${source} ${flow}`)).toEqual([
+      'api main',
+      'api reference',
+    ]);
+    expect(new Set(logged.map(({ runId }) => runId)).size).toBe(1);
+    expect(logged[0]).toMatchObject({
+      template: 'nda',
+      instruction: 'Säljare',
+      counts: { tags: 2, candidates: 2, fallback: 1, approved: 1, sent: 1, cited: 1 },
+      sourceAccuracy: 1,
+    });
+  });
+
+  it('logs a run that fails midway with its error and the timings it reached', async () => {
+    const failing: QueryFlowDependencies = {
+      ...fakeFlow(),
+      rerank: () => Promise.reject(new Error('reranker crashed')),
+    };
+    app = appWith(flows(failing));
+
+    await post(app, { template: 'nda', instruction: 'Säljare' });
+
+    expect(logged).toHaveLength(1);
+    expect(logged[0]).toMatchObject({ flow: 'main', error: 'reranker crashed' });
+    expect(logged[0].timings).toMatchObject({ translationMs: 3, searchMs: expect.any(Number) });
+    expect(logged[0].timings.judgingMs).toBeUndefined();
+    expect(logged[0].counts).toBeUndefined();
+  });
+
+  it('skips a flow that cannot be built, keeping the main flow’s result', async () => {
     app = appWith(flows(fakeFlow()));
 
     const lines = events((await post(app, { template: 'nda', reference: true })).payload);
 
-    expect(lines.at(-1)).toEqual({
-      type: 'error',
+    expect(lines.slice(-3).map(({ type }) => type)).toEqual(['result', 'skipped', 'done']);
+    expect(lines.at(-2)).toEqual({
+      type: 'skipped',
       flow: 'reference',
-      message: 'The database has no chunk embeddings; run `npm run index:embed`',
+      reason: 'The database has no chunk embeddings; run `npm run index:embed`',
     });
+  });
+
+  it('ends the stream with an error event when a flow fails while running', async () => {
+    const failing = { ...fakeFlow(), rerank: () => Promise.reject(new Error('reranker crashed')) };
+    app = appWith(flows(failing));
+
+    const lines = events((await post(app, { template: 'nda', reference: true })).payload);
+
+    expect(lines.at(-1)).toEqual({ type: 'error', flow: 'main', message: 'reranker crashed' });
   });
 
   it.each([
@@ -302,6 +357,20 @@ describe('createQueryFlows on the server', () => {
         { retrieval: createFakeEmbedder().embedder },
       ),
     ).toThrow('run `npm run index:embed`');
+  });
+
+  it('warms up without the reference RAG’s embeddings, and with them', async () => {
+    const { db, path } = (database = createEvalDatabase());
+    const { embedder, embedded } = createFakeEmbedder();
+    const env = { LLM_PROVIDER: 'fake', RERANKER: 'llm', DATABASE_PATH: path };
+
+    await createQueryFlows(db, env, SILENT_LOGGER, { retrieval: embedder }).warmUp?.();
+    expect(embedded).toEqual([]);
+
+    await indexEmbeddings(db, embedder, FAKE_IDENTITY);
+    const indexed = embedded.length;
+    await createQueryFlows(db, env, SILENT_LOGGER, { retrieval: embedder }).warmUp?.();
+    expect(embedded.slice(indexed)).toEqual(['uppvärmning']);
   });
 
   it('searches with the tag index it is given', async () => {
