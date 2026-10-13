@@ -27,12 +27,15 @@ export function formatForTerminal(result: EvalResult): string {
     ...JUDGE_MODES.flatMap((mode) => [
       '',
       `Threshold sweep for ${mode} (${judgeNote(result, mode)}):`,
-      `  threshold  precision  recall     F1`,
-      ...result.sweeps[mode].map(
-        (row) =>
-          `  ${row.threshold.toFixed(1).padEnd(10)} ${scoreColumns(row)}${mark(result, mode, row)}`,
+      `  threshold  ${GRADE_SCOPES.map((scope) => `${scope} P/R/F1`.padEnd(SCOPE_WIDTH)).join('')}`.trimEnd(),
+      ...sweepRows(result, mode).map(
+        ({ threshold, scopes, central }) =>
+          `  ${threshold.toFixed(1).padEnd(10)} ${scopes
+            .map((row) => scoreColumns(row).padEnd(SCOPE_WIDTH))
+            .join('')
+            .trimEnd()}${mark(result, mode, central)}`,
       ),
-      `  Recommended threshold: ${result.recommended[mode].threshold.toFixed(1)} (highest F1)`,
+      `  Recommended threshold: ${result.recommended[mode].threshold.toFixed(1)} (highest central F1)`,
     ]),
     ...failureLines(result).map((line) => (line.startsWith('-') ? `  ${line}` : `\n${line}`)),
   ].join('\n');
@@ -67,11 +70,14 @@ export function formatAsMarkdown(result: EvalResult, context: ReportContext): st
       '',
       `## Threshold sweep: ${mode}`,
       '',
-      `Recommended threshold: **${result.recommended[mode].threshold.toFixed(1)}** (highest F1, the lowest threshold on a tie). The sweep reuses the judge's scores; it makes no new calls.`,
+      `Recommended threshold: **${result.recommended[mode].threshold.toFixed(1)}** (highest F1 on the central chunks, the lowest threshold on a tie). Each query keeps at most ${result.topK} chunks, best first, as the query flow does (\`RERANK_TOP_K\`). The sweep reuses the judge's scores; it makes no new calls.`,
       '',
-      '| Threshold | Precision | Recall | F1 |',
-      '| --- | --- | --- | --- |',
-      ...result.sweeps[mode].map((row) => `| ${row.threshold.toFixed(1)} | ${scoreCells(row)} |`),
+      `| Threshold | ${GRADE_SCOPES.flatMap((scope) => ['P', 'R', 'F1'].map((measure) => `${scope} ${measure}`)).join(' | ')} |`,
+      `|${' --- |'.repeat(1 + 3 * GRADE_SCOPES.length)}`,
+      ...sweepRows(result, mode).map(
+        ({ threshold, scopes }) =>
+          `| ${threshold.toFixed(1)} | ${scopes.map((row) => scoreCells(row)).join(' | ')} |`,
+      ),
     ]),
     '',
     '## Per query',
@@ -111,6 +117,19 @@ function judgeNote(result: EvalResult, mode: JudgeMode): string {
     return `${configured}: no JEV_API_KEY, so the LLM answered all ${llm} judgements instead of JEV`;
   }
   return `${configured}; answered by JEV ${jev}, by the LLM ${llm}`;
+}
+
+/** A grade scope's three score columns and the gap after them, in the terminal sweep. */
+const SCOPE_WIDTH = 33;
+
+/** The sweep per threshold: each grade scope's row side by side, and the central row, which is recommended. */
+function sweepRows(result: EvalResult, mode: JudgeMode) {
+  const sweeps = result.sweeps[mode];
+  return sweeps.central.map((central, i) => ({
+    threshold: central.threshold,
+    scopes: GRADE_SCOPES.map((scope) => sweeps[scope][i]),
+    central,
+  }));
 }
 
 function mark(result: EvalResult, mode: JudgeMode, row: SweepRow): string {

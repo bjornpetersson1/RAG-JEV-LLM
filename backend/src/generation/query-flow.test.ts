@@ -147,7 +147,13 @@ describe('runQuery', () => {
     ]);
     expect(steps[0]).toMatchObject({ tags: [{ slug: 'uppsagning', origin: 'translated' }] });
     expect(steps[1]).toMatchObject({ candidates: 3, fallback: 0 });
-    expect(steps[2]).toMatchObject({ approved: 2, relevant: 2, timings: { judgingMs: 40 } });
+    expect(steps[2]).toMatchObject({
+      candidates: 3,
+      judged: true,
+      relevant: 2,
+      approved: 2,
+      timings: { judgingMs: 40 },
+    });
   });
 
   it('asks search, rerank and generator the template’s default instruction without free text', async () => {
@@ -290,6 +296,68 @@ describe('createQueryFlow', () => {
     JUDGE_CACHE: 'off',
   };
   const logger = SILENT_LOGGER;
+
+  it('judges with the LLM by default and writes no draft when no candidate reaches JUDGE_THRESHOLD', async () => {
+    database = createEvalDatabase();
+    const flow = createQueryFlow(
+      database.db,
+      {
+        ...ENV,
+        RERANKER: undefined,
+        DATABASE_PATH: database.path,
+        // The fake judge scores the share of the instruction's words a chunk has; no chunk has "xylofon".
+        JUDGE_THRESHOLD: '1',
+      },
+      logger,
+    );
+    const steps: QueryStep[] = [];
+
+    const result = await runQuery(
+      { instruction: 'Uppsägning ska vara sakligt grundad xylofon', template: 'employment' },
+      flow,
+      { onStep: (step) => steps.push(step) },
+    );
+
+    expect(flow.reranker.name).toBe('llm');
+    expect(result.candidates).toBeGreaterThan(0);
+    expect(steps.find(({ step }) => step === 'rerank')).toMatchObject({
+      candidates: result.candidates,
+      judged: true,
+      relevant: 0,
+      approved: 0,
+    });
+    expect(result.approved).toEqual([]);
+    expect(result.draft).toBeUndefined();
+  });
+
+  // The fake judge scores chunk 11 (7 §) 1 and chunk 12 0.25 for this instruction.
+  it.each([
+    ['0.5', '8', 1, ['11']],
+    ['0.2', '1', 2, ['11']],
+  ])(
+    'with JUDGE_THRESHOLD %s and RERANK_TOP_K %s, keeps the %i chunks at or above it, best first, capped',
+    async (threshold, topK, relevant, approved) => {
+      database = createEvalDatabase();
+      const flow = createQueryFlow(
+        database.db,
+        { ...ENV, DATABASE_PATH: database.path, JUDGE_THRESHOLD: threshold, RERANK_TOP_K: topK },
+        logger,
+      );
+
+      const result = await runQuery(
+        { instruction: 'Uppsägning ska vara sakligt grundad', template: 'employment' },
+        flow,
+      );
+
+      expect(result.sources.map(({ chunk, score }) => [chunk.id, score])).toEqual([
+        ['11', 1],
+        ['12', 0.25],
+      ]);
+      expect(result.judging?.relevant).toBe(relevant);
+      expect(result.approved.map(({ id }) => id)).toEqual(approved);
+      expect(result.draft?.used.map(({ id }) => id)).toEqual(approved);
+    },
+  );
 
   it('runs the whole chain from .env with fake roles and a test database', async () => {
     database = createEvalDatabase();

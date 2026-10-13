@@ -37,6 +37,12 @@ const ROLE_ENV_KEYS: Record<RoleName, string> = {
   generator: 'GENERATOR',
 };
 
+/**
+ * A role's model when `LLM_<ROLE>_MODEL` is not set, before `LLM_MODEL`: the judge answers one
+ * yes/no question per chunk, and `JUDGE_THRESHOLD`'s default was measured with Haiku (E7-7).
+ */
+const ROLE_DEFAULT_MODELS: Partial<Record<RoleName, string>> = { judge: 'claude-haiku-5-5' };
+
 export class LlmConfigError extends Error {
   constructor(readonly issues: string[]) {
     super(
@@ -90,7 +96,7 @@ export function loadLlmConfig(env: Env): LlmConfig {
       roles[role] = { provider };
     } else if (provider !== undefined && isProvider(provider)) {
       if (provider === 'anthropic') anthropicRoles.push(role);
-      const model = read(modelKey) ?? read('LLM_MODEL');
+      const model = read(modelKey) ?? ROLE_DEFAULT_MODELS[role] ?? read('LLM_MODEL');
       if (model === undefined) {
         issues.push(
           `${modelKey} or LLM_MODEL is required because ${role} uses provider ${provider}`,

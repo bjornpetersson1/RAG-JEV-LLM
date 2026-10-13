@@ -40,7 +40,12 @@ export function ResultView({ flow, result }: ResultViewProps) {
 
   return (
     <div className="result">
-      <DraftView flow={flow} draft={result.draft} onSelect={select} />
+      <DraftView
+        flow={flow}
+        draft={result.draft}
+        unknown={result.judging?.unknown ?? 0}
+        onSelect={select}
+      />
       <SourceList flow={flow} result={result} selected={selected} open={open} onToggle={toggle} />
     </div>
   );
@@ -49,10 +54,12 @@ export function ResultView({ flow, result }: ResultViewProps) {
 interface DraftViewProps {
   flow: FlowName;
   draft?: Draft;
+  /** Candidates the reranker could not score, so "nothing relevant" may not be the whole story. */
+  unknown: number;
   onSelect(id: string): void;
 }
 
-function DraftView({ flow, draft, onSelect }: DraftViewProps) {
+function DraftView({ flow, draft, unknown, onSelect }: DraftViewProps) {
   const text = draft?.text;
   const check = draft?.check;
   // Parsed once per draft, not on every click in the source list.
@@ -79,7 +86,15 @@ function DraftView({ flow, draft, onSelect }: DraftViewProps) {
     [flow, text, check, onSelect],
   );
 
-  if (!draft) return <p>Inget utkast skrevs: inga relevanta källor hittades.</p>;
+  if (!draft) {
+    return unknown > 0 ? (
+      <p>
+        Inget utkast skrevs: inga källor bedömdes som relevanta, och {unknown} kunde inte bedömas.
+      </p>
+    ) : (
+      <p>Inget utkast skrevs: inga relevanta källor hittades.</p>
+    );
+  }
   if (text === undefined) {
     return <p>Inget utkast skrevs: inga godkända källor rymdes i kontextgränserna.</p>;
   }

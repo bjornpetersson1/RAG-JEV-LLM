@@ -55,6 +55,25 @@ describe('threshold sweep', () => {
     expect(recommendThreshold(rows).threshold).toBe(0.3);
   });
 
+  it('keeps at most topK chunks per query, the best scored, as the query flow does', () => {
+    const rows = sweepThresholds(
+      [
+        {
+          scores: [
+            { chunkId: 'c', score: 0.2 },
+            { chunkId: 'a', score: 0.9 },
+            { chunkId: 'b', score: 0.55 },
+          ],
+          relevant: new Set(['a']),
+        },
+      ],
+      1,
+    );
+
+    // At 0.1 all three pass, but only the best (a) is kept.
+    expect(rows[0]).toMatchObject({ threshold: 0.1, precision: 1, recall: 1 });
+  });
+
   it('recommends the lowest threshold among those with the highest F1', () => {
     const row = (threshold: number, f1: number) => ({ threshold, precision: 0, recall: 0, f1 });
 

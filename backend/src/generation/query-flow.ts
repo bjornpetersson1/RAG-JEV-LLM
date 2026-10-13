@@ -121,7 +121,17 @@ export interface QueryResult {
 export type QueryStep = (
   | { step: 'translation'; tags: QueryTag[] }
   | { step: 'search'; candidates: number; fallback: number }
-  | { step: 'rerank'; approved: number; relevant: number }
+  | {
+      step: 'rerank';
+      /** The candidates given to the reranker. */
+      candidates: number;
+      /** Whether a threshold decided relevance (a judge), or only `RERANK_TOP_K` cut (a ranker). */
+      judged: boolean;
+      relevant: number;
+      /** Candidates that could not be scored (a failed or timed-out call); not relevant. */
+      unknown: number;
+      approved: number;
+    }
   | { step: 'generation' }
 ) & { timings: Partial<StepTimings> };
 
@@ -202,8 +212,11 @@ export async function runQuery(
   if (reranked) {
     report({
       step: 'rerank',
-      approved: approved.length,
+      candidates: chunks.length,
+      judged: reranked.judged,
       relevant: reranked.stats.relevant,
+      unknown: reranked.stats.unknown,
+      approved: approved.length,
       timings: { judgingMs: reranked.stats.elapsedMs },
     });
   }

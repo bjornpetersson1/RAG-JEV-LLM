@@ -29,6 +29,7 @@ export function fakeRerankResult(
   );
   const relevant = scored.filter(({ score }) => score >= 0.5);
   return {
+    judged: true,
     ranked: relevant.slice(0, topK),
     scored,
     stats: {

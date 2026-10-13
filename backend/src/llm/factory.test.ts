@@ -44,14 +44,14 @@ async function modelsUsed(env: Record<string, string>) {
 describe('createLlmRoles', () => {
   const base = { LLM_PROVIDER: 'anthropic', LLM_MODEL: 'model-a', ANTHROPIC_API_KEY: 'key' };
 
-  it('uses the default provider and model for every role', async () => {
+  it('uses the default provider for every role and the default model for all but the judge', async () => {
     const { loggedRoles, requestModels } = await modelsUsed(base);
 
-    expect(requestModels).toEqual(['model-a', 'model-a', 'model-a', 'model-a']);
+    expect(requestModels).toEqual(['model-a', 'model-a', 'claude-haiku-5-5', 'model-a']);
     expect(loggedRoles).toEqual([
       ['tagger', 'model-a'],
       ['queryTranslator', 'model-a'],
-      ['judge', 'model-a'],
+      ['judge', 'claude-haiku-5-5'],
       ['generator', 'model-a'],
     ]);
   });

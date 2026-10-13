@@ -116,9 +116,19 @@ describe('the query form', () => {
     expect(await screen.findByText('30 kandidater, varav 6 från fritextsökning')).toBeDefined();
 
     await act(async () =>
-      stream.step({ step: 'rerank', approved: 8, relevant: 12, timings: { judgingMs: 30_000 } }),
+      stream.step({
+        step: 'rerank',
+        candidates: 30,
+        judged: true,
+        relevant: 12,
+        unknown: 0,
+        approved: 8,
+        timings: { judgingMs: 30_000 },
+      }),
     );
-    expect(await screen.findByText('8 godkända av rerankern')).toBeDefined();
+    expect(
+      await screen.findByText('12 bedömda som relevanta av 30, de 8 bästa går vidare'),
+    ).toBeDefined();
     expect(screen.getByText('Skriver utkast…')).toBeDefined();
     expect(screen.queryByText(/Text \[K:11\]/)).toBeNull();
 

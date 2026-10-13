@@ -54,6 +54,7 @@ function fakeDeps(jevAnsweredBy: 'jev' | 'llm' = 'llm') {
       },
       'tags+llm': { name: 'llm', model: 'claude-haiku-5-5' },
     },
+    topK: 8,
   };
   return { deps, judgeCalls };
 }
@@ -140,13 +141,13 @@ describe('runEvaluation', () => {
     );
   });
 
-  it('sweeps thresholds over the judged scores and recommends the best F1', async () => {
+  it('sweeps thresholds over the judged scores per grade and recommends the best central F1', async () => {
     const { deps } = fakeDeps();
 
     const result = await runEvaluation(QUERIES, deps);
 
     // Up to 0.4 every relevant chunk is returned (F1 0.909); at 0.7 chunk 2 is lost (F1 0.857).
-    const sweep = result.sweeps['tags+llm'];
+    const sweep = result.sweeps['tags+llm'].all;
     expect(sweep.find((row) => row.threshold === 0.4)).toMatchObject({
       precision: expect.closeTo(5 / 6),
       recall: 1,
@@ -155,7 +156,12 @@ describe('runEvaluation', () => {
       precision: 1,
       recall: 0.75,
     });
-    expect(result.recommended['tags+llm']).toMatchObject({ threshold: 0.1, recall: 1 });
+    // Against the central chunks (1 and 5), chunk 3 (0.6) costs precision until 0.7; 0.8 still keeps 5.
+    expect(result.sweeps['tags+llm'].central.find((row) => row.threshold === 0.7)).toMatchObject({
+      precision: 1,
+      recall: 1,
+    });
+    expect(result.recommended['tags+llm']).toMatchObject({ threshold: 0.7, f1: 1 });
   });
 
   it('reports which judge answered and how many judgements each gave', async () => {
@@ -181,8 +187,8 @@ describe('report', () => {
     expect(text).toMatch(/ {2}tags {7}all {6}0\.750 {6}1\.000 {6}0\.857 {6}0\.300 {6}0\.150/);
     expect(text).toMatch(/ {2}tags {7}central {2}0\.625 /);
     expect(text).toContain('Threshold sweep for tags+llm');
-    expect(text).toMatch(/0\.1 .*<- recommended/);
-    expect(text).toContain('Recommended threshold: 0.1 (highest F1)');
+    expect(text).toMatch(/0\.7 {8}1\.000 {6}1\.000 {6}1\.000 {6}1\.000 .*<- recommended/);
+    expect(text).toContain('Recommended threshold: 0.7 (highest central F1)');
   });
 
   it('writes Markdown with the settings, summary, sweeps and one row per query', async () => {

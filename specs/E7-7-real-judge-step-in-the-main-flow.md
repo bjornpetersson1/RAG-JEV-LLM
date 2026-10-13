@@ -4,7 +4,7 @@
 - **Labels:** `E7 UI and measurement`
 - **Phase:** 5. UI and measurement
 - **Depends on:** none (related: E7-6 (#79), E7-5 (#78), E7-4 (#58))
-- **Status:** Approved
+- **Status:** Implemented — all acceptance criteria verified (npm ci, lint, format:check, typecheck, 926 tests (867 backend, 59 frontend; `npm test` offline under sandbox-exec) and build exit 0; `eval:run` with the Haiku judge on the subscription (threshold 0.8, `eval/report-2026-10-13.md`); `bench:compare --runs 1 --no-draft` with `llm` and `minilm`; `npm run dev` with `RERANKER=llm`: "4 bedömda som relevanta av 30" and the rerank row 30.5 s in the timing panel)
 
 ## Summary
 
@@ -53,13 +53,13 @@ The main flow gets back the judge step the requirements describe. Each candidate
 
 ## Tasks
 
-- [ ] Make `llm` the default `RERANKER`, and set `LLM_JUDGE_MODEL=claude-haiku-5-5` in `.env.example`. Update the README, `.env.example`, `CLAUDE.md`'s one-line description, and the config tests.
-- [ ] Rerank step event: `judged` and the number of scored candidates. Set `judged` from the reranker, so that a threshold above 0 counts as judged.
-- [ ] Frontend: the two wordings, and the no-draft text for a result without approved chunks. Add tests.
-- [ ] Query-flow tests: the threshold rule, and no relevant candidate → no generator call.
-- [ ] Run the threshold sweep with the Haiku judge on the subscription. Set `JUDGE_THRESHOLD` and write up the report.
-- [ ] Run `bench:compare --runs 1 --no-draft` with `llm` and with `minilm`, and write up the report.
-- [ ] Check the dev server with `RERANKER=llm`: judge time in the timing panel and the wording.
+- [x] Make `llm` the default `RERANKER`, and set `LLM_JUDGE_MODEL=claude-haiku-5-5` in `.env.example`. Update the README, `.env.example`, `CLAUDE.md`'s one-line description, and the config tests.
+- [x] Rerank step event: `judged` and the number of scored candidates. Set `judged` from the reranker, so that a threshold above 0 counts as judged.
+- [x] Frontend: the two wordings, and the no-draft text for a result without approved chunks. Add tests.
+- [x] Query-flow tests: the threshold rule, and no relevant candidate → no generator call.
+- [x] Run the threshold sweep with the Haiku judge on the subscription. Set `JUDGE_THRESHOLD` and write up the report.
+- [x] Run `bench:compare --runs 1 --no-draft` with `llm` and with `minilm`, and write up the report.
+- [x] Check the dev server with `RERANKER=llm`: judge time in the timing panel and the wording.
 
 ## Decisions
 
@@ -70,6 +70,24 @@ The main flow gets back the judge step the requirements describe. Each candidate
 - **The judge cache stays on in the query flow** (default). A repeated demo query costs no new calls. The benchmark and the sweep run with the cache off, as before, so their times are real.
 - **`judged` comes from the reranker, not the flow name or reranker name** (default). That way, a cross-encoder given a threshold, or JEV, gets the right wording without any special cases.
 - **The benchmark runs once (`--runs 1`) and without drafts** (default). Five runs of 20 queries with about 30 judge calls each would be about 3,000 calls on the subscription, and an earlier benchmark lost pairs to the session limit. Generation time belongs to #91.
+
+- **Settled while implementing:**
+  - **`judged` lives on `RerankResult`**: the judge rerankers set it true, a cross-encoder when its threshold is above 0. The flow passes it on in the rerank step event with `candidates` (the scored count), so the UI never looks at the reranker's name.
+  - **The judge wording names the cap**: "N bedömda som relevanta av M" when every relevant chunk is sent, and ", de K bästa skickas till generatorn" when `RERANK_TOP_K` cut some.
+  - **`eval:run`'s threshold sweep is now per grade** (`sweeps[mode].central` / `.all`, both in the terminal and the Markdown report), and the recommendation is the central sweep's best F1, as criterion 2 asks; before, it swept against all graded chunks only.
+  - **`JUDGE_THRESHOLD` 0.5 → 0.8** from that sweep (central F1 0.388 against 0.230 at 0.5); tests that relied on the 0.5 default pin it explicitly.
+  - **`bench:rerank` defaults to `minilm`** (it only measures local cross-encoders), no longer to the default `RERANKER`.
+  - **Measured cost** (`eval/report-2026-10-13.md`): time to sources 35.2 s with the judge (27.1 s judging through the Claude Code CLI), 10.8 s with minilm, 0.05 s for the reference RAG; precision 0.440, 0.350 and 0.287.
+
+- **Code review (high):**
+  - **Unknown chunks are named.** The rerank step event carries `unknown`; the UI adds "(N kunde inte bedömas)", and a result without a draft says "inga källor bedömdes som relevanta, och N kunde inte bedömas", so a failing judge (CLI error, session limit, timeout) does not look like "nothing relevant".
+  - **The threshold sweep keeps at most `RERANK_TOP_K` per query, best first**, as the query flow does, so the threshold is tuned for the production rule. The judges themselves still keep every relevant chunk, so the mode table stays comparable with earlier runs. Re-run: 0.8 still has the best central F1 (0.356 against 0.305 at 0.5).
+  - **The default threshold is per judge**: 0.8 for `llm`, 0.5 for `jev` until #79, so JEV's default does not move on a Haiku measurement. `.env.example` leaves `JUDGE_THRESHOLD` empty.
+  - **A blank `LLM_JUDGE_MODEL` means Haiku** (a per-role default in the LLM config, before `LLM_MODEL`), so the code default matches the threshold's calibration and does not judge with Opus.
+  - **The candidate sweep (`eval:run -- --sweep`) uses minilm unless `RERANKER` is set**, so it does not make thousands of uncached judge calls by default and stays comparable with E7-4's rows.
+  - **Wording**: ", de K bästa går vidare" instead of "skickas till generatorn", since the context limits may still leave some out.
+  - **A query-flow test with the real (fake-LLM) judge** shows both sides of `JUDGE_THRESHOLD` and the `RERANK_TOP_K` cap.
+  - **Declined: one shared type for the step events.** The frontend copies every event type from the backend; there is no shared package, and adding one is outside this issue.
 
 ## Open Questions
 

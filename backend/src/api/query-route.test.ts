@@ -122,6 +122,34 @@ describe('POST /query', () => {
     });
   });
 
+  it('ends with the result and done, without a draft, when the judge approves nothing', async () => {
+    const judgedIrrelevant: QueryFlowDependencies = {
+      ...fakeFlow(),
+      rerank: async (_instruction, chunks) => fakeRerankResult(chunks, { '1': 0.1, '2': 0.2 }),
+    };
+    app = appWith(flows(judgedIrrelevant));
+
+    const lines = events((await post(app, { template: 'nda', instruction: 'Säljare' })).payload);
+
+    expect(lines.map((event) => (event.type === 'step' ? event.step : event.type))).toEqual([
+      'start',
+      'translation',
+      'search',
+      'rerank',
+      'result',
+      'done',
+    ]);
+    expect(lines[3]).toMatchObject({
+      candidates: 2,
+      judged: true,
+      relevant: 0,
+      unknown: 0,
+      approved: 0,
+    });
+    const result = lines.find((event) => event.type === 'result');
+    expect(result?.type === 'result' && result.result.draft).toBeUndefined();
+  });
+
   it('runs the same flow on the template alone, with its default instruction', async () => {
     app = appWith(flows(fakeFlow()));
 
