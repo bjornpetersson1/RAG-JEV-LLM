@@ -4,7 +4,7 @@
 - **Labels:** `E7 UI and measurement`
 - **Phase:** 5. UI and measurement (last issue of E7)
 - **Depends on:** E5-3 (#17), E8-5 (#69), E7-5 (#78); after E7-3 (#24)
-- **Status:** Implemented — all acceptance criteria verified (npm ci, lint, format:check, typecheck, 913 tests (860 backend, 53 frontend) and build exit 0; `npm run eval:run -- --sweep` on the demo machine with minilm and the Claude Code subscription, table and choice in `eval/report-2026-10-13.md`)
+- **Status:** Implemented — all acceptance criteria verified (npm ci, lint, format:check, typecheck, 915 tests (862 backend, 53 frontend) and build exit 0; `npm run eval:run -- --sweep` on the demo machine with minilm and the Claude Code subscription, table and choice in `eval/report-2026-10-13.md`)
 
 ## Summary
 
@@ -48,7 +48,7 @@ Measure and tune what reaches the generator: the evaluation set gets graded rele
 
 - [x] Grade the 266 labels in `eval/queries.yaml`; loader and types for `grade`.
 - [x] Metrics: precision@k before rerank; precision/recall per grade.
-- [x] `--sweep` in `eval:run`: rerank once at the largest count, derive the grid, the sweep table.
+- [x] `--sweep` in `eval:run`: per-count lists, their union reranked once per query, the sweep table.
 - [x] Run the sweep; apply the rule; update defaults, `.env.example` and README.
 - [x] Update #58's description; README pointer to #79.
 - [x] Tests.

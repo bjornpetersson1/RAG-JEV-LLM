@@ -111,7 +111,7 @@ export function createSweepSetup(
 }
 
 /** The embedder, answering a repeat of the last single query from memory. */
-function rememberingLastQuery(embedder: Embedder): Embedder {
+export function rememberingLastQuery(embedder: Embedder): Embedder {
   let last: { text: string; embedding: Embedding[] } | undefined;
   return {
     name: embedder.name,
