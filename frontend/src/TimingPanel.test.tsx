@@ -164,6 +164,25 @@ describe('TimingPanel', () => {
   });
 });
 
+describe('an opened info text', () => {
+  afterEach(cleanup);
+
+  it('opens in a row of its own across the table, not in the row header', () => {
+    const main: FlowState = { planned: ['search', 'rerank'], steps: {}, result: queryResult() };
+    render(<TimingPanel flows={{ main }} reference={false} running={false} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Vad betyder Rerank?' }));
+
+    const note = screen.getByRole('note');
+    const cell = note.closest('td') as HTMLTableCellElement;
+    expect(cell.colSpan).toBe(2);
+    expect(cell.closest('tr')?.className).toBe('info-row');
+    expect(screen.getByRole('rowheader', { name: 'Rerank' }).contains(note)).toBe(false);
+    // The detail (time per candidate, cache hits) is explained under the same button.
+    expect(note.textContent).toContain('Tid per bedömd kandidat');
+  });
+});
+
 describe('the comparison', () => {
   afterEach(cleanup);
 

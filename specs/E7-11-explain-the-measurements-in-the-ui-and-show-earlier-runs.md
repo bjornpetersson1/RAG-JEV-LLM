@@ -4,7 +4,7 @@
 - **Labels:** `E7 UI and measurement`
 - **Phase:** 5. UI and measurement
 - **Depends on:** none (related: E7-3 (#24), E7-8 (#91), E7-9 (#94))
-- **Status:** Implemented — all acceptance criteria verified (npm ci, lint, format:check, typecheck, 971 tests (882 backend, 89 frontend; `npm test` offline under sandbox-exec, loopback only) and build exit 0; `GET /runs` also checked against the real `logs/runs.jsonl`; not checked by eye in a browser)
+- **Status:** Implemented — all acceptance criteria verified (npm ci, lint, format:check, typecheck, 972 tests (882 backend, 90 frontend; `npm test` offline under sandbox-exec, loopback only) and build exit 0; `GET /runs` also checked against the real `logs/runs.jsonl`; layout checked in headless Chrome)
 
 ## Summary
 
@@ -102,7 +102,13 @@ The web UI says, in plain Swedish for a lawyer, what each number measures, why, 
   - **Not changed: two source-accuracy formatters.** The result view formats from the post-check's counts ("3 av 5 hänvisningar"), which avoids floating-point error. The run log keeps only the ratio, so the runs page formats that. One helper would need both inputs.
 - **PR review:**
   - **Fixed: the rerank and score texts cover a ranker too** (`RERANKER=bge` or `minilm`), where every candidate gets a score and the best go on with no threshold, and point to the configuration line. Clean code after the review was reviewed inline (two texts).
-  - **Left to the owner:** looking at the timing panel with an info text open. No browser tool was available, so the layout is not checked by eye.
+  - **Checked by eye after the review (owner asked for screenshots).** Headless Chrome over the DevTools protocol, with the app on the fake LLM roles, showed that an opened text inside a row header squeezed the timing table into a tall, narrow column, and that two (i) buttons on one row were unclear. Fixed:
+    - an opened text in a table now gets a row of its own across the whole table (`ExplainedRow`);
+    - a timing row has one (i), which explains the row's measure and its detail (time per candidate and cache hits, tokens and ms per token) together;
+    - row headers do not wrap;
+    - the counts table has a fixed header column, so an opened text does not move the values;
+    - a heading's text opens under the heading.
+      A test checks that an opened text is in its own row, spans the table and is not in the row header.
 
 ## Open Questions
 

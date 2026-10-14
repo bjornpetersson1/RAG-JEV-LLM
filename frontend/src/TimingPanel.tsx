@@ -1,6 +1,6 @@
 import type { FlowState } from './FlowProgress';
 import { DEMO_NOTICE, SECTION_LEADS, type Measure } from './explanations';
-import { Info } from './Info';
+import { ExplainedRow, Info } from './Info';
 import {
   FLOWS,
   type FlowConfiguration,
@@ -15,7 +15,7 @@ interface Row {
   /** The step whose event brings the row's time; absent for the total. */
   step?: QueryStepName | ((planned: readonly QueryStepName[]) => QueryStepName);
   timing: keyof StepTimings;
-  /** What the row's (i) button explains, and its detail's, if it has one (E7-11). */
+  /** What the row's (i) button explains, with its detail's text if it has one (E7-11). */
   measure: Measure;
   detail?: Measure;
   /** The summary rows stand out: time to sources, the comparison's measure, and the total. */
@@ -106,12 +106,14 @@ export function TimingPanel({ flows, reference, skipped, running }: TimingPanelP
         </thead>
         <tbody>
           {ROWS.map((row) => (
-            <tr key={row.label} className={row.className}>
-              {/* Named by its label alone, so the (i) buttons inside are not read as part of it. */}
-              <th scope="row" aria-label={row.label}>
-                {row.label} <Info measure={row.measure} />
-                {row.detail && <Info measure={row.detail} />}
-              </th>
+            <ExplainedRow
+              key={row.label}
+              label={row.label}
+              measure={row.measure}
+              detail={row.detail}
+              columns={columns.length + 1}
+              className={row.className}
+            >
               {columns.map(({ flow, state, timings }) => (
                 <td key={flow}>
                   <TimingCell
@@ -123,7 +125,7 @@ export function TimingPanel({ flows, reference, skipped, running }: TimingPanelP
                   />
                 </td>
               ))}
-            </tr>
+            </ExplainedRow>
           ))}
         </tbody>
       </table>

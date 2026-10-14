@@ -29,6 +29,12 @@ const SHOWN: Measure[] = [
   'notSent',
 ];
 
+/** The details explained under another measure's button. */
+const UNDER: Partial<Record<Measure, Measure>> = {
+  rerankDetail: 'rerank',
+  generationDetail: 'generation',
+};
+
 const CONFIGURATION = { retriever: 'tags', generator: 'fake', topK: 8 };
 
 function flow(overrides: Partial<FlowState> = {}): FlowState {
@@ -76,7 +82,9 @@ describe('info texts', () => {
 
   it.each(SHOWN)('%s has an (i) button that opens its text in place', (measure) => {
     renderEverything();
-    const { name, text } = EXPLANATIONS[measure];
+    // A timing row's detail is explained under the row's own button.
+    const { name } = EXPLANATIONS[UNDER[measure] ?? measure];
+    const { text } = EXPLANATIONS[measure];
     const [button] = screen.getAllByRole('button', { name: `Vad betyder ${name}?` });
 
     expect(button.getAttribute('aria-expanded')).toBe('false');
@@ -84,9 +92,9 @@ describe('info texts', () => {
 
     expect(button.getAttribute('aria-expanded')).toBe('true');
     expect(text.trim()).not.toBe('');
-    expect(document.getElementById(button.getAttribute('aria-controls') ?? '')?.textContent).toBe(
-      text,
-    );
+    expect(
+      document.getElementById(button.getAttribute('aria-controls') ?? '')?.textContent,
+    ).toContain(text);
     fireEvent.click(button);
     expect(screen.queryByText(text)).toBeNull();
   });

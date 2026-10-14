@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { SECTION_LEADS, type Measure } from './explanations';
-import { Info } from './Info';
+import { ExplainedRow } from './Info';
 import { FLOWS, TEMPLATES, type FlowName, type QueryStepName } from './query';
 import {
   fetchRuns,
@@ -194,19 +194,13 @@ function RunDetail({ request, onBack }: { request: LoggedRequest; onBack(): void
           <table className="counts">
             <tbody>
               {COUNTS.map(({ label, key, measure }) => (
-                <tr key={key}>
-                  <th scope="row">
-                    {label} <Info measure={measure} />
-                  </th>
+                <ExplainedRow key={key} label={label} measure={measure} columns={2}>
                   <td>{entry.counts?.[key] ?? '–'}</td>
-                </tr>
+                </ExplainedRow>
               ))}
-              <tr>
-                <th scope="row">
-                  Källträffsäkerhet <Info measure="sourceAccuracy" />
-                </th>
+              <ExplainedRow label="Källträffsäkerhet" measure="sourceAccuracy" columns={2}>
                 <td>{formatAccuracy(entry.sourceAccuracy)}</td>
-              </tr>
+              </ExplainedRow>
             </tbody>
           </table>
         </section>

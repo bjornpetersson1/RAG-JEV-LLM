@@ -280,14 +280,50 @@ main {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  gap: 0.25rem;
+}
+
+.heading-with-info h3 {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.heading-with-info .info {
+  margin-left: 0;
+}
+
+/* A row header keeps its label and (i) on one line; an opened text gets a row of its own. */
+.timing th[scope='row'],
+.counts th {
+  white-space: nowrap;
+}
+
+.info-row td {
+  padding-top: 0;
+}
+
+.info-row .info-text {
+  max-width: none;
+}
+
+.info-paragraph {
+  display: block;
+}
+
+.info-paragraph + .info-paragraph {
+  margin-top: 0.5rem;
 }
 
 .heading-with-info .info-text {
   flex-basis: 100%;
+  max-width: none;
+}
+
+.comparison .heading-with-info {
+  margin: 1rem 0 0.25rem;
 }
 
 .comparison h3 {
-  margin: 1rem 0 0.25rem;
   font-size: 1rem;
 }
 
@@ -345,4 +381,18 @@ main {
   font-weight: normal;
   text-align: left;
   padding-right: 1.5rem;
+}
+
+/* A fixed header column, so an opened text does not move the values. */
+.counts {
+  width: 100%;
+  table-layout: fixed;
+}
+
+.counts th {
+  width: 16rem;
+}
+
+.sources .heading-with-info {
+  margin: 1rem 0 0.25rem;
 }
