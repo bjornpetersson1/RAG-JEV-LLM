@@ -59,9 +59,10 @@ export const EXPLANATIONS: Record<Measure, Explanation> = {
   rerank: {
     name: 'Rerank',
     text:
-      'Tiden för AI-domaren att bedöma vilka kandidater som är relevanta för instruktionen. ' +
-      'Domaren läser varje kandidat och svarar ja eller nej; de godkända används i utkastet. Det ' +
-      'här steget tar oftast längst tid innan utkastet börjar skrivas.',
+      'Tiden för att bedöma vilka kandidater som är relevanta för instruktionen. Med en AI-domare ' +
+      '(standard) läses varje kandidat och får ett ja eller nej; med en lokal rankningsmodell får ' +
+      'varje kandidat en poäng och de bästa går vidare. Vad flödet använde står i konfigurationen ' +
+      '(reranker). Med en AI-domare tar steget oftast längst tid innan utkastet börjar skrivas.',
   },
   rerankDetail: {
     name: 'tid per bedömd kandidat och cacheträffar',
@@ -130,7 +131,8 @@ export const EXPLANATIONS: Record<Measure, Explanation> = {
     name: 'poäng',
     text:
       'Domarens eller rankarens bedömning av hur relevant källan är, från 0 till 1, med modellens ' +
-      'namn inom parentes. Högre är mer relevant; källor över tröskeln godkänns.',
+      'namn inom parentes. Högre är mer relevant. En AI-domare godkänner källor över sin tröskel; ' +
+      'en rankningsmodell har ingen tröskel, utan de högst rankade går vidare.',
   },
   origin: {
     name: 'ursprung',

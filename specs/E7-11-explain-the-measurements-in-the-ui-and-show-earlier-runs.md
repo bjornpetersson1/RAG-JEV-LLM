@@ -100,6 +100,9 @@ The web UI says, in plain Swedish for a lawyer, what each number measures, why, 
   - **Fixed: row headers are named by their label (`aria-label`), and the comparison's (i) sits beside its heading**, so a screen reader does not read the buttons as part of a header.
   - **Fixed: the texts do not assume the main flow uses tags.** Translation and embedding say which kind of flow has the step, and the introduction says "i standardinställningen" and points to the configuration line (`RETRIEVER=bge` or `both`).
   - **Not changed: two source-accuracy formatters.** The result view formats from the post-check's counts ("3 av 5 hänvisningar"), which avoids floating-point error. The run log keeps only the ratio, so the runs page formats that. One helper would need both inputs.
+- **PR review:**
+  - **Fixed: the rerank and score texts cover a ranker too** (`RERANKER=bge` or `minilm`), where every candidate gets a score and the best go on with no threshold, and point to the configuration line. Clean code after the review was reviewed inline (two texts).
+  - **Left to the owner:** looking at the timing panel with an info text open. No browser tool was available, so the layout is not checked by eye.
 
 ## Open Questions
 
