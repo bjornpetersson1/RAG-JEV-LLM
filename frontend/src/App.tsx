@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
+import { INTRODUCTION } from './explanations';
 import { FlowProgress, type FlowState } from './FlowProgress';
 import { QueryForm } from './QueryForm';
+import { RunsPage } from './RunsPage';
 import { TimingPanel } from './TimingPanel';
 import { fetchHealthStatus } from './health';
 import {
@@ -13,6 +15,18 @@ import {
 } from './query';
 
 const UNREACHABLE = 'unreachable';
+
+/** The two views, by `#` address so a reload or a link keeps the view (E7-11). */
+const VIEWS = [
+  { hash: '', title: 'Ny fråga' },
+  { hash: '#korningar', title: 'Tidigare körningar' },
+] as const;
+
+type View = (typeof VIEWS)[number]['hash'];
+
+function currentView(): View {
+  return window.location.hash === '#korningar' ? '#korningar' : '';
+}
 
 interface Run {
   flows: Partial<Record<FlowName, FlowState>>;
@@ -27,6 +41,13 @@ interface Run {
 export function App() {
   const [status, setStatus] = useState<string>();
   const [run, setRun] = useState<Run>();
+  const [view, setView] = useState<View>(currentView);
+
+  useEffect(() => {
+    const onHashChange = () => setView(currentView());
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -63,40 +84,52 @@ export function App() {
     <main>
       <h1>Legal RAG POC</h1>
       <p className="health">Backend: {status ?? 'checking…'}</p>
-      <QueryForm running={run?.running ?? false} onSubmit={submit} />
-      {run?.error && (
-        <p className="error" role="alert">
-          {run.error}
-        </p>
-      )}
-      {run && (
-        <TimingPanel
-          flows={run.flows}
-          reference={run.reference}
-          skipped={run.skipped.reference}
-          running={run.running}
-        />
-      )}
-      {run && preparingReference(run) && (
-        <p className="pending" role="status">
-          Förbereder referens-RAG…
-        </p>
-      )}
-      {/* A flow appears once the backend starts it. */}
-      {FLOWS.map(({ flow, title }) => {
-        const state = run?.flows[flow];
-        return (
-          state && (
-            <FlowProgress
-              key={flow}
-              flow={flow}
-              title={title}
-              state={state}
-              active={(run?.running ?? false) && !state.result}
-            />
-          )
-        );
-      })}
+      <nav className="views" aria-label="Vyer">
+        {VIEWS.map(({ hash, title }) => (
+          <a key={title} href={hash || '#'} aria-current={view === hash ? 'page' : undefined}>
+            {title}
+          </a>
+        ))}
+      </nav>
+      {/* The query view stays mounted, so a running query and its result survive a look at the runs. */}
+      {view === '#korningar' && <RunsPage />}
+      <div hidden={view === '#korningar'}>
+        <p className="introduction">{INTRODUCTION}</p>
+        <QueryForm running={run?.running ?? false} onSubmit={submit} />
+        {run?.error && (
+          <p className="error" role="alert">
+            {run.error}
+          </p>
+        )}
+        {run && (
+          <TimingPanel
+            flows={run.flows}
+            reference={run.reference}
+            skipped={run.skipped.reference}
+            running={run.running}
+          />
+        )}
+        {run && preparingReference(run) && (
+          <p className="pending" role="status">
+            Förbereder referens-RAG…
+          </p>
+        )}
+        {/* A flow appears once the backend starts it. */}
+        {FLOWS.map(({ flow, title }) => {
+          const state = run?.flows[flow];
+          return (
+            state && (
+              <FlowProgress
+                key={flow}
+                flow={flow}
+                title={title}
+                state={state}
+                active={(run?.running ?? false) && !state.result}
+              />
+            )
+          );
+        })}
+      </div>
     </main>
   );
 }

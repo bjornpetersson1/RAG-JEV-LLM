@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react';
+import { SECTION_LEADS, type Measure } from './explanations';
+import { Info } from './Info';
 import type { FlowName, Origin, QueryResult, QuerySource, SourceStatus } from './query';
 
 const ORIGINS: Record<Origin, string> = {
@@ -54,13 +56,22 @@ export function SourceList({ flow, result, selected, open, onToggle }: SourceLis
 
   return (
     <div className="sources">
-      <Group title="Citerade källor" sources={cited} entry={entry} />
-      <Group title="Skickade men inte citerade" sources={sent} entry={entry} />
+      <p className="lead">
+        {SECTION_LEADS.sources} Varje källa visar sin poäng <Info measure="score" /> och sitt
+        ursprung <Info measure="origin" />.
+      </p>
+      <Group title="Citerade källor" measure="cited" sources={cited} entry={entry} />
+      <Group title="Skickade men inte citerade" measure="sent" sources={sent} entry={entry} />
       {notSent.length > 0 && (
-        <details className="not-sent">
-          <summary>Inte skickade till generatorn ({notSent.length})</summary>
-          <ul>{notSent.map(entry)}</ul>
-        </details>
+        <>
+          <p className="not-sent-info">
+            Om kandidaterna som inte skickades <Info measure="notSent" />
+          </p>
+          <details className="not-sent">
+            <summary>Inte skickade till generatorn ({notSent.length})</summary>
+            <ul>{notSent.map(entry)}</ul>
+          </details>
+        </>
       )}
     </div>
   );
@@ -73,16 +84,20 @@ export function sourceDomId(flow: FlowName, chunkId: string): string {
 
 interface GroupProps {
   title: string;
+  measure: Measure;
   sources: QuerySource[];
   entry(source: QuerySource): ReactNode;
 }
 
-function Group({ title, sources, entry }: GroupProps) {
+function Group({ title, measure, sources, entry }: GroupProps) {
   return (
     <>
-      <h3>
-        {title} ({sources.length})
-      </h3>
+      <div className="heading-with-info">
+        <h3>
+          {title} ({sources.length})
+        </h3>
+        <Info measure={measure} />
+      </div>
       {sources.length === 0 ? <p>Inga.</p> : <ul>{sources.map(entry)}</ul>}
     </>
   );

@@ -1,5 +1,7 @@
 import { useCallback, useMemo, useState, type MouseEvent, type ReactNode } from 'react';
 import Markdown from 'react-markdown';
+import { SECTION_LEADS } from './explanations';
+import { Info } from './Info';
 import type { Draft, FlowName, PostCheck, QueryResult } from './query';
 import { FLAG_LINK, linkReferences } from './references';
 import { SourceList, sourceDomId } from './SourceList';
@@ -154,9 +156,15 @@ function CheckSummary({ check }: { check: PostCheck }) {
       : // From the counts, since e.g. 0.29 × 100 is 28.999… in floating point.
         `${Math.floor((check.valid * 100) / check.references)} % (${check.valid} av ${check.references} hänvisningar)`;
   return (
-    <p className="check">
-      Källträffsäkerhet: {accuracy} · {check.flags.length} flaggade
-    </p>
+    <div className="check">
+      <p className="lead">{SECTION_LEADS.check}</p>
+      <p>
+        <span>
+          Källträffsäkerhet: {accuracy} · {check.flags.length} flaggade
+        </span>{' '}
+        <Info measure="sourceAccuracy" /> <Info measure="flagged" />
+      </p>
+    </div>
   );
 }
 

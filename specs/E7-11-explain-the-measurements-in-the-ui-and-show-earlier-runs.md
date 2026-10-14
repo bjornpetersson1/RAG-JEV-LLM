@@ -4,7 +4,7 @@
 - **Labels:** `E7 UI and measurement`
 - **Phase:** 5. UI and measurement
 - **Depends on:** none (related: E7-3 (#24), E7-8 (#91), E7-9 (#94))
-- **Status:** Approved
+- **Status:** Implemented — all acceptance criteria verified (npm ci, lint, format:check, typecheck, 971 tests (882 backend, 89 frontend; `npm test` offline under sandbox-exec, loopback only) and build exit 0; `GET /runs` also checked against the real `logs/runs.jsonl`; not checked by eye in a browser)
 
 ## Summary
 
@@ -15,7 +15,7 @@ The web UI says, in plain Swedish for a lawyer, what each number measures, why, 
 - **Info texts.** Each section gets one always-visible sentence saying what it shows: the timing panel, the comparison, the draft's post-check and the source list. Each measure gets an (i) button that opens its explanation in place: what is measured, why, and how to read it.
 - **Introduction.** A short text above the results says what the comparison is about. The main flow finds sources with tags and the reference RAG with vectors, and both use the same judge and generator.
 - **The comparison in words.** The comparison line says which flow had its sources first and what that means. It also says that the UI's numbers are a demo (judge cache on) and that `bench:compare` is the measurement.
-- **Earlier runs.** A tab, *Tidigare körningar*, lists every run in `logs/runs.jsonl`, newest first, grouped per request (`runId`). It filters by contract type and flow and is split into pages. Opening a request shows its timing panel and counts as when it ran.
+- **Earlier runs.** A tab, _Tidigare körningar_, lists every run in `logs/runs.jsonl`, newest first, grouped per request (`runId`). It filters by contract type and flow and is split into pages. Opening a request shows its timing panel and counts as when it ran.
 
 ## Non-goals
 
@@ -48,7 +48,7 @@ The web UI says, in plain Swedish for a lawyer, what each number measures, why, 
    - `GET /api/runs` returns the requests, newest first. Each request holds its flows' log entries.
    - The endpoint filters by contract type (`template`) and by flow (requests with that flow), and returns pages of 20 with the total count.
    - A line that is not valid JSON is skipped, and so is an entry missing `runId` or `timestamp`. A missing log gives an empty list.
-   - The tab *Tidigare körningar* (address `#korningar`) lists:
+   - The tab _Tidigare körningar_ (address `#korningar`) lists:
      - each request's time, contract type and instruction (or the template's default);
      - its flows' time to sources and total;
      - a failed flow's error.
@@ -63,12 +63,12 @@ The web UI says, in plain Swedish for a lawyer, what each number measures, why, 
 
 ## Tasks
 
-- [ ] Info texts: the texts, an (i) component and the always-visible sentences.
-- [ ] The introduction and the comparison line in words, with the demo sentence.
-- [ ] Backend: read and group the run log, filters, pages, `GET /api/runs`.
-- [ ] Frontend: the tabs with `#` addresses, the runs list with filters and pages, and a request's detail with the timing panel.
-- [ ] Tests for every criterion.
-- [ ] README.
+- [x] Info texts: the texts, an (i) component and the always-visible sentences.
+- [x] The introduction and the comparison line in words, with the demo sentence.
+- [x] Backend: read and group the run log, filters, pages, `GET /api/runs`.
+- [x] Frontend: the tabs with `#` addresses, the runs list with filters and pages, and a request's detail with the timing panel.
+- [x] Tests for every criterion.
+- [x] README.
 
 ## Decisions
 
@@ -80,6 +80,26 @@ The web UI says, in plain Swedish for a lawyer, what each number measures, why, 
 - **Requests are grouped by `runId`** (default). The flows of one request are shown together, as in the timing panel.
 - **The detail view reuses the timing panel** (default). The UI then has one place that formats timings, and the info texts are the same.
 - **The run log is read on each request** (default). It is a local file of a few hundred lines; no cache.
+- **Settled while implementing:**
+  - **The backend route is `GET /runs`**, which the UI calls as `/api/runs` through the Vite proxy, like `/query`. It is registered also without a database, since the run log is a file of its own.
+  - **An (i) button is a real `<button>` named "Vad betyder <name>?"**, with `aria-expanded` and `aria-controls`; the visible "i" is `aria-hidden`, so a row header or heading keeps its own name. The source groups' buttons sit beside their headings, not in them.
+  - **Score and origin are explained once, in the source list's sentence**, not on every source: the list can have 30 entries.
+  - **The comparison has a heading, "Jämförelse", with its (i) button**; the sentences under it are its always-visible text. It names the parts of the gap (translation, search, judge) and which flow knew its sources first, counting the translation.
+  - **`TimingFlow`** is what the timing panel needs of a flow (a live `FlowState` or a logged run, whose timings may be partial). The comparison is left out when a flow lacks a time to sources.
+  - **A run's detail also explains its counts** (tags, candidates, full-text fill, approved, sent, cited), with texts of their own; the counts are only on the runs page.
+  - **The contract types' Swedish names (`TEMPLATES`) moved to `query.ts`**, shared by the form and the runs page.
+- **Clean code:** reviewed inline. `FilterSelect` replaces the two copied filter selects, and `runsPage` is no longer exported (only the route uses it).
+- **Code review (high):**
+  - **Fixed: a log entry needs `runId`, `timestamp`, `flow`, `template` and `timings`**, the fields the runs page reads. A line without them is skipped (test), so a partly written line cannot crash the page.
+  - **Fixed: the log is read with `fs.promises.readFile`**, so a long log does not block a query that is streaming. It is still read on every call (Decisions above: a local file of a few hundred lines).
+  - **Fixed: a new filter or page clears the old list and shows "Hämtar körningar…"** until the answer arrives (test).
+  - **Fixed: the template's default instruction comes from whichever flow logged it**, since a failed flow logs none (test).
+  - **Fixed: a logged flow's plan comes from its configuration** (translator, reranker) or its timings, and always has generation, so a step it failed in stays in the plan.
+  - **Fixed: a request's `timestamp` is documented as when its first flow started**, which is what the run log stamps.
+  - **Fixed: the verdict no longer reads "alltså" after a sentence it contradicts.** It says "Räknat med översättningen visste … först" when the main flow has a translation, and has no stray space when the parts are missing (test without a translation).
+  - **Fixed: row headers are named by their label (`aria-label`), and the comparison's (i) sits beside its heading**, so a screen reader does not read the buttons as part of a header.
+  - **Fixed: the texts do not assume the main flow uses tags.** Translation and embedding say which kind of flow has the step, and the introduction says "i standardinställningen" and points to the configuration line (`RETRIEVER=bge` or `both`).
+  - **Not changed: two source-accuracy formatters.** The result view formats from the post-check's counts ("3 av 5 hänvisningar"), which avoids floating-point error. The run log keeps only the ratio, so the runs page formats that. One helper would need both inputs.
 
 ## Open Questions
 

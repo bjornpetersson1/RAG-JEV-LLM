@@ -480,6 +480,30 @@ The result carries what this needs: `sources` lists every candidate with its doc
 
 Above the results, the timing panel (E7-3) shows each step's time and the total for both flows, side by side, with a bar per flow on one shared scale. The steps are query translation, search (with the time spent embedding the instruction), rerank (with the average per candidate the reranker scored, and the judge cache hits), time to sources (E7-8: search plus rerank, without the translation), generation (with the draft's output tokens and ms per token) and the total. A step appears as soon as it finishes, a step still running shows `…`, and a step the flow does not run shows `–`. The UI keeps the judge cache on, and the reference runs after the main flow on the same question, so a chunk both flows found is a cache hit for the reference: its judge time and time to sources can come out lower than a fresh run's. The panel's comparison is therefore a demo; `bench:compare`, which runs with the cache off, is the measured result. When both flows are done, the panel says how much sooner or later the main flow had its sources, once without and once with the query translation (whose time it names), and then how much faster or slower it was in total. A line per flow names its configuration: retriever, tag index, query translator, reranker with model and precision, `RERANK_TOP_K` and generator. The reference RAG option is on by default. Without it, the panel says the reference was not run.
 
+### Info texts and earlier runs
+
+The UI explains its numbers in plain Swedish, written for a lawyer (E7-11). There are three kinds of text:
+
+- An introduction above the form says what the comparison is about: tags against vectors, with the same judge and generator.
+- Each section has one always-visible sentence: the timing panel, the draft's post-check and the source list.
+- Each measure has an (i) button that opens what it measures, why, and how to read it, in place. The measures are each timing row and its details, the configuration, the source accuracy and flags, a source's score and origin, and the source groups.
+
+The comparison under the timing panel also reads the result in words. It names what the gap in time to sources consists of (the translation, the search and the judge) and which flow knew its sources first. It ends with the notice that the UI's numbers are a demo and that `npm run bench:compare` is the measurement. The texts live in `frontend/src/explanations.ts`.
+
+The tab _Tidigare körningar_ (`#korningar`) lists every run in the [run log](#run-log), newest first, grouped per request. Each request shows its time, contract type and instruction, and each flow's time to sources and total, or its error. It filters by contract type and flow, 20 requests per page. Opening a request shows its timing panel, counts and source accuracy, with the same info texts. The run log keeps no drafts or sources, so an earlier run shows neither. A field an older entry lacks shows `–`.
+
+The list comes from `GET /api/runs` (`/runs` on the backend):
+
+```bash
+curl 'http://localhost:3000/runs?template=nda&flow=reference&page=2'
+```
+
+- `template` (`employment` or `nda`) and `flow` (`main` or `reference`, a request with that flow) are optional filters.
+- `page` starts at 1.
+- The answer has `requests` (each with `runId`, `timestamp` and its `flows`' log entries), `total`, `page` and `pageSize`.
+- A line in the log that is not JSON, or lacks `runId`, `timestamp`, `flow`, `template` or `timings`, is skipped. A missing log gives an empty list.
+- A request's `timestamp` is when its first flow started; the list is ordered by it.
+
 ### Run log
 
 Every run of a flow, from the UI or `npm run query`, is appended as one JSON line to `logs/runs.jsonl` (git-ignored; the folder is created when missing):

@@ -1,4 +1,5 @@
 import { registerQueryRoute, type QueryFlows } from './api/query-route.js';
+import { registerRunsRoute } from './api/runs-route.js';
 import { createQueryFlows, openQueryDatabase } from './api/setup.js';
 import { buildApp } from './app.js';
 import { resolveDatabasePath } from './db/config.js';
@@ -22,6 +23,8 @@ const app = buildApp();
 
 try {
   app.tagIndex = loadTagIndex(databasePath, buildTagIndex, app.log);
+  // Earlier runs are listed also without a database: the run log is a file of its own.
+  registerRunsRoute(app);
   const flows = registerQueryFlows(databasePath);
   // Before listening, so the first query's timings do not include loading the local models.
   const warmUpStarted = performance.now();
