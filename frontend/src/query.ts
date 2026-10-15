@@ -4,6 +4,12 @@
 export type Template = 'employment' | 'nda';
 export type FlowName = 'main' | 'reference';
 
+/** The contract types, with their names in the UI. */
+export const TEMPLATES: readonly { value: Template; label: string }[] = [
+  { value: 'employment', label: 'Anställningsavtal' },
+  { value: 'nda', label: 'Sekretessavtal' },
+];
+
 /** The flows in the order they run, with their titles in the UI. */
 export const FLOWS: readonly { flow: FlowName; title: string }[] = [
   { flow: 'main', title: 'Huvudflödet' },

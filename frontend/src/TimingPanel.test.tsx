@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { afterEach, describe, expect, it } from 'vitest';
 import { App } from './App';
 import type { FlowState } from './FlowProgress';
+import { DEMO_NOTICE } from './explanations';
 import { formatMs, TimingPanel } from './TimingPanel';
 import { controlledStream, queryResult, stubFetch } from './test-helpers';
 
@@ -145,13 +146,115 @@ describe('TimingPanel', () => {
       ),
     ).toBeDefined();
     expect(
+      screen.getByText(
+        'Skillnaden består av översättningen till taggar (1,0 s, bara i huvudflödet), sökningen ' +
+          '(10 ms mot 320 ms) och domarens bedömning (3,0 s mot 2,5 s). Räknat med översättningen ' +
+          'visste referens-RAG:en först vilka källor utkastet skulle bygga på.',
+      ),
+    ).toBeDefined();
+    expect(
       screen.getByText('Totalt var huvudflödet 10,0 s snabbare än referens-RAG:en.'),
     ).toBeDefined();
+    expect(screen.getByText(DEMO_NOTICE)).toBeDefined();
     const bars = [...document.querySelectorAll<HTMLElement>('tr.total .bar')].map(
       (bar) => bar.style.width,
     );
     expect(bars).toEqual(['50%', '100%']);
     expect(screen.queryByText('Referens-RAG:en kördes inte.')).toBeNull();
+  });
+});
+
+describe('an opened info text', () => {
+  afterEach(cleanup);
+
+  it('opens in a row of its own across the table, not in the row header', () => {
+    const main: FlowState = { planned: ['search', 'rerank'], steps: {}, result: queryResult() };
+    render(<TimingPanel flows={{ main }} reference={false} running={false} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Vad betyder Rerank?' }));
+
+    const note = screen.getByRole('note');
+    const cell = note.closest('td') as HTMLTableCellElement;
+    expect(cell.colSpan).toBe(2);
+    expect(cell.closest('tr')?.className).toBe('info-row');
+    expect(screen.getByRole('rowheader', { name: 'Rerank' }).contains(note)).toBe(false);
+    // The detail (time per candidate, cache hits) is explained under the same button.
+    expect(note.textContent).toContain('Tid per bedömd kandidat');
+  });
+});
+
+describe('the comparison', () => {
+  afterEach(cleanup);
+
+  it('says the main flow knew its sources first when it did, also with the translation', () => {
+    const main: FlowState = {
+      planned: ['translation', 'search', 'rerank', 'generation'],
+      steps: {},
+      result: queryResult({
+        timings: {
+          translationMs: 500,
+          searchMs: 5,
+          judgingMs: 1000,
+          sourcesMs: 1005,
+          totalMs: 6000,
+        },
+      }),
+    };
+    const reference: FlowState = {
+      planned: ['search', 'rerank', 'generation'],
+      steps: {},
+      result: queryResult({
+        flow: 'reference',
+        timings: { searchMs: 300, judgingMs: 2000, sourcesMs: 2300, totalMs: 7000 },
+      }),
+    };
+    render(<TimingPanel flows={{ main, reference }} reference running={false} />);
+
+    expect(
+      screen.getByText(
+        'Huvudflödet hade sina källor 1,3 s före referens-RAG:en utan översättningen, och 795 ms före med översättningen till taggar (500 ms).',
+      ),
+    ).toBeDefined();
+    expect(
+      screen.getByText(
+        /Räknat med översättningen visste huvudflödet först vilka källor utkastet skulle bygga på\.$/,
+      ),
+    ).toBeDefined();
+    expect(screen.getByText(DEMO_NOTICE)).toBeDefined();
+  });
+});
+
+describe('the comparison without a translation step', () => {
+  afterEach(cleanup);
+
+  it('names the flow that knew its sources first without counting a translation', () => {
+    const done = (flow: 'main' | 'reference', sourcesMs: number): FlowState => ({
+      planned: ['search', 'rerank', 'generation'],
+      steps: {},
+      result: queryResult({
+        flow,
+        timings: {
+          searchMs: 100,
+          judgingMs: sourcesMs - 100,
+          sourcesMs,
+          totalMs: sourcesMs + 1000,
+        },
+      }),
+    });
+    render(
+      <TimingPanel
+        flows={{ main: done('main', 2000), reference: done('reference', 3000) }}
+        reference
+        running={false}
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        'Skillnaden består av sökningen (100 ms mot 100 ms) och domarens bedömning (1,9 s mot 2,9 s). ' +
+          'Huvudflödet visste först vilka källor utkastet skulle bygga på.',
+      ),
+    ).toBeDefined();
   });
 });
 

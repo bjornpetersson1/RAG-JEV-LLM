@@ -3,9 +3,11 @@
 // reached. A log that cannot be written is a warning, never a failed query.
 
 import { appendFileSync, mkdirSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { describeError } from '../errors.js';
 import { REPO_ROOT } from '../repo-root.js';
+import { isTemplate } from '../tagging/vocabulary.js';
 import type { FlowConfiguration } from './flow-configuration.js';
 import {
   flowName,
@@ -68,6 +70,47 @@ export function createRunLog(warn: (message: string) => void, path: string = RUN
       }
     },
   };
+}
+
+/**
+ * Every entry in the log at `path`, oldest first (E7-11). A missing log is empty. A line that is not
+ * JSON, or lacks what the runs page reads (`runId`, `timestamp`, `flow`, `template`, `timings`), is
+ * skipped, so one broken write does not hide the rest. Read asynchronously, so a long log does not
+ * hold up a query streaming at the same time.
+ */
+export async function readRunLog(path: string = RUN_LOG_PATH): Promise<RunLogEntry[]> {
+  let text: string;
+  try {
+    text = await readFile(path, 'utf8');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    throw error;
+  }
+  return text.split('\n').flatMap((line) => {
+    const entry = parseEntry(line);
+    return entry ? [entry] : [];
+  });
+}
+
+function parseEntry(line: string): RunLogEntry | undefined {
+  if (line.trim() === '') return undefined;
+  let value: unknown;
+  try {
+    value = JSON.parse(line);
+  } catch {
+    return undefined;
+  }
+  if (typeof value !== 'object' || value === null) return undefined;
+  const { runId, timestamp, flow, template, timings } = value as Record<string, unknown>;
+  const complete =
+    typeof runId === 'string' &&
+    typeof timestamp === 'string' &&
+    (flow === 'main' || flow === 'reference') &&
+    typeof template === 'string' &&
+    isTemplate(template) &&
+    typeof timings === 'object' &&
+    timings !== null;
+  return complete ? (value as RunLogEntry) : undefined;
 }
 
 export interface LoggedRun extends QueryOptions {
