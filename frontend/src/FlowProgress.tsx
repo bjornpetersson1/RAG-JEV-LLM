@@ -59,7 +59,7 @@ export const FlowProgress = memo(function FlowProgress({
         </div>
       )}
       {steps.search && <p>{describeSearch(planned, steps.search)}</p>}
-      {steps.rerank && <p>{steps.rerank.approved} godkända av rerankern</p>}
+      {steps.rerank && <p>{describeRerank(steps.rerank)}</p>}
       {pending && (
         <p className="pending" role="status">
           {RUNNING[pending]}
@@ -70,11 +70,28 @@ export const FlowProgress = memo(function FlowProgress({
   );
 });
 
+/**
+ * A judge says how many it found relevant; a ranker only how many of the best it kept. Candidates
+ * that could not be scored are named, so a failing judge does not look like "nothing relevant".
+ */
+export function describeRerank({
+  candidates,
+  judged,
+  relevant,
+  unknown,
+  approved,
+}: Extract<QueryStep, { step: 'rerank' }>): string {
+  const failed = unknown > 0 ? ` (${unknown} kunde inte bedömas)` : '';
+  if (!judged) return `${approved} högst rankade av ${candidates}${failed}`;
+  const found = `${relevant} bedömda som relevanta av ${candidates}${failed}`;
+  return approved < relevant ? `${found}, de ${approved} bästa går vidare` : found;
+}
+
 function describeSearch(
   planned: readonly QueryStepName[],
   { candidates, fallback }: Extract<QueryStep, { step: 'search' }>,
 ): string {
-  // Without a rerank step every candidate goes to the generator (the reference RAG).
+  // Without a rerank step every candidate goes to the generator.
   if (!planned.includes('rerank')) return `${candidates} närmaste chunkar skickas till generatorn`;
   return fallback > 0
     ? `${candidates} kandidater, varav ${fallback} från fritextsökning`

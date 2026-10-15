@@ -4,6 +4,12 @@
 export type Template = 'employment' | 'nda';
 export type FlowName = 'main' | 'reference';
 
+/** The contract types, with their names in the UI. */
+export const TEMPLATES: readonly { value: Template; label: string }[] = [
+  { value: 'employment', label: 'Anställningsavtal' },
+  { value: 'nda', label: 'Sekretessavtal' },
+];
+
 /** The flows in the order they run, with their titles in the UI. */
 export const FLOWS: readonly { flow: FlowName; title: string }[] = [
   { flow: 'main', title: 'Huvudflödet' },
@@ -87,7 +93,17 @@ export interface Draft {
 export type QueryStep = (
   | { step: 'translation'; tags: QueryTag[] }
   | { step: 'search'; candidates: number; fallback: number }
-  | { step: 'rerank'; approved: number; relevant: number }
+  | {
+      step: 'rerank';
+      /** The candidates given to the reranker. */
+      candidates: number;
+      /** Whether a threshold decided relevance (a judge), or only `RERANK_TOP_K` cut (a ranker). */
+      judged: boolean;
+      relevant: number;
+      /** Candidates that could not be scored (a failed or timed-out call); not relevant. */
+      unknown: number;
+      approved: number;
+    }
   | { step: 'generation' }
 ) & { timings: Partial<StepTimings> };
 
@@ -100,6 +116,8 @@ export interface StepTimings {
   embeddingMs?: number;
   searchMs: number;
   judgingMs?: number;
+  /** Time to sources: search plus rerank, without the translation (E7-8). */
+  sourcesMs: number;
   generationMs?: number;
   totalMs: number;
 }
@@ -127,6 +145,8 @@ export interface QueryResult {
   judging?: { cacheHits: number; judgeCalls: number; relevant: number; unknown: number };
   draft?: Draft;
   timings: StepTimings;
+  /** Token use per step; the timing panel reads the draft's output tokens. */
+  usage?: { generation?: { outputTokens: number } };
 }
 
 export type QueryEvent =

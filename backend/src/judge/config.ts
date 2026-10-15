@@ -2,7 +2,9 @@ import { readOneOf, readPositiveInteger, readShare } from '../env.js';
 import { MAX_TIMER_MS } from '../http.js';
 import { loadJevConfig, type JevConfig } from '../jev/config.js';
 
-const DEFAULT_JUDGE_THRESHOLD = 0.5;
+// Per judge: the LLM's is E7-7's sweep with the Haiku judge (the highest F1 on the central chunks);
+// JEV's stays the requirements' 0.5 until #79 measures JEV.
+const DEFAULT_JUDGE_THRESHOLDS: Record<JudgeImpl, number> = { llm: 0.8, jev: 0.5 };
 
 // A judgement is one chunk of many, so JEV gets less time than for a query translation.
 const DEFAULT_JUDGE_TIMEOUT_MS = 10_000;
@@ -31,7 +33,7 @@ export function loadJudgeConfig(
   env: Record<string, string | undefined>,
   impl: JudgeImpl,
 ): JudgeConfig {
-  const threshold = readShare(env, 'JUDGE_THRESHOLD', DEFAULT_JUDGE_THRESHOLD);
+  const threshold = readShare(env, 'JUDGE_THRESHOLD', DEFAULT_JUDGE_THRESHOLDS[impl]);
   const timeoutMs = loadJudgeTimeoutMs(env);
   if (impl === 'llm') return { impl, threshold };
   return { impl, threshold, jev: loadJevConfig(env, `RERANKER is ${impl}`, timeoutMs) };

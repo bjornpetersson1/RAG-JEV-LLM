@@ -62,6 +62,7 @@ export function queryResult(overrides: Partial<QueryResult> = {}): QueryResult {
       translationMs: 800,
       searchMs: 20,
       judgingMs: 3000,
+      sourcesMs: 3020,
       generationMs: 9000,
       totalMs: 12820,
     },

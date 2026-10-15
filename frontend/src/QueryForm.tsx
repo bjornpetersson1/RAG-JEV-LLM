@@ -1,10 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import type { QueryRequest, Template } from './query';
-
-const TEMPLATES: { value: Template; label: string }[] = [
-  { value: 'employment', label: 'Anställningsavtal' },
-  { value: 'nda', label: 'Sekretessavtal' },
-];
+import { TEMPLATES, type QueryRequest, type Template } from './query';
 
 interface QueryFormProps {
   running: boolean;

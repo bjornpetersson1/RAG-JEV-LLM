@@ -56,8 +56,8 @@ export interface QueryFlowDependencies extends GenerationDependencies {
   ): Promise<{ candidates: readonly Candidate[]; embedMs?: number }>;
   loadChunks(ids: readonly string[]): Chunk[];
   /**
-   * The configured reranker with `RERANK_TOP_K`: the relevant chunks, best first. Absent for the
-   * reference RAG, which hands every candidate to the generator.
+   * The reranker with `RERANK_TOP_K`: the relevant chunks, best first. Absent, every candidate goes
+   * to the generator.
    */
   rerank?(instruction: string, chunks: readonly Chunk[]): Promise<RerankResult>;
 }
@@ -70,6 +70,11 @@ export interface StepTimings {
   /** Candidate search, embedding the instruction included, and loading the candidates' text. */
   searchMs: number;
   judgingMs?: number;
+  /**
+   * Time to sources (E7-8): search plus rerank, or search alone without a rerank step; the
+   * translation is not part of it and is reported on its own.
+   */
+  sourcesMs: number;
   /** Absent when nothing was approved, or no draft was asked for. */
   generationMs?: number;
   totalMs: number;
@@ -121,7 +126,17 @@ export interface QueryResult {
 export type QueryStep = (
   | { step: 'translation'; tags: QueryTag[] }
   | { step: 'search'; candidates: number; fallback: number }
-  | { step: 'rerank'; approved: number; relevant: number }
+  | {
+      step: 'rerank';
+      /** The candidates given to the reranker. */
+      candidates: number;
+      /** Whether a threshold decided relevance (a judge), or only `RERANK_TOP_K` cut (a ranker). */
+      judged: boolean;
+      relevant: number;
+      /** Candidates that could not be scored (a failed or timed-out call); not relevant. */
+      unknown: number;
+      approved: number;
+    }
   | { step: 'generation' }
 ) & { timings: Partial<StepTimings> };
 
@@ -193,18 +208,30 @@ export async function runQuery(
     step: 'search',
     candidates: candidates.length,
     fallback,
-    timings: { searchMs, ...(embedMs !== undefined && { embeddingMs: embedMs }) },
+    timings: {
+      searchMs,
+      ...(embedMs !== undefined && { embeddingMs: embedMs }),
+      // Without a rerank step the sources are known now.
+      ...(!deps.rerank && { sourcesMs: searchMs }),
+    },
   });
   signal?.throwIfAborted();
 
   const reranked = await deps.rerank?.(question, chunks);
   const approved = reranked ? reranked.ranked.map(({ chunk }) => chunk) : chunks;
+  const sourcesMs = searchMs + (reranked?.stats.elapsedMs ?? 0);
   if (reranked) {
     report({
       step: 'rerank',
-      approved: approved.length,
+      candidates: chunks.length,
+      judged: reranked.judged,
       relevant: reranked.stats.relevant,
-      timings: { judgingMs: reranked.stats.elapsedMs },
+      unknown: reranked.stats.unknown,
+      approved: approved.length,
+      timings: {
+        judgingMs: reranked.stats.elapsedMs,
+        sourcesMs,
+      },
     });
   }
 
@@ -232,7 +259,12 @@ export async function runQuery(
       },
     }),
     draft,
-    timings: { ...reached, searchMs, totalMs: elapsedMs(started) },
+    timings: {
+      ...reached,
+      searchMs,
+      sourcesMs,
+      totalMs: elapsedMs(started),
+    },
     usage: {
       translation: translation?.usage,
       judging: reranked?.stats.usage,

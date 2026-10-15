@@ -21,15 +21,14 @@ export function formatQueryResult(request: QueryRequest, result: QueryResult): s
   return lines.join('\n');
 }
 
-function formatHeader({ tags, candidates, approved, judging }: QueryResult): string[] {
-  // Only the reference RAG has no rerank step.
-  if (!judging) {
-    return [
-      `Reference RAG: the ${candidates} chunks most similar to the instruction (no tags, no rerank)`,
-    ];
-  }
+function formatHeader({ flow, tags, candidates, approved, judging }: QueryResult): string[] {
+  const found =
+    flow === 'reference'
+      ? `Reference RAG: the ${candidates} chunks most similar to the instruction (no tags)`
+      : `Tags: ${tags.join(', ') || '–'}`;
+  if (!judging) return [found];
   return [
-    `Tags: ${tags.join(', ') || '–'}`,
+    found,
     `Candidates: ${candidates} · approved: ${formatApproved(approved.length, judging.relevant)} · ` +
       `unknown: ${judging.unknown} · judge calls: ${judging.judgeCalls} · cache hits: ${judging.cacheHits}`,
   ];
@@ -132,6 +131,7 @@ function formatTimings({ timings, usage }: QueryResult): string[] {
     ...step('translation', timings.translationMs),
     search,
     ...step('judging', timings.judgingMs),
+    `sources ${timings.sourcesMs}`,
     ...step('generation', timings.generationMs),
     `total ${timings.totalMs}`,
   ];

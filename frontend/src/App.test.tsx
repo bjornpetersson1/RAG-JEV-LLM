@@ -116,9 +116,19 @@ describe('the query form', () => {
     expect(await screen.findByText('30 kandidater, varav 6 från fritextsökning')).toBeDefined();
 
     await act(async () =>
-      stream.step({ step: 'rerank', approved: 8, relevant: 12, timings: { judgingMs: 30_000 } }),
+      stream.step({
+        step: 'rerank',
+        candidates: 30,
+        judged: true,
+        relevant: 12,
+        unknown: 0,
+        approved: 8,
+        timings: { judgingMs: 30_000 },
+      }),
     );
-    expect(await screen.findByText('8 godkända av rerankern')).toBeDefined();
+    expect(
+      await screen.findByText('12 bedömda som relevanta av 30, de 8 bästa går vidare'),
+    ).toBeDefined();
     expect(screen.getByText('Skriver utkast…')).toBeDefined();
     expect(screen.queryByText(/Text \[K:11\]/)).toBeNull();
 
@@ -146,7 +156,7 @@ describe('the query form', () => {
     expect(screen.queryByText('Översätter frågan till taggar…')).toBeNull();
   });
 
-  it('says which instruction was used without free text, and shows the reference RAG after the main flow', async () => {
+  it('says which instruction was used without free text, and shows the reference RAG and its judge after the main flow', async () => {
     const stream = controlledStream();
     stubFetch(() => Promise.resolve(stream.response));
     render(<App />);
@@ -159,9 +169,25 @@ describe('the query form', () => {
         flow: 'main',
         result: { ...RESULT, defaultInstruction: 'Anställningsavtal' },
       });
-      stream.send({ type: 'start', flow: 'reference', steps: ['search', 'generation'] });
+      stream.send({
+        type: 'start',
+        flow: 'reference',
+        steps: ['search', 'rerank', 'generation'],
+      });
       stream.step(
-        { step: 'search', candidates: 8, fallback: 0, timings: { searchMs: 400 } },
+        { step: 'search', candidates: 30, fallback: 0, timings: { searchMs: 400 } },
+        'reference',
+      );
+      stream.step(
+        {
+          step: 'rerank',
+          candidates: 30,
+          judged: true,
+          relevant: 6,
+          unknown: 0,
+          approved: 6,
+          timings: { judgingMs: 2500, sourcesMs: 2900 },
+        },
         'reference',
       );
     });
@@ -173,7 +199,8 @@ describe('the query form', () => {
     ).toBeDefined();
     expect(screen.queryByText('Förbereder referens-RAG…')).toBeNull();
     const reference = screen.getByRole('region', { name: 'Referens-RAG' });
-    expect(reference.textContent).toContain('8 närmaste chunkar skickas till generatorn');
+    expect(reference.textContent).toContain('30 kandidater');
+    expect(reference.textContent).toContain('6 bedömda som relevanta av 30');
     expect(reference.textContent).toContain('Skriver utkast…');
   });
 

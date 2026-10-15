@@ -33,6 +33,11 @@ export interface RerankStats {
 }
 
 export interface RerankResult {
+  /**
+   * Whether a threshold decided relevance (a judge, or a cross-encoder given one), so the UI can
+   * say "judged relevant"; without one every scored chunk counts and only `topK` cuts.
+   */
+  judged: boolean;
   /** The relevant chunks, best first, at most `topK`. */
   ranked: ScoredChunk[];
   /** Every chunk that got a score, best first, before the threshold and `topK`. */

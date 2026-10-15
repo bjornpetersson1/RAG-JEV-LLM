@@ -1,8 +1,8 @@
 // Builds the sweep's retrievers and reranker from `.env` and the database (E7-4): the retrievers
 // `tags` (tag search with its full-text fallback, as the query flow runs it), built once per
 // `MAX_CANDIDATES`, and `both`, built once per `RETRIEVE_CANDIDATES` over the configured tag search
-// (its tag ranking is capped by `MAX_CANDIDATES` in the query flow too), and the configured
-// `RERANKER` without its cache, keeping every relevant chunk.
+// (its tag ranking is capped by `MAX_CANDIDATES` in the query flow too), and the reranker `RERANKER`
+// names (minilm when it is not set) without its cache, keeping every relevant chunk.
 
 import type { DatabaseSync } from 'node:sqlite';
 import { resolveDatabasePath } from '../db/config.js';
@@ -14,6 +14,7 @@ import { warmUpLocalModels } from '../models/warm-up.js';
 import { createQueryServices } from '../query/services.js';
 import { translateToSlugs } from '../query/translate-query.js';
 import { DEFAULT_RERANK_TOP_K, loadRerankerConfig } from '../rerank/factory.js';
+import { minilmReranker } from '../rerank/minilm-reranker.js';
 import { loadRetrievalConfig, type RetrieverName } from '../retrieval/config.js';
 import { createRetriever } from '../retrieval/retriever.js';
 import { loadRetrievalResources } from '../retrieval/setup.js';
@@ -94,8 +95,12 @@ export function createSweepSetup(
       },
     };
   });
-  // Off, since cached scores would make every rerank time estimate near zero.
-  const reranker = createEvalReranker(loadRerankerConfig(env).name, 'off', {
+  // Not the default LLM judge unless asked for: uncached, it would make thousands of calls, and
+  // E7-4's rows are minilm's. Off, since cached scores would make every rerank time estimate near zero.
+  const name = env.RERANKER?.trim()
+    ? loadRerankerConfig(env).name
+    : minilmReranker.crossEncoder.name;
+  const reranker = createEvalReranker(name, 'off', {
     env,
     db,
     llmConfig,

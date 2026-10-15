@@ -28,6 +28,11 @@ export function formatConfiguration(configuration: FlowConfiguration): string {
   ].join(' · ');
 }
 
+/** A reranker as `<RERANKER value> <model> <precision>`, e.g. `llm claude-haiku-5-5`. */
+export function rerankerLabel(reranker: { name: string; model: string; dtype?: string }): string {
+  return `${reranker.name} ${modelLabel(reranker)}`;
+}
+
 /** A local or remote model as `<model> <precision>`, the precision left out when there is none. */
 export function modelLabel({ model, dtype }: { model: string; dtype?: string }): string {
   return dtype ? `${model} ${dtype}` : model;

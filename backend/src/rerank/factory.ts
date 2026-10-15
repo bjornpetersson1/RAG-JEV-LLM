@@ -21,9 +21,10 @@ export function localCrossEncoders(registry = RERANKERS): CrossEncoderSpec[] {
   return Object.values(registry).flatMap((entry) => entry.crossEncoder ?? []);
 }
 
-// Local, free and fast (E7-5: within 0.03 of BGE's recall@8 at a ninth of its time); `bge`, `jev`
-// or `llm` are chosen in .env.
-export const DEFAULT_RERANKER = 'minilm';
+// A judge that says yes or no per chunk against JUDGE_THRESHOLD, as the requirements' query flow
+// has it, until JEV can be used (E7-7). The local cross-encoders only rank: `minilm` (fast) and
+// `bge` are chosen in .env, as is `jev`.
+const DEFAULT_RERANKER = 'llm';
 export const DEFAULT_RERANK_TOP_K = 8;
 
 export interface RerankerConfig {

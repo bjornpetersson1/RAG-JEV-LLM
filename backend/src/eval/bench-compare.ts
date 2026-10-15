@@ -49,6 +49,8 @@ export interface FlowSummary {
   /** Queries with at least one measured run. */
   queries: number;
   drafts: number;
+  /** Measured pairs with no draft: the judge approved nothing. Absent when no draft was asked for. */
+  withoutDraft?: number;
   runs: number;
   /** This flow's failed runs. */
   failures: number;
@@ -56,18 +58,33 @@ export interface FlowSummary {
 
 export interface FlowMeasures {
   total: Latency;
+  /** The query translation, which time to sources leaves out; absent without one. */
+  translation?: Latency;
+  /** Time to sources: search plus rerank, without the translation (E7-8). */
+  sources: Latency;
   search: Latency;
   /** Absent when the instruction was never embedded (tag search). */
   embedding?: Latency;
-  /** Absent for a flow without a rerank step. */
+  /** Absent for a flow without a rerank step, like the two below. */
   rerank?: Latency;
-  /** Absent when no draft was written. */
+  /** The candidates given to the rerank: the median per pair. */
+  judgedCandidates?: number;
+  /** Candidates the rerank could not score (a failed or timed-out call), over every pair. */
+  unknown?: number;
+  /**
+   * Over the pairs where every flow wrote a draft (with output tokens), like the two below and
+   * source accuracy, so the flows are compared on the same drafts; absent without any.
+   */
   generation?: Latency;
+  /** Generation time per output token, so drafts of different length compare (E7-8). */
+  generationPerToken?: Latency;
+  /** The drafts' output tokens. */
+  outputTokens?: Latency;
   /** Query translation, generation, and a remote rerank. */
   llm: Latency;
   /** Of the chunks sent to the generator: per run a macro average over the queries, then the mean over the runs. */
   relevance: Relevance;
-  /** Valid references / all references over every draft; null without references. */
+  /** Valid references / all references over the shared drafts; null without references. */
   sourceAccuracy: number | null;
 }
 
@@ -81,7 +98,8 @@ interface Sample {
 /**
  * Runs every query through every flow `options.runs` times. Within a run the flows take turns
  * going first, so drift on the machine hits both. A failed run is reported, and that query and
- * run is left out of every flow, so the flows are compared on the same queries.
+ * run is left out of every flow, so the flows are compared on the same queries. The drafts are
+ * compared only where every flow wrote one, since a judge that approves nothing writes none.
  */
 export async function benchCompare(
   queries: readonly ResolvedQuery[],
@@ -110,12 +128,23 @@ export async function benchCompare(
       }
     }
   }
-  return flows.map((flow, i) => {
-    const paired = tallies[i].samples.filter(
-      ({ run, queryId }) => !failed.has(pairKey(run, queryId)),
-    );
-    return summarise(flow, paired, tallies[i].failures, options.runs);
-  });
+  const paired = tallies.map(({ samples }) =>
+    samples.filter(({ run, queryId }) => !failed.has(pairKey(run, queryId))),
+  );
+  const drafted = paired.map(
+    (samples) =>
+      new Set(
+        samples
+          .filter(({ result }) => wroteDraft(result))
+          .map(({ run, queryId }) => pairKey(run, queryId)),
+      ),
+  );
+  const draftedByAll = new Set(
+    [...(drafted[0] ?? [])].filter((key) => drafted.every((keys) => keys.has(key))),
+  );
+  return flows.map((flow, i) =>
+    summarise(flow, paired[i], tallies[i].failures, { ...options, draftedByAll }),
+  );
 }
 
 /** The chunks the generator got: what fit the context limits when a draft was asked for. */
@@ -124,42 +153,78 @@ function sentIds({ approved, draft }: QueryResult): string[] {
   return sent.map(({ id }) => id);
 }
 
+/** A draft without text is none: no approved chunk fitted the context limits. */
+function wroteDraft({ draft }: QueryResult): boolean {
+  return draft?.text !== undefined;
+}
+
 function pairKey(run: number, queryId: string): string {
   return `${run}:${queryId}`;
+}
+
+interface SummaryOptions {
+  runs: number;
+  draft: boolean;
+  /** The pairs where every flow wrote a draft. */
+  draftedByAll: ReadonlySet<string>;
 }
 
 function summarise(
   flow: BenchFlow,
   samples: readonly Sample[],
   failures: number,
-  runs: number,
+  options: SummaryOptions,
 ): FlowSummary {
   const results = samples.map(({ result }) => result);
+  const drafts = results.filter(wroteDraft).length;
   return {
     flow: flow.name,
     configuration: flow.configuration,
-    ...(results.length > 0 && { measured: measure(flow, samples, runs) }),
+    ...(results.length > 0 && { measured: measure(flow, samples, options) }),
     samples: samples.length,
     queries: new Set(samples.map(({ queryId }) => queryId)).size,
-    drafts: results.filter(({ draft }) => draft?.text !== undefined).length,
-    runs,
+    drafts,
+    ...(options.draft && { withoutDraft: samples.length - drafts }),
+    runs: options.runs,
     failures,
   };
 }
 
-function measure(flow: BenchFlow, samples: readonly Sample[], runs: number): FlowMeasures {
+function measure(
+  flow: BenchFlow,
+  samples: readonly Sample[],
+  { runs, draftedByAll }: SummaryOptions,
+): FlowMeasures {
   const results = samples.map(({ result }) => result);
-  const checks = results.flatMap(({ draft }) => (draft?.check ? [draft.check] : []));
-  const optional = (step: 'embeddingMs' | 'judgingMs' | 'generationMs') => {
-    const times = results.flatMap(({ timings }) => timings[step] ?? []);
-    return times.length > 0 ? latencyOf(times) : undefined;
-  };
+  const shared = samples
+    .filter(({ run, queryId }) => draftedByAll.has(pairKey(run, queryId)))
+    .map(({ result }) => result);
+  const judged = results.filter(({ judging }) => judging);
+  const checks = shared.flatMap(({ draft }) => (draft?.check ? [draft.check] : []));
+  const latencyIfAny = (times: readonly number[]) =>
+    times.length > 0 ? latencyOf(times) : undefined;
+  const optional = (step: 'translationMs' | 'embeddingMs' | 'judgingMs') =>
+    latencyIfAny(results.flatMap(({ timings }) => timings[step] ?? []));
+  const drafts = shared.flatMap(({ timings, usage }) =>
+    timings.generationMs !== undefined && usage.generation && usage.generation.outputTokens > 0
+      ? [{ ms: timings.generationMs, tokens: usage.generation.outputTokens }]
+      : [],
+  );
   return {
     total: latencyOf(results.map(({ timings }) => timings.totalMs)),
+    translation: optional('translationMs'),
+    sources: latencyOf(results.map(({ timings }) => timings.sourcesMs)),
     search: latencyOf(results.map(({ timings }) => timings.searchMs)),
     embedding: optional('embeddingMs'),
     rerank: optional('judgingMs'),
-    generation: optional('generationMs'),
+    ...(judged.length > 0 && {
+      // The rerank is given the candidates that loaded, which are the sources.
+      judgedCandidates: latencyOf(judged.map(({ sources }) => sources.length)).median,
+      unknown: sum(judged.map(({ judging }) => judging?.unknown ?? 0)),
+    }),
+    generation: latencyIfAny(drafts.map(({ ms }) => ms)),
+    generationPerToken: latencyIfAny(drafts.map(({ ms, tokens }) => ms / tokens)),
+    outputTokens: latencyIfAny(drafts.map(({ tokens }) => tokens)),
     llm: latencyOf(results.map((result) => llmMs(result, flow.remoteRerank))),
     relevance: averageOverRuns(samples, runs),
     sourceAccuracy: sourceAccuracy(

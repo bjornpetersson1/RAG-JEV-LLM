@@ -16,7 +16,8 @@ import {
   createCrossEncoderReranker,
   loadCrossEncoderRerankerConfig,
 } from './cross-encoder-reranker.js';
-import { DEFAULT_RERANKER, localCrossEncoders } from './factory.js';
+import { localCrossEncoders } from './factory.js';
+import { minilmReranker } from './minilm-reranker.js';
 import type { CrossEncoderSpec } from './types.js';
 
 const SIZES = [30, 50];
@@ -66,12 +67,12 @@ try {
   process.exitCode = 1;
 }
 
-/** `[--reranker <cross-encoder>] [--dtype int8|fp32]`, by default the default reranker in int8. */
+/** `[--reranker <cross-encoder>] [--dtype int8|fp32]`, by default minilm in int8. */
 function parseRerankBenchArgs(args: string[]): { spec: CrossEncoderSpec; dtype: ModelDtype } {
   const { values } = parseArgs({
     args,
     options: {
-      reranker: { type: 'string', default: DEFAULT_RERANKER },
+      reranker: { type: 'string', default: minilmReranker.crossEncoder.name },
       dtype: { type: 'string', default: 'int8' },
     },
   });

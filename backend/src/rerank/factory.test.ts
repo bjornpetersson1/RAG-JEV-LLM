@@ -25,8 +25,8 @@ function deps() {
 }
 
 describe('loadRerankerConfig', () => {
-  it('defaults to the minilm reranker keeping 8 chunks', () => {
-    expect(loadRerankerConfig({})).toEqual({ name: 'minilm', topK: 8 });
+  it('defaults to the LLM judge keeping 8 chunks', () => {
+    expect(loadRerankerConfig({})).toEqual({ name: 'llm', topK: 8 });
   });
 
   it.each(['bge', 'jev', 'llm', 'minilm', 'qwen3'])('accepts RERANKER=%s', (name) => {
@@ -54,9 +54,9 @@ describe('loadRerankerConfig', () => {
 describe('createReranker', () => {
   it.each([
     [{ RERANKER: 'jev', ...JEV_KEY }, 'jev', 'jev-latest'],
-    [{ RERANKER: 'llm' }, 'llm', 'fake'],
+    [{}, 'llm', 'fake'],
     [{ RERANKER: 'bge' }, 'bge', 'onnx-community/bge-reranker-v2-m3-ONNX'],
-    [{}, 'minilm', 'cross-encoder/mmarco-mMiniLMv2-L12-H384-v1'],
+    [{ RERANKER: 'minilm' }, 'minilm', 'cross-encoder/mmarco-mMiniLMv2-L12-H384-v1'],
     [{ RERANKER: 'qwen3' }, 'qwen3', 'Qwen3-Reranker'],
   ])('builds %o from .env alone', (env, name, model) => {
     const { reranker, topK } = createReranker(env, deps());

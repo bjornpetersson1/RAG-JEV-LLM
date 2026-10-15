@@ -1,5 +1,7 @@
 import { useCallback, useMemo, useState, type MouseEvent, type ReactNode } from 'react';
 import Markdown from 'react-markdown';
+import { SECTION_LEADS } from './explanations';
+import { Info } from './Info';
 import type { Draft, FlowName, PostCheck, QueryResult } from './query';
 import { FLAG_LINK, linkReferences } from './references';
 import { SourceList, sourceDomId } from './SourceList';
@@ -40,7 +42,12 @@ export function ResultView({ flow, result }: ResultViewProps) {
 
   return (
     <div className="result">
-      <DraftView flow={flow} draft={result.draft} onSelect={select} />
+      <DraftView
+        flow={flow}
+        draft={result.draft}
+        unknown={result.judging?.unknown ?? 0}
+        onSelect={select}
+      />
       <SourceList flow={flow} result={result} selected={selected} open={open} onToggle={toggle} />
     </div>
   );
@@ -49,10 +56,12 @@ export function ResultView({ flow, result }: ResultViewProps) {
 interface DraftViewProps {
   flow: FlowName;
   draft?: Draft;
+  /** Candidates the reranker could not score, so "nothing relevant" may not be the whole story. */
+  unknown: number;
   onSelect(id: string): void;
 }
 
-function DraftView({ flow, draft, onSelect }: DraftViewProps) {
+function DraftView({ flow, draft, unknown, onSelect }: DraftViewProps) {
   const text = draft?.text;
   const check = draft?.check;
   // Parsed once per draft, not on every click in the source list.
@@ -79,7 +88,15 @@ function DraftView({ flow, draft, onSelect }: DraftViewProps) {
     [flow, text, check, onSelect],
   );
 
-  if (!draft) return <p>Inget utkast skrevs: inga relevanta källor hittades.</p>;
+  if (!draft) {
+    return unknown > 0 ? (
+      <p>
+        Inget utkast skrevs: inga källor bedömdes som relevanta, och {unknown} kunde inte bedömas.
+      </p>
+    ) : (
+      <p>Inget utkast skrevs: inga relevanta källor hittades.</p>
+    );
+  }
   if (text === undefined) {
     return <p>Inget utkast skrevs: inga godkända källor rymdes i kontextgränserna.</p>;
   }
@@ -139,9 +156,15 @@ function CheckSummary({ check }: { check: PostCheck }) {
       : // From the counts, since e.g. 0.29 × 100 is 28.999… in floating point.
         `${Math.floor((check.valid * 100) / check.references)} % (${check.valid} av ${check.references} hänvisningar)`;
   return (
-    <p className="check">
-      Källträffsäkerhet: {accuracy} · {check.flags.length} flaggade
-    </p>
+    <div className="check">
+      <p className="lead">{SECTION_LEADS.check}</p>
+      <p>
+        <span>
+          Källträffsäkerhet: {accuracy} · {check.flags.length} flaggade
+        </span>{' '}
+        <Info measure="sourceAccuracy" /> <Info measure="flagged" />
+      </p>
+    </div>
   );
 }
 
