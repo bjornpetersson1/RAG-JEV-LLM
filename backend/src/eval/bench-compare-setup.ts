@@ -34,7 +34,7 @@ export function createBenchSetup(
   /** A fake embedder in tests; by default `EMBEDDER`. */
   embedder: Embedder = createEmbedder(env),
 ): BenchSetup {
-  // With the judge cache on, runs 2–5 of an `llm` or `jev` reranker would measure the cache.
+  // With the judge cache on, runs 2–5 of an `llm`, `subq` or `jev` reranker would measure the cache.
   const benchEnv = { ...env, JUDGE_CACHE: 'off' };
   // Loaded once and shared, so the model loads once and the vectors are read once.
   const resources = loadRetrievalResources(db, benchEnv, embedder);

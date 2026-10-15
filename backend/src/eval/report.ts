@@ -149,10 +149,7 @@ function failureLines({ failed }: EvalResult): string[] {
   ];
 }
 
-/**
- * Which judge was configured and which actually answered, e.g. when the LLM stood in for JEV or
- * SubQ.
- */
+/** Which judge was configured and which answered: the LLM stands in for a model without a key. */
 function judgeNote(result: EvalResult, mode: JudgeMode): string {
   const { name, model } = result.judges[mode];
   const answered = result.answeredBy[mode];
