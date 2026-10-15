@@ -62,6 +62,7 @@ const deps = (rerankers: Parameters<typeof compareRerankers>[1]['rerankers']) =>
   retrievers: [retriever],
   rerankers,
   translate: async () => [],
+  translator: 'llm-model',
   loadChunks: (ids: readonly string[]) => ids.map((id) => ({ id, text: id })),
   latencyQueries: 1,
 });
@@ -318,5 +319,25 @@ describe('createCompareSetup', () => {
       ['fts', 'none', ''],
     ]);
     expect(rows[3].queries).toBe(2);
+  });
+
+  it('names the translator and times it for a retriever that uses tags, not for one without', async () => {
+    const reranker = fakeReranker(0, 40);
+    const tagRetriever: ComparedRetriever = { ...retriever, name: 'tags', usesTags: true };
+
+    const rows = await compareRerankers(QUERIES, {
+      ...deps([{ name: 'fake', cached: reranker, uncached: () => reranker }]),
+      retrievers: [tagRetriever, retriever],
+    });
+
+    const [tagsBefore, tagsAfter, bgeBefore] = rows;
+    expect(tagsBefore).toMatchObject({
+      translator: 'llm-model',
+      translationMs: expect.any(Object),
+    });
+    expect(tagsAfter.translator).toBe('llm-model');
+    expect(tagsAfter.translationMs?.median).toBeGreaterThanOrEqual(0);
+    expect(bgeBefore).toMatchObject({ retriever: 'bge', translator: '–' });
+    expect(bgeBefore.translationMs).toBeUndefined();
   });
 });

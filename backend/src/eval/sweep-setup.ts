@@ -38,6 +38,14 @@ export const SWEEP_BASELINES: Record<
   both: { candidates: 40, topK: DEFAULT_RERANK_TOP_K },
 };
 
+/**
+ * The sweep's reranker: the one `RERANKER` names, else minilm, not the default judge. Uncached, a
+ * judge would make thousands of calls, and E7-4's rows are minilm's.
+ */
+export function sweepRerankerName(env: Env): string {
+  return env.RERANKER?.trim() ? loadRerankerConfig(env).name : minilmReranker.crossEncoder.name;
+}
+
 export function createSweepSetup(
   db: DatabaseSync,
   env: Env,
@@ -95,12 +103,8 @@ export function createSweepSetup(
       },
     };
   });
-  // Not the default LLM judge unless asked for: uncached, it would make thousands of calls, and
-  // E7-4's rows are minilm's. Off, since cached scores would make every rerank time estimate near zero.
-  const name = env.RERANKER?.trim()
-    ? loadRerankerConfig(env).name
-    : minilmReranker.crossEncoder.name;
-  const reranker = createEvalReranker(name, 'off', {
+  // Off, since cached scores would make every rerank time estimate near zero.
+  const reranker = createEvalReranker(sweepRerankerName(env), 'off', {
     env,
     db,
     llmConfig,

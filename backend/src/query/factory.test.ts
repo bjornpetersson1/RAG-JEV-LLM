@@ -23,4 +23,22 @@ describe('createQueryTranslator', () => {
     });
     expect(jev.requests[0].url).toBe('https://api.typesafe.ai/v1/systemone');
   });
+
+  it('builds the SubQ translator for subq, calling SubQ', async () => {
+    const subq = createFakeJev({ sekretess: 1 }, { sekretessklausul: 0.7 });
+    const translator = createQueryTranslator(
+      loadQueryTranslatorConfig({ QUERY_TRANSLATOR_IMPL: 'subq', SUBQ_API_KEY: 'k' }),
+      {
+        llmTranslator: createFakeQueryTranslator(() => []),
+        logger: createCapturingLogger(),
+        fetch: subq.fetch,
+      },
+    );
+
+    await expect(translator.translate('NDA', VOCABULARY)).resolves.toMatchObject({
+      tags: [{ slug: 'sekretessklausul', score: 0.7 }],
+    });
+    expect(subq.requests[0].url).toBe('https://api.subq.ai/v1/systemone');
+    expect(subq.requests[0].body.model).toBe('subq-snap-preview');
+  });
 });

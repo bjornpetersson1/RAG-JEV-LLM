@@ -33,6 +33,7 @@
     "retrieve": "npm run retrieve -w backend --",
     "bench:index": "npm run bench:index -w backend",
     "jev:probe": "npm run jev:probe -w backend",
+    "subq:probe": "npm run subq:probe -w backend --",
     "models:bench": "npm run models:bench -w backend --",
     "bench:rerank": "npm run bench:rerank -w backend --",
     "embed:smoke": "npm run embed:smoke -w backend",

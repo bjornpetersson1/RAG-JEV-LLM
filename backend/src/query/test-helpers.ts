@@ -1,7 +1,7 @@
 import type { Tag } from '../llm/types.js';
 import { createFakeFetch } from '../llm/test-helpers.js';
 
-/** Twelve tags over four areas: enough to exceed the cap of 8 and the 3 areas JEV asks about. */
+/** Twelve tags over four areas: enough to exceed the cap of 8 and the 3 areas a System One translator asks about. */
 export const VOCABULARY: Tag[] = [
   ...['lon', 'bonus', 'provision'].map((slug) => tag(slug, 'lon')),
   ...['vite', 'skadestand', 'ranta'].map((slug) => tag(slug, 'skadestand')),
@@ -11,12 +11,12 @@ export const VOCABULARY: Tag[] = [
   ...['semesterlon', 'semesterdagar', 'sparade-dagar'].map((slug) => tag(slug, 'semester')),
 ];
 
-function tag(slug: string, area: string): Tag {
+export function tag(slug: string, area: string): Tag {
   return { slug, label: slug, description: `${slug} i avtalet`, area };
 }
 
 /**
- * A fake JEV endpoint: the area question gets `areaProbabilities`, and each tag question the score
+ * A fake JEV or SubQ endpoint: the area question gets `areaProbabilities`, and each tag question the score
  * in `tagScores` (0 when missing). Records every request body.
  */
 export function createFakeJev(

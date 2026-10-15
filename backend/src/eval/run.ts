@@ -4,9 +4,12 @@
 import type { Chunk, JudgeScore } from '../llm/types.js';
 import type { RerankResult, Reranker } from '../rerank/types.js';
 import { describeError } from '../errors.js';
+import { SYSTEM_ONE_PROVIDERS } from '../systemone/config.js';
 import { sum } from '../stats.js';
 import {
   averageRanked,
+  precisionAt,
+  precisionRecall,
   rankedRelevance,
   recommendThreshold,
   sweepThresholds,
@@ -23,11 +26,18 @@ import {
   type ResolvedQuery,
 } from './queries.js';
 
-export const EVAL_MODES = ['tags', 'tags+jev', 'tags+llm', 'fts'] as const;
+export const EVAL_MODES = ['tags', 'tags+jev', 'tags+subq', 'tags+llm', 'fts'] as const;
 export type EvalMode = (typeof EVAL_MODES)[number];
 
-export const JUDGE_MODES = ['tags+jev', 'tags+llm'] as const;
+export const JUDGE_MODES = ['tags+jev', 'tags+subq', 'tags+llm'] as const;
 export type JudgeMode = (typeof JUDGE_MODES)[number];
+
+/** The kinds of document a chunk can come from (`documents.type`), reported apart (E9-1). */
+export const DOCUMENT_TYPES = ['law', 'ruling'] as const;
+export type DocumentType = (typeof DOCUMENT_TYPES)[number];
+
+/** The number of equal score bands from 0 to 1 in a judge's score distribution. */
+export const SCORE_BANDS = 10;
 
 /** Which reranker a judge mode used, for the report. */
 export type RerankerIdentity = Pick<Reranker, 'name' | 'model'>;
@@ -45,6 +55,8 @@ export interface SearchDependencies {
 }
 
 export interface EvalDependencies extends SearchDependencies {
+  /** The document type of each chunk id; unknown ids are absent. */
+  documentTypes(ids: readonly string[]): ReadonlyMap<string, DocumentType>;
   /** Reranks the chunks with the reranker of `mode`, keeping every relevant one (cache on). */
   judge(mode: JudgeMode, instruction: string, chunks: readonly Chunk[]): Promise<RerankResult>;
   /** The judge each judge mode was configured with, for the report. */
@@ -66,6 +78,14 @@ export interface QueryOutcome {
   returned: Record<EvalMode, string[]>;
   /** Each mode's list measured against the central chunks and against every graded chunk. */
   relevance: Record<EvalMode, Record<GradeScope, RankedRelevance>>;
+  /**
+   * The same, counting only the returned and relevant chunks of one document type; undefined when
+   * the query has no relevant chunk of that type in that scope.
+   */
+  relevanceByType: Record<
+    EvalMode,
+    Record<DocumentType, Record<GradeScope, RankedRelevance | undefined>>
+  >;
   /** Each judge mode's scores, for the sweep; unknown chunks are left out. */
   scores: Record<JudgeMode, ChunkScore[]>;
   answeredBy: Record<JudgeMode, AnsweredBy>;
@@ -84,6 +104,12 @@ export interface EvalResult {
   failed: FailedQuery[];
   /** Macro averages over the queries, per grade scope. */
   modes: Record<EvalMode, Record<GradeScope, RankedScores>>;
+  /** The macro averages per document type, over the queries with a relevant chunk of that type. */
+  modesByType: Record<EvalMode, Record<DocumentType, Record<GradeScope, TypeScores>>>;
+  /** Per judge mode, the queries whose judge approved none of the candidates. */
+  noneApproved: Record<JudgeMode, number>;
+  /** Per judge mode, the share of its scores in each of {@link SCORE_BANDS} bands from 0 to 1. */
+  scoreDistribution: Record<JudgeMode, number[]>;
   /** Each judge mode's threshold sweep against the central chunks and against every graded chunk. */
   sweeps: Record<JudgeMode, Record<GradeScope, SweepRow[]>>;
   /** The central sweep's best row (E7-7: the central chunks are what a clause rests on). */
@@ -94,6 +120,9 @@ export interface EvalResult {
   /** Judgements per judge over the whole run. */
   answeredBy: Record<JudgeMode, AnsweredBy>;
 }
+
+/** A document type's averages and the number of queries they are over. */
+export type TypeScores = RankedScores & { queries: number };
 
 /** Runs every query through every mode, one query at a time. */
 export async function runEvaluation(
@@ -131,14 +160,34 @@ export async function runEvaluation(
     modes: byEvalMode((mode) =>
       byGradeScope((scope) => averageRanked(outcomes.map((o) => o.relevance[mode][scope]))),
     ),
+    modesByType: byEvalMode((mode) =>
+      byDocumentType((type) =>
+        byGradeScope((scope) => {
+          const rows = outcomes.flatMap((o) => o.relevanceByType[mode][type][scope] ?? []);
+          return { ...averageRanked(rows), queries: rows.length };
+        }),
+      ),
+    ),
+    // Only a query with judged candidates counts: none at all, or only unknown ones, is no verdict.
+    noneApproved: byJudgeMode(
+      (mode) =>
+        outcomes.filter(
+          (outcome) => outcome.scores[mode].length > 0 && outcome.returned[mode].length === 0,
+        ).length,
+    ),
+    scoreDistribution: byJudgeMode((mode) =>
+      scoreDistribution(outcomes.flatMap((outcome) => outcome.scores[mode])),
+    ),
     sweeps,
     recommended: byJudgeMode((mode) => recommendThreshold(sweeps[mode].central)),
     topK: deps.topK,
     judges: deps.judges,
-    answeredBy: byJudgeMode((mode) => ({
-      jev: sum(outcomes.map((o) => o.answeredBy[mode].jev)),
-      llm: sum(outcomes.map((o) => o.answeredBy[mode].llm)),
-    })),
+    answeredBy: byJudgeMode((mode) => {
+      const total = noAnswers();
+      for (const judge of JUDGES)
+        total[judge] = sum(outcomes.map((o) => o.answeredBy[mode][judge]));
+      return total;
+    }),
   };
 }
 
@@ -146,25 +195,45 @@ async function evaluateQuery(query: ResolvedQuery, deps: EvalDependencies): Prom
   const tags = await deps.translate(query);
   const tagCandidates = deps.search(query, tags, 'tags');
   const chunks = deps.loadChunks(tagCandidates);
-  // Without a JEV key both modes have the same judge; it is asked once, so the rows agree exactly.
-  const jevJudged = await deps.judge('tags+jev', query.instruction, chunks);
-  const judged: Record<JudgeMode, RerankResult> = {
-    'tags+jev': jevJudged,
-    'tags+llm': sameJudge(deps.judges)
-      ? jevJudged
-      : await deps.judge('tags+llm', query.instruction, chunks),
-  };
+  // Without a JEV or SubQ key a mode has the LLM as its judge; each judge is asked once, so the rows
+  // of modes with the same judge agree exactly.
+  const byJudge = new Map<string, RerankResult>();
+  const judged = {} as Record<JudgeMode, RerankResult>;
+  for (const mode of JUDGE_MODES) {
+    const key = judgeKey(deps.judges[mode]);
+    if (!byJudge.has(key)) byJudge.set(key, await deps.judge(mode, query.instruction, chunks));
+    judged[mode] = byJudge.get(key)!;
+  }
   const returned: Record<EvalMode, string[]> = {
     tags: tagCandidates,
     ...byJudgeMode((mode) => judged[mode].ranked.map(({ chunk }) => chunk.id)),
     fts: deps.search(query, tags, 'fts'),
   };
+  const types = deps.documentTypes([
+    ...new Set([...Object.values(returned).flat(), ...query.relevantIds]),
+  ]);
+  const ofType = (ids: Iterable<string>, type: DocumentType) =>
+    [...ids].filter((id) => types.get(id) === type);
   return {
     query,
     tags,
     returned,
     relevance: byEvalMode((mode) =>
       byGradeScope((scope) => rankedRelevance(returned[mode], relevantFor(query, scope))),
+    ),
+    relevanceByType: byEvalMode((mode) =>
+      byDocumentType((type) =>
+        byGradeScope((scope) => {
+          const relevant = new Set(ofType(relevantFor(query, scope), type));
+          if (relevant.size === 0) return undefined;
+          // Precision and recall over the type's own chunks; P@K over the list's real top K.
+          return {
+            ...precisionRecall(ofType(returned[mode], type), relevant),
+            precision5: precisionAt(returned[mode], relevant, 5),
+            precision10: precisionAt(returned[mode], relevant, 10),
+          };
+        }),
+      ),
     ),
     scores: byJudgeMode((mode) =>
       judged[mode].scored.map(({ chunk, score }) => ({ chunkId: chunk.id, score })),
@@ -174,19 +243,41 @@ async function evaluateQuery(query: ResolvedQuery, deps: EvalDependencies): Prom
   };
 }
 
-function sameJudge(judges: Record<JudgeMode, RerankerIdentity>): boolean {
-  const [jev, llm] = [judges['tags+jev'], judges['tags+llm']];
-  return jev.name === llm.name && jev.model === llm.model;
+function judgeKey({ name, model }: RerankerIdentity): string {
+  return JSON.stringify([name, model]);
+}
+
+/** The share of `scores` in each of {@link SCORE_BANDS} bands; a score of 1 is in the top band. */
+function scoreDistribution(scores: readonly ChunkScore[]): number[] {
+  const counts = new Array<number>(SCORE_BANDS).fill(0);
+  for (const { score } of scores)
+    counts[Math.min(SCORE_BANDS - 1, Math.floor(score * SCORE_BANDS))] += 1;
+  return counts.map((count) => (scores.length === 0 ? 0 : count / scores.length));
+}
+
+/** Every judge that can answer: the System One models and the LLM. */
+const JUDGES = [...SYSTEM_ONE_PROVIDERS, 'llm'] as const;
+
+function noAnswers(): AnsweredBy {
+  return Object.fromEntries(JUDGES.map((judge) => [judge, 0])) as AnsweredBy;
 }
 
 function countByJudge(scored: readonly { answeredBy?: JudgeScore['judgedBy'] }[]): AnsweredBy {
-  const counts: AnsweredBy = { jev: 0, llm: 0 };
+  const counts = noAnswers();
   for (const { answeredBy } of scored) if (answeredBy) counts[answeredBy] += 1;
   return counts;
 }
 
 export function byJudgeMode<T>(value: (mode: JudgeMode) => T): Record<JudgeMode, T> {
-  return { 'tags+jev': value('tags+jev'), 'tags+llm': value('tags+llm') };
+  return {
+    'tags+jev': value('tags+jev'),
+    'tags+subq': value('tags+subq'),
+    'tags+llm': value('tags+llm'),
+  };
+}
+
+function byDocumentType<T>(value: (type: DocumentType) => T): Record<DocumentType, T> {
+  return { law: value('law'), ruling: value('ruling') };
 }
 
 function byEvalMode<T>(value: (mode: EvalMode) => T): Record<EvalMode, T> {

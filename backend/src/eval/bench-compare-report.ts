@@ -21,7 +21,7 @@ const BENCH_TABLE: ReportTable = {
     'to sources: search plus rerank, without the translation, which is part of LLM time. Search',
     'includes embedding the instruction. Judged is the median number of candidates given to the',
     'rerank, unknown the candidates it could not score over every run. LLM time is query',
-    'translation, generation and a remote (LLM or JEV) rerank. Precision and recall are of the',
+    'translation, generation and a remote (LLM, JEV or SubQ) rerank. Precision and recall are of the',
     'chunks sent to the generator, macro averages over the queries, averaged over the runs. A query',
     'and run that failed in either flow is left out of both, so the flows are compared on the same',
     'samples. Generation, ms/token, output tokens and source accuracy (valid references / all',

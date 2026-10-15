@@ -8,7 +8,7 @@ describe('loadJudgeConfig', () => {
     expect(loadJudgeConfig(JEV_KEY, 'jev')).toEqual({
       impl: 'jev',
       threshold: 0.5,
-      jev: {
+      systemOne: {
         apiKey: 'jev-key',
         baseUrl: 'https://api.typesafe.ai/v1',
         model: 'jev-latest',
@@ -28,11 +28,26 @@ describe('loadJudgeConfig', () => {
         },
         'jev',
       ),
-    ).toMatchObject({ impl: 'jev', threshold: 0.65, jev: { timeoutMs: 2500 } });
+    ).toMatchObject({ impl: 'jev', threshold: 0.65, systemOne: { timeoutMs: 2500 } });
     expect(loadJudgeConfig({ JUDGE_THRESHOLD: '0.3' }, 'llm')).toEqual({
       impl: 'llm',
       threshold: 0.3,
     });
+  });
+
+  it('reads SubQ with threshold 0.6 and the judge timeout', () => {
+    expect(loadJudgeConfig({ SUBQ_API_KEY: 'subq-key', SUBQ_TIMEOUT_MS: '30000' }, 'subq')).toEqual(
+      {
+        impl: 'subq',
+        threshold: 0.6,
+        systemOne: {
+          apiKey: 'subq-key',
+          baseUrl: 'https://api.subq.ai/v1',
+          model: 'subq-snap-preview',
+          timeoutMs: 10_000,
+        },
+      },
+    );
   });
 
   it('needs no JEV key for the LLM', () => {
@@ -49,6 +64,8 @@ describe('loadJudgeConfig', () => {
     [{ JUDGE_THRESHOLD: 'high' }, 'llm', 'Invalid JUDGE_THRESHOLD "high"'],
     [{ JUDGE_TIMEOUT_MS: '0' }, 'llm', 'Invalid JUDGE_TIMEOUT_MS "0"'],
     [{ ...JEV_KEY, JEV_TIMEOUT_MS: 'abc' }, 'jev', 'Invalid JEV_TIMEOUT_MS "abc"'],
+    [JEV_KEY, 'subq', 'SUBQ_API_KEY is required because RERANKER is subq'],
+    [{ SUBQ_API_KEY: 'k', SUBQ_BASE_URL: 'nope' }, 'subq', 'Invalid SUBQ_BASE_URL "nope"'],
   ] as const)('rejects %o for %s', (env, impl, message) => {
     expect(() => loadJudgeConfig({ ...env }, impl)).toThrow(message);
   });

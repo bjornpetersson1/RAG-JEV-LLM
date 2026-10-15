@@ -105,7 +105,7 @@ export async function judgeAll(
     try {
       const { score, judgedBy, usage } = await untilAborted(call, signal);
       usages.push(usage);
-      // An LLM answer standing in for JEV is not cached, so the next run asks JEV again.
+      // An LLM answer standing in for JEV or SubQ is not cached, so the next run asks it again.
       if (judgedBy === primary.impl) toCache.push({ chunk, score });
       results.set(chunk.id, scored(chunk.id, 'judged', score, judgedBy, elapsedMs(chunkStarted)));
     } catch (error) {

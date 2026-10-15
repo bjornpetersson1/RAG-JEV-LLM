@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createJevClient } from '../jev/client.js';
+import { createSystemOneClient } from '../systemone/client.js';
 import { createFakeLlmClient } from '../llm/fakes.js';
 import { createLlmQueryTranslator } from '../llm/roles.js';
 import { createCapturingLogger } from '../llm/test-helpers.js';
 import type { QueryTranslator } from '../llm/types.js';
-import { createJevQueryTranslator } from './jev-translator.js';
+import { createSystemOneQueryTranslator } from './systemone-translator.js';
 import { createFakeJev, VOCABULARY } from './test-helpers.js';
 import { translateQuery } from './translate-query.js';
 
@@ -17,7 +17,8 @@ const PRESETS = {
 function implementations(): [string, QueryTranslator, () => number][] {
   const llmClient = createFakeLlmClient(() => ({ tags: ['vite', 'lon', 'okand'] }));
   const jev = createFakeJev({ lon: 0.6, skadestand: 0.4 }, { vite: 0.8, lon: 0.7 });
-  const jevClient = createJevClient({
+  const jevClient = createSystemOneClient({
+    provider: 'jev',
     apiKey: 'k',
     baseUrl: 'https://jev.example/v1',
     model: 'jev-latest',
@@ -28,7 +29,7 @@ function implementations(): [string, QueryTranslator, () => number][] {
   });
   return [
     ['llm', createLlmQueryTranslator(llmClient), () => llmClient.requests.length],
-    ['jev', createJevQueryTranslator(jevClient, 0.5), () => jev.requests.length],
+    ['jev', createSystemOneQueryTranslator(jevClient, 0.5), () => jev.requests.length],
   ];
 }
 

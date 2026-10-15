@@ -10,6 +10,7 @@ const ROW: ComparisonRow = {
   reranker: 'bge',
   model: 'onnx-community/bge-reranker-v2-m3-ONNX',
   dtype: 'int8',
+  translator: '–',
   candidates: 40,
   before: {
     central: {
@@ -43,13 +44,30 @@ const ROW: ComparisonRow = {
 describe('comparisonRows', () => {
   it('gives one table row per grade with every column, precision before and after', () => {
     expect(comparisonRows([ROW], '2026-10-12')).toEqual([
-      '| 2026-10-12 | bge | bge | onnx-community/bge-reranker-v2-m3-ONNX | int8 | 40.0 | central | ' +
+      '| 2026-10-12 | bge | bge | onnx-community/bge-reranker-v2-m3-ONNX | int8 | – | 40.0 | central | ' +
         '0.250 | 0.375 | 0.500 | 0.750 | 0.200 | 0.100 | 0.500 | 0.625 | 0.750 | 0.750 | 0.400 | ' +
-        '0.300 | 30123 / 41000 | 3200 / 4100 | 20 |  |',
-      '| 2026-10-12 | bge | bge | onnx-community/bge-reranker-v2-m3-ONNX | int8 | 40.0 | all | ' +
+        '0.300 | 30123 / 41000 | 3200 / 4100 | – | 20 |  |',
+      '| 2026-10-12 | bge | bge | onnx-community/bge-reranker-v2-m3-ONNX | int8 | – | 40.0 | all | ' +
         '0.300 | 0.400 | 0.500 | 0.800 | 0.300 | 0.200 | 0.600 | 0.700 | 0.800 | 0.800 | 0.600 | ' +
-        '0.500 | 30123 / 41000 | 3200 / 4100 | 20 |  |',
+        '0.500 | 30123 / 41000 | 3200 / 4100 | – | 20 |  |',
     ]);
+  });
+
+  it('names a tag retriever’s query translator and its latency', () => {
+    const [row] = comparisonRows(
+      [
+        {
+          ...ROW,
+          retriever: 'tags',
+          translator: 'subq subq-snap-preview',
+          translationMs: { median: 812.4, p90: 1500 },
+        },
+      ],
+      'd',
+    );
+
+    expect(row).toContain('| int8 | subq subq-snap-preview | 40.0 |');
+    expect(row).toContain('| 3200 / 4100 | 812 / 1500 | 20 |');
   });
 
   it('leaves the after columns empty for the retriever’s own order', () => {

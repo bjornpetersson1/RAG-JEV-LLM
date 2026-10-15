@@ -1,6 +1,6 @@
 # RAG-JEV-LLM
 
-Legal RAG proof of concept: tag search or local bge-m3 hybrid retrieval, followed by a judge (an LLM judge by default until JEV can be used; JEV, or the local mMiniLM and BGE rankers, optional), find relevant Swedish laws and rulings, and an LLM drafts employment agreements and NDAs from them.
+Legal RAG proof of concept: tag search or local bge-m3 hybrid retrieval, followed by a judge (an LLM judge by default; SubQ, or the local mMiniLM and BGE rankers, optional; JEV paused), find relevant Swedish laws and rulings, and an LLM drafts employment agreements and NDAs from them.
 
 ## Prerequisites
 
@@ -190,49 +190,74 @@ A chunk the instruction names by provision, e.g. "7 § LAS" or "2 kap. 9 § DL" 
 A lawyer's instruction becomes vocabulary tags for the search (`translateQuery`; the query flow calls it when the retriever uses tags, `tags` or `both`, and skips it for `RETRIEVER=bge`). `QUERY_TRANSLATOR_IMPL` chooses how:
 
 - `llm` (default): the query translator's LLM, with the whole vocabulary in a cached Swedish system prompt. It returns at most 8 slugs, and unknown or repeated ones are dropped.
-- `jev`: TypeSafe's JEV model, with the instruction as the state.
+- `subq`: Subquadratic's decision model SubQ Snap (E9-1), with the instruction as the state. Every call is billed.
   - A Choice question ("Vilket rättsområde handlar texten om?") scores the 10 areas.
-  - The tags of the up to 3 most probable areas then get one Noul question each ("Handlar texten om <beskrivning>?"), one call per area, in parallel.
+  - The tags of the up to 3 most probable areas then get one Noul question each ("Handlar texten om <beskrivning>?"), at most 16 per call (SubQ's limit), all calls in parallel. When one call fails, the others are cancelled and the translation fails.
   - Tags scoring at least `QUERY_TRANSLATOR_THRESHOLD` (default 0.5) are kept, highest first, at most 8.
   - The result also carries every tag's score and the area scores, for the UI.
-  - JEV needs `JEV_API_KEY`. `JEV_BASE_URL`, `JEV_MODEL` and `JEV_TIMEOUT_MS` are optional, and calls are not retried.
+  - SubQ needs `SUBQ_API_KEY`. `SUBQ_BASE_URL`, `SUBQ_MODEL` and `SUBQ_TIMEOUT_MS` are optional, and calls are not retried.
+- `jev`: the same with TypeSafe's JEV, through the same client (`JEV_API_KEY`, `JEV_BASE_URL`, `JEV_MODEL`, `JEV_TIMEOUT_MS`). Paused: JEV has never been called live, since TypeSafe's billing would not sell credits (#79).
+
+JEV and SubQ answer the same "System One" API (`POST <base>/systemone` with a state and named typed questions), so one client (`backend/src/systemone/`) serves both; only the settings and the provider's name differ.
 
 Choosing a template (`employment` or `nda`) adds its preset tags from `sources/tags.json`. A template without free text uses only its presets and calls no translator. With free text, the presets come first, followed by up to 8 translated tags that are not presets. Without free text and without a template, the result is no tags. Every translation reports the time it took and, when the translator gives it, the tokens it used.
 
 ## Reranking
 
-The relevance step sits behind one `Reranker` interface (`backend/src/rerank/`). `RERANKER` in `.env` picks the implementation, and nothing else in the code branches on it. A judge (`llm`, `jev`) says yes or no per chunk against `JUDGE_THRESHOLD`, as the requirements' query flow has it, so a query with no relevant candidate gets no draft. The cross-encoders (`minilm`, `bge`) only rank: at threshold 0 every scored chunk counts and only `RERANK_TOP_K` cuts, so they always pass the best few on. The UI says which: "N bedömda som relevanta av M" for a judge, "N högst rankade av M" for a ranker.
+The relevance step sits behind one `Reranker` interface (`backend/src/rerank/`). `RERANKER` in `.env` picks the implementation, and nothing else in the code branches on it. A judge (`llm`, `subq`, `jev`) says yes or no per chunk against `JUDGE_THRESHOLD`, as the requirements' query flow has it, so a query with no relevant candidate gets no draft. The cross-encoders (`minilm`, `bge`) only rank: at threshold 0 every scored chunk counts and only `RERANK_TOP_K` cuts, so they always pass the best few on. The UI says which: "N bedömda som relevanta av M" for a judge, "N högst rankade av M" for a ranker.
 
-- `bge`: the local cross-encoder bge-reranker-v2-m3 (see [Local models](#local-models)). It scores each chunk's heading path and text against the instruction and turns the logit into a score with a sigmoid. Pairs over 1,024 tokens are cut at the end of the chunk, with a warning. Its scores are not calibrated like JEV's or the LLM's, so it has its own threshold, `RERANK_THRESHOLD_BGE` (default 0: only `RERANK_TOP_K` cuts); `RERANKER_DTYPE` (`int8` default, or `fp32`) and `RERANKER_BATCH_SIZE` (default 8) tune it. Nothing is cached.
+- `bge`: the local cross-encoder bge-reranker-v2-m3 (see [Local models](#local-models)). It scores each chunk's heading path and text against the instruction and turns the logit into a score with a sigmoid. Pairs over 1,024 tokens are cut at the end of the chunk, with a warning. Its scores are not calibrated like a judge's, so it has its own threshold, `RERANK_THRESHOLD_BGE` (default 0: only `RERANK_TOP_K` cuts); `RERANKER_DTYPE` (`int8` default, or `fp32`) and `RERANKER_BATCH_SIZE` (default 8) tune it. Nothing is cached.
 - `minilm`: the small local cross-encoder mMiniLM-L12 (E7-5, about 118M parameters, a fifth of BGE's size), run the same way as `bge` with pairs of at most 512 tokens. It has its own threshold, `RERANK_THRESHOLD_MINILM` (default 0), and shares `RERANKER_DTYPE` and `RERANKER_BATCH_SIZE`; in int8 it runs the AVX2-quantised export. See [Small reranker (E7-5)](#small-reranker-e7-5).
-- `llm` (default, until JEV can be used; E7-7): the judge's LLM (`LLM_JUDGE_PROVIDER`/`LLM_JUDGE_MODEL`, Haiku in `.env.example`), asked for the probability that the answer is yes.
-- `jev`: JEV, with the chunk as the state and the question as one Noul question. When a JEV call fails (timeout, network or HTTP error, malformed answer), the judge's LLM answers that chunk instead, and a warning names the chunk and the cause. Needs `JEV_API_KEY`; without it the server refuses to start.
+- `llm` (default; E7-7): the judge's LLM (`LLM_JUDGE_PROVIDER`/`LLM_JUDGE_MODEL`, Haiku in `.env.example`), asked for the probability that the answer is yes.
+- `subq` (E9-1): SubQ, with the chunk as the state and the question as one Noul question. When a SubQ call fails (timeout, network or HTTP error, malformed answer), the judge's LLM answers that chunk instead, and a warning names the chunk and the cause, with SubQ's own error type and message; an HTTP 402 says SubQ is out of credits. Needs `SUBQ_API_KEY`; without it the server refuses to start. Every call is billed.
+- `jev`: the same with JEV. Paused (#79); needs `JEV_API_KEY`.
 - `qwen3`: a placeholder for a later experiment.
 
 `JUDGE_IMPL` was replaced by `RERANKER`; a `.env` that still sets it fails at startup. A reranker scores every candidate, drops those below the threshold and unknown chunks, and returns the best `RERANK_TOP_K` (default 8), best first. Every reranker returns the same shape: the chunk, a score from 0 to 1, the reranker and its model. Adding one is a new file with a `RerankerEntry` and one entry in `RERANKERS` (`backend/src/rerank/factory.ts`).
 
-The `jev` and `llm` rerankers ask the same question about the same text: the chunk's source reference and text, "Är texten relevant för följande uppdrag: <instruktion>?". A chunk is relevant when its score reaches `JUDGE_THRESHOLD`. Its default is per judge: 0.8 for `llm`, from E7-7's sweep with the Haiku judge (see [The judge step (E7-7)](#the-judge-step-e7-7)), and 0.5 for `jev` until #79 measures JEV.
+The `subq`, `jev` and `llm` rerankers ask the same question about the same text: the chunk's source reference and text, "Är texten relevant för följande uppdrag: <instruktion>?". A chunk is relevant when its score reaches `JUDGE_THRESHOLD`. Its default is per judge: 0.8 for `llm`, from E7-7's sweep with the Haiku judge (see [The judge step (E7-7)](#the-judge-step-e7-7)), 0.6 for `subq`, from E9-1's sweep (see [SubQ as the judge (E9-1)](#subq-as-the-judge-e9-1)), and 0.5 for `jev` until #79 measures JEV.
 
 An `Embedder` interface (`backend/src/embedding/`, `EMBEDDER=bge`) gives the local bge-m3 embeddings (see [Local models](#local-models)); `npm run index:embed` and `RETRIEVER=bge`/`both` use it (see [Hybrid retrieval](#hybrid-retrieval)).
 
-JEV gets `JUDGE_TIMEOUT_MS` (default 10000) per judgement and is not retried. Chunks are sent whole; one that JEV refuses as too large falls back like any other JEV error.
+SubQ and JEV get `JUDGE_TIMEOUT_MS` (default 10000) per judgement and are not retried. Chunks are sent whole; one that is refused as too large falls back like any other error.
 
 ### Parallel judging and the judge cache
 
-The `jev` and `llm` rerankers judge through `judgeAll(instruction, chunks, deps, { cache })`. It judges a query's candidate chunks with the judge from `createJudging` (the judge, its cache identity and the threshold, from one config) in parallel, at most `JUDGE_CONCURRENCY` (default 8) calls at a time. A chunk whose judgement fails, or takes longer than `JUDGE_CHUNK_TIMEOUT_MS` (default 30000, fallback included), is `unknown`: it counts as not relevant, and a warning names it. When `JUDGE_TOTAL_TIMEOUT_MS` (default 60000) is reached, calls in flight are cancelled, every chunk not yet judged is `unknown`, and the judgements finished so far are returned.
+The `subq`, `jev` and `llm` rerankers judge through `judgeAll(instruction, chunks, deps, { cache })`. It judges a query's candidate chunks with the judge from `createJudging` (the judge, its cache identity and the threshold, from one config) in parallel, at most `JUDGE_CONCURRENCY` (default 8) calls at a time. A chunk whose judgement fails, or takes longer than `JUDGE_CHUNK_TIMEOUT_MS` (default 30000, fallback included), is `unknown`: it counts as not relevant, and a warning names it. When `JUDGE_TOTAL_TIMEOUT_MS` (default 60000) is reached, calls in flight are cancelled, every chunk not yet judged is `unknown`, and the judgements finished so far are returned.
 
-Scores of the `jev` and `llm` rerankers are cached in the `judge_cache` table:
+Scores of the `subq`, `jev` and `llm` rerankers are cached in the `judge_cache` table:
 
-- The key is the question asked about the instruction (trimmed, lower-cased, whitespace collapsed), the judge (JEV for `jev`, else the LLM), its model and the chunk. A chunk whose text has changed is judged again.
+- The key is the question asked about the instruction (trimmed, lower-cased, whitespace collapsed), the judge (SubQ for `subq`, JEV for `jev`, else the LLM), its model and the chunk. A chunk whose text has changed is judged again.
 - Only the primary judge's scores are stored, so an LLM fallback answer is asked for again next time.
+- Migration `0008_judge_cache_subq` (E9-1) lets the table hold SubQ's scores; run `npm run db:migrate` once on an existing database.
 - Relevance is decided against the current `JUDGE_THRESHOLD` when the score is read, so changing the threshold needs no new calls.
 - `JUDGE_CACHE=off`, or `{ cache: false }` per call, skips the cache entirely, e.g. for timing measurements. Deleting the table's rows clears it.
 
 The result has each chunk's status (`judged`, `cached` or `unknown`), score, relevance, judge and time, plus the total time, cache hits, judge calls, unknown chunks and tokens used.
 
+### Paid SubQ runs
+
+Every SubQ call is billed ($0.05 per million input tokens for `subq-snap-preview`; output is free). The batch commands that would call SubQ (`subq:probe`, `eval:run` in every form and `bench:compare`) first print how many SubQ calls and input tokens the run makes at most and what that costs, and go on only when `y` is typed at the prompt or `--yes` is given; without a terminal and without `--yes` they stop before any call. The estimate is an upper bound: every candidate judged without the cache, every list full, a token per 2 characters (measured: about 3.7 for chunks and 2.8 for a translation's tag questions). At the end they print the input tokens SubQ actually reported and their cost. A configuration that does not call SubQ is not asked about. A single query (`npm run query`, the web UI) is not guarded: it costs a fraction of a cent.
+
+```bash
+npm run subq:probe                          # asks first
+npm run eval:run -- --reranker subq,llm --yes
+```
+
+### SubQ limits
+
+SubQ documents a context window of 384K tokens, 1–16 questions per call and the price; rate limits and latency are not documented. `npm run subq:probe` measures them as `jev:probe` does (below), with the cost guard above.
+
+Measured on 2026-10-15 from the demo machine (`npm run subq:probe`, `subq-snap-preview`, timeout 10000 ms):
+
+- **Latency:** median 316 ms, max 594 ms over 10 sequential calls with a 1,000-character state and one question.
+- **State size:** 256,000 characters accepted, the probe's cap; nothing was refused. SubQ documents 384K tokens.
+- **Burst:** 20 concurrent calls answered in 711 ms, none rate limited (HTTP 429) and no other errors.
+- **Cost:** the 39 calls used 145,588 input tokens, 0.0073 USD, against an estimate of at most 183,857. That is about 3.7 characters per token for chunk-sized states. A translation's short tag questions came to about 2.8 (89,401 tokens for 131 calls), so the estimate counts 2.
+
 ### JEV limits
 
-TypeSafe does not document JEV's maximum state size, pricing or rate limits. `npm run jev:probe` measures them against the real API with the judge's timeout `JUDGE_TIMEOUT_MS` (needs `JEV_API_KEY`; the calls are billed): latency over 10 sequential calls, the largest state accepted (doubling from 1,000 characters) and how a burst of 20 concurrent calls is answered.
+JEV is paused (#79). TypeSafe does not document JEV's maximum state size, pricing or rate limits. `npm run jev:probe` measures them against the real API with the judge's timeout `JUDGE_TIMEOUT_MS` (needs `JEV_API_KEY`; the calls are billed): latency over 10 sequential calls, the largest state accepted (doubling from 1,000 characters) and how a burst of 20 concurrent calls is answered.
 
 **Observed so far: nothing.** The project has no JEV key yet, so the limits are not measured, and JEV's request shape is only checked against the documentation with faked responses. Run the probe once a key exists and record the results here.
 
@@ -303,9 +328,19 @@ E7-7 then made the LLM judge the default again: minilm only ranks (threshold 0),
 
 ### The judge step (E7-7)
 
-The requirements' query flow has a judge that says yes or no per candidate, so `RERANKER=llm` is the default until JEV can be used, with Haiku as the judge (`LLM_JUDGE_MODEL`). The LLM judge's default `JUDGE_THRESHOLD` is 0.8, the highest F1 on the central chunks in a sweep with that judge (`eval/report-2026-10-13.md`, "Judge threshold"). `eval:run` now sweeps the threshold against the central chunks and against all graded ones, keeps at most `RERANK_TOP_K` per query as the query flow does, and recommends by the central F1. A blank `LLM_JUDGE_MODEL` means Haiku, not `LLM_MODEL`.
+The requirements' query flow has a judge that says yes or no per candidate, so `RERANKER=llm` is the default, with Haiku as the judge (`LLM_JUDGE_MODEL`). The LLM judge's default `JUDGE_THRESHOLD` is 0.8, the highest F1 on the central chunks in a sweep with that judge (`eval/report-2026-10-13.md`, "Judge threshold"). `eval:run` now sweeps the threshold against the central chunks and against all graded ones, keeps at most `RERANK_TOP_K` per query as the query flow does, and recommends by the central F1. A blank `LLM_JUDGE_MODEL` means Haiku, not `LLM_MODEL`.
 
-Measured without drafts (`bench:compare -- --runs 1 --no-draft`, judge cache off), the main flow has its sources in 35 s with the judge (27 s of it judging, through the Claude Code CLI) and 11 s with minilm; the reference RAG in 50 ms. The judge gives the most relevant sources (precision 0.44 against 0.35 and 0.29) and can return none, in which case no draft is written. JEV (#79) is the intended faster judge.
+Measured without drafts (`bench:compare -- --runs 1 --no-draft`, judge cache off), the main flow has its sources in 35 s with the judge (27 s of it judging, through the Claude Code CLI) and 11 s with minilm; the reference RAG in 50 ms. The judge gives the most relevant sources (precision 0.44 against 0.35 and 0.29) and can return none, in which case no draft is written. SubQ (E9-1) is the faster judge being measured; JEV (#79) is paused.
+
+### SubQ as the judge (E9-1)
+
+SubQ Snap was measured against the LLM judge on the evaluation set (`eval/report-2026-10-15.md`, "SubQ as the judge and query translator"):
+
+- **Speed.** As the judge, SubQ reranks 30 candidates in 1.3 s per query against the LLM's 26.4 s, and the main flow has its sources in 1.5 s instead of about 27 s.
+- **Ranking.** SubQ ranks better than every other reranker: central recall@8 is 0.322, against 0.276 for the LLM.
+- **Central F1.** At its best threshold (0.6, now its default) SubQ reaches 0.330 on the central chunks, below the LLM's 0.371 at 0.8.
+- **Default rules.** The rule fixed before the run needs SubQ's F1 to be at least the LLM's, so `RERANKER` stays `llm`. As the query translator SubQ is 7 times faster, but its tags find fewer relevant chunks (central R@cand 0.332 against 0.399), so `QUERY_TRANSLATOR_IMPL` stays `llm` too.
+- **Cost.** All of E9-1's SubQ runs cost 0.047 USD.
 
 ### Licences
 
@@ -326,16 +361,19 @@ npm run eval:label -- anst-01 [--chars 300]   # candidates for one query: tag se
 npm run eval:run                              # precision, recall and the threshold sweep
 ```
 
-`eval:run` runs every query through four modes and prints precision and recall (macro averages over the queries):
+`eval:run` runs every query through five modes and prints precision and recall (macro averages over the queries):
 
 - `tags`: tag-search candidates (E4-1);
 - `tags+jev`: those candidates as approved by the `jev` reranker;
+- `tags+subq`: the same, with the `subq` reranker (E9-1);
 - `tags+llm`: the same, with the `llm` reranker;
 - `fts`: full-text candidates only (E4-3).
 
+The report also gives every mode's measures for statutes (`law`) and rulings (`ruling`) apart, counting only the returned and relevant chunks of that document type, over the queries with a relevant chunk of it; and per judge mode the number of queries where the judge approved no candidate and the share of its scores in each tenth from 0 to 1 (E9-1).
+
 Here a reranker keeps every relevant candidate, not only `RERANK_TOP_K`, so the numbers stay comparable with the first run. For each judge mode, thresholds from 0.1 to 0.9 are applied to the judge's scores, and the threshold with the highest F1 is recommended. The judge cache is on, so the sweep and repeated runs cost no new calls. The full report, with one row per query, goes to `reports/eval-<timestamp>.md`.
 
-Without `JEV_API_KEY`, `tags+jev` is answered by the `llm` reranker, and the report says so. To run without the paid API, use the Claude Code provider. It starts the `claude` CLI without `ANTHROPIC_API_KEY`, so the calls go to your subscription even when `.env` has a key. A `claude` call takes several seconds, so give the judge more time than the defaults, which are sized for JEV and the API:
+Without `JEV_API_KEY` or `SUBQ_API_KEY`, `tags+jev` or `tags+subq` is answered by the `llm` reranker, and the report says so; judges that are the same are asked once. With `SUBQ_API_KEY`, the run asks first (see [Paid SubQ runs](#paid-subq-runs)). To run without the paid API, use the Claude Code provider. It starts the `claude` CLI without `ANTHROPIC_API_KEY`, so the calls go to your subscription even when `.env` has a key. A `claude` call takes several seconds, so give the judge more time than the defaults, which are sized for SubQ, JEV and the API:
 
 ```bash
 LLM_PROVIDER=claude-code LLM_MODEL=claude-haiku-5-5 LLM_TIMEOUT_MS=120000 \
@@ -350,17 +388,17 @@ The first run's report is kept in `eval/report-2026-10-11.md`. A query that fail
 npm run eval:run -- --reranker bge,llm [--retriever tags,bge,both]
 ```
 
-With `--reranker`, `eval:run` compares rerankers instead (E8-5). Every query goes through each retriever (`--retriever`, default the configured `RETRIEVER`; `fts` is always added as a baseline), and each candidate list through each reranker, which keeps every relevant candidate. One row per retriever and reranker gives recall@5/@8/@10 and recall over all candidates, before rerank (the retriever's own order, reranker `none`) and after it, precision@5/@10 after rerank, and the median and p90 latency per query of the rerank and of retrieval. The table is printed and appended to the table in that day's `eval/report-<date>.md`; every report has the same columns, so rows from different days, e.g. JEV once credits exist, can be put side by side. The command exits non-zero when queries failed.
+With `--reranker`, `eval:run` compares rerankers instead (E8-5). Every query goes through each retriever (`--retriever`, default the configured `RETRIEVER`; `fts` is always added as a baseline), and each candidate list through each reranker, which keeps every relevant candidate. One row per retriever and reranker gives recall@5/@8/@10 and recall over all candidates, before rerank (the retriever's own order, reranker `none`) and after it, precision@5/@10 after rerank, and the median and p90 latency per query of the rerank and of retrieval. A retriever that uses tags also names the query translator and the translation's latency per query (E9-1), so two runs with `QUERY_TRANSLATOR_IMPL=llm` and `subq` compare the translators. The table is printed and appended to the table in that day's `eval/report-<date>.md`; every report has the same columns, so rows from different days can be put side by side. The command exits non-zero when queries failed.
 
 - `tags` here is E5-3's tag search without the full-text fallback; `bge` and `both` need `npm run index:embed`.
-- A reranker that cannot run is a skipped row with the reason, e.g. `jev` without `JEV_API_KEY` or `qwen3` (not implemented); the others still run.
+- A reranker that cannot run is a skipped row with the reason, e.g. `subq` without `SUBQ_API_KEY` or `qwen3` (not implemented); the others still run.
 - The local models are loaded before anything is timed. A reranker whose scores came from the judge cache takes its latency from the queries without cache hits, or, with fewer than 5 of those, from a cache-off pass over the first 5 queries; its row says which.
 - BGE in int8 and fp32 are two runs: `RERANKER_DTYPE=int8` and `RERANKER_DTYPE=fp32`.
 
 ### Switch reranker in three steps
 
-1. Set `RERANKER=` in `.env`: `llm` (default), `jev`, `minilm` (local, fast), `bge` (local, larger) or `qwen3` (not implemented yet).
-2. Fill in what it needs: `JEV_API_KEY` for `jev`; the judge's LLM settings for `llm`; nothing for `minilm` or `bge`, whose models download into `MODEL_CACHE_DIR` on first use (`RERANKER_DTYPE` picks int8 or fp32).
+1. Set `RERANKER=` in `.env`: `llm` (default), `subq`, `jev` (paused), `minilm` (local, fast), `bge` (local, larger) or `qwen3` (not implemented yet).
+2. Fill in what it needs: `SUBQ_API_KEY` for `subq`, `JEV_API_KEY` for `jev`; the judge's LLM settings for `llm`; nothing for `minilm` or `bge`, whose models download into `MODEL_CACHE_DIR` on first use (`RERANKER_DTYPE` picks int8 or fp32).
 3. Verify with `npm run retrieve -- "<question>"` (one question, the reranked chunks and their scores) or `npm run eval:run -- --reranker <name>` (the evaluation set).
 
 Nothing else changes: the query flow and `eval:run` only know the `Reranker` interface.
@@ -389,17 +427,17 @@ The first sweep (2026-10-13, `minilm`) set the defaults:
 ### Main flow vs reference RAG
 
 ```bash
-npm run bench:compare [-- --runs 5] [--limit <n>] [--no-draft]
+npm run bench:compare [-- --runs 5] [--limit <n>] [--no-draft] [--yes]
 ```
 
-`bench:compare` (E5-4) runs every evaluation query through the main flow (as `.env` configures it) and the [reference RAG](#reference-rag), `--runs` times each (default 5). Within a run the two flows take turns going first, the embedder and a local reranker are loaded before anything is timed, and the judge cache is off, so an `llm` or `jev` reranker is measured on every run. One row per flow gives the median and p90 over every run of:
+`bench:compare` (E5-4) runs every evaluation query through the main flow (as `.env` configures it) and the [reference RAG](#reference-rag), `--runs` times each (default 5). Within a run the two flows take turns going first, the embedder and a local reranker are loaded before anything is timed, and the judge cache is off, so an `llm`, `subq` or `jev` reranker is measured on every run. With `RERANKER=subq` or `QUERY_TRANSLATOR_IMPL=subq` it asks first (see [Paid SubQ runs](#paid-subq-runs)). One row per flow gives the median and p90 over every run of:
 
 - total time;
 - query translation (main flow only), and time to sources (E7-8): search plus rerank, without the translation; this is the measure the comparison is about, since the drafts' length weighs on the total;
 - search time: retrieval and loading the chunks, embedding the instruction included, and the embedding time on its own (`–` for tag search, which embeds nothing);
 - rerank time, with the median number of candidates the rerank judged (`judged`) and the candidates it could not score over every run (`unknown`, a failed or timed-out call);
 - generation time, also per output token (`ms/token`, one decimal) with the drafts' output tokens, so a longer draft does not read as a slower flow;
-- LLM time: query translation, generation and, for `llm` or `jev`, the rerank (a local reranker such as `bge` is not LLM time);
+- LLM time: query translation, generation and, for `llm`, `subq` or `jev`, the rerank (a local reranker such as `bge` is not LLM time);
 - precision and recall of the chunks sent to the generator (each flow's approved chunks, those that fit the context limits when a draft is written), macro averages over the queries, averaged over the runs;
 - source accuracy: valid references / all references (E6-3).
 
@@ -440,7 +478,7 @@ npm run query -- "<instruction>" --template nda --max-chunks 30 --max-context-ch
 - the post-check (E6-3): the source accuracy (the share of `[K:]` citations and free-text legal references such as "7 § LAS" or "AD 2019 nr 35" that match a chunk sent to the generator) and every flagged reference with its position in the draft;
 - the time in ms and the tokens for each step.
 
-The reranker keeps at most `RERANK_TOP_K` (default 8) approved chunks. They go to the generator best first, up to `GENERATOR_MAX_CHUNKS` (default 20) and `GENERATOR_MAX_CONTEXT_CHARS` (default 60 000). When the limits leave chunks out, the output says how many and prints the same command with `--max-chunks` and `--max-context-chars` large enough to include them all. Running it again repeats the whole flow. Judge scores that are cached (from JEV with `RERANKER=jev`, or from the LLM with `RERANKER=llm`) are reused, but LLM answers standing in for a failed JEV call are not cached, and an LLM query translator may pick other tags, so the rerun can find somewhat different chunks. When the reranker approves nothing, or no approved chunk fits the limits, no draft is written.
+The reranker keeps at most `RERANK_TOP_K` (default 8) approved chunks. They go to the generator best first, up to `GENERATOR_MAX_CHUNKS` (default 20) and `GENERATOR_MAX_CONTEXT_CHARS` (default 60 000). When the limits leave chunks out, the output says how many and prints the same command with `--max-chunks` and `--max-context-chars` large enough to include them all. Running it again repeats the whole flow. Judge scores that are cached (from SubQ with `RERANKER=subq`, JEV with `RERANKER=jev`, or the LLM with `RERANKER=llm`) are reused, but LLM answers standing in for a failed SubQ or JEV call are not cached, and an LLM query translator may pick other tags, so the rerun can find somewhat different chunks. When the reranker approves nothing, or no approved chunk fits the limits, no draft is written.
 
 Example drafts for both templates, made with the Claude Code provider, are in [`prompts/examples/`](prompts/examples/). To run on the subscription instead of the paid API, use the settings they were made with (`RERANKER=llm`, called `JUDGE_IMPL=llm` then, reuses the evaluation's cached LLM scores while there is no JEV key):
 

@@ -4,18 +4,21 @@
 - **Labels:** `E9 SubQ`
 - **Phase:** E9 SubQ
 - **Depends on:** none
-- **Status:** Approved
+- **Status:** Implemented — all acceptance criteria verified (lint, format:check, typecheck, 936 backend and 90 frontend tests, build exit 0; live SubQ runs 2026-10-15, 0.047 USD)
 
 ## Summary
+
 Add SubQ Snap (`subq-snap-preview`, https://docs.subq.ai) as a judge (`RERANKER=subq`) and as a query translator (`QUERY_TRANSLATOR_IMPL=subq`). It goes through the client JEV already uses, generalised into one System One client. Measure SubQ against the LLM judge and the local rankers on the existing evaluation set, and make it the default wherever the pre-agreed rules say it wins. Every batch script that would call the paid SubQ API first prints a cost estimate and needs a confirmation.
 
 ## Goals
+
 - SubQ is selectable for both model roles JEV has, with the same behaviour as JEV: the same question, cache, fallback, timeouts and logging.
 - Nothing outside the System One client and its per-provider settings knows which of JEV or SubQ it talks to.
 - No batch run calls SubQ without the owner having seen an estimate and confirmed it.
 - Live numbers decide the defaults: the limits from a probe, and an evaluation with statutes and rulings reported separately.
 
 ## Non-goals
+
 - Removing JEV. JEV's code, settings, `jev:probe` and the `tags+jev` mode stay and keep passing their tests. JEV is documented as paused, and #79 stays open.
 - SubQ's other endpoints (Chat Completions, Responses, Files, Conversations) and the `subq-preview` chat model.
 - `score` questions, `noul` `criteria`, images, and several chunks per call.
@@ -25,6 +28,7 @@ Add SubQ Snap (`subq-snap-preview`, https://docs.subq.ai) as a judge (`RERANKER=
 - Zero data retention. The owner requests it from SubQ if wanted; nothing in the code depends on it.
 
 ## Acceptance Criteria
+
 1. **`RERANKER=subq` judges chunks through the SubQ client.** Tests with a faked SubQ API (an injected `fetch`) prove each of these:
    - **Request:** `POST <SUBQ_BASE_URL>/systemone` with `Authorization: Bearer <key>`, `model` set to `SUBQ_MODEL`, the judged text (`judgedText`) as `state`, and one `noul` question whose instructions are `relevanceQuestion(instruction)`.
    - **Score:** the score is the answer's `noul`. The chunk is relevant when the score is at least `JUDGE_THRESHOLD`, and `judgedBy` is `subq`.
@@ -50,6 +54,7 @@ Add SubQ Snap (`subq-snap-preview`, https://docs.subq.ai) as a judge (`RERANKER=
    - that without `--yes` on a non-terminal stdin, no SubQ request is made;
    - that with `--yes` the run proceeds;
    - that a configuration without SubQ (e.g. `RERANKER=minilm`, `QUERY_TRANSLATOR_IMPL=llm`) neither prompts nor prints an estimate.
+
 6. **`npm run subq:probe`** measures the same three things as `jev:probe` against SubQ: latency over 10 sequential calls, the largest state accepted (doubling from 1,000 characters) and a burst of 20 concurrent calls.
    - It has been run against the real API after the owner confirmed the estimate.
    - The README's new "SubQ limits" section has the measured values and the date.
@@ -71,21 +76,23 @@ Add SubQ Snap (`subq-snap-preview`, https://docs.subq.ai) as a judge (`RERANKER=
 10. **Checks.** `npm run lint && npm run format:check && npm run typecheck && npm test && npm run build` pass, and `npm test` makes no network request.
 
 ## Tasks
-- [ ] Generalise `backend/src/jev/` into a System One client (`backend/src/systemone/`).
+
+- [x] Generalise `backend/src/jev/` into a System One client (`backend/src/systemone/`).
   - One `createSystemOneClient` takes a provider identity (`jev` | `subq`, used in log entries and error messages) and that provider's config.
   - `SystemOneError` replaces `JevError` with the same kinds plus `status`, and includes SubQ's `detail.error_type`/`message` when present. A 402 says the account is out of credits.
   - Keep per-provider config loaders: `loadJevConfig` unchanged, plus a new `loadSubqConfig`/`hasSubqKey`.
-- [ ] Rename the JEV judge and translator to provider-neutral ones (`createSystemOneJudge`, `createSystemOneQueryTranslator`). The translator splits each area's tag questions into calls of at most 16 (the SubQ limit). JEV gets the same split, which is harmless.
-- [ ] Generalise the fallback judge to `SystemOneError`. The judge config, factory and cache identity get `subq`, and `JudgeScore['judgedBy']` gets `'subq'`. Wherever `judgedBy` is counted or labelled (eval `answeredBy`, the report, the UI's source list), SubQ is handled.
-- [ ] Add a `subq` reranker entry (remote) to the registry, and `subq` to `QUERY_TRANSLATOR_IMPL`, the translator factory and `translatorLabel`.
-- [ ] Generalise `judge/probe.ts` to take the provider. `jev:probe` stays, and `subq:probe` is added in the backend and root `package.json`.
-- [ ] Add the cost guard module, which counts calls and estimates tokens from the texts it will send, and wire it into `subq:probe`, `eval:run` (default, `--reranker`, `--sweep`) and `bench:compare`. Parse `--yes` in their argument parsers, and print the actual usage at the end.
-- [ ] In eval: add the `tags+subq` mode (no key → the LLM answers, as for JEV, asked once when the judges are the same), statute/ruling split, the "no candidate approved" count and SubQ's score distribution. Add the translation time column and the translator name to the comparison rows.
-- [ ] Update `.env.example`, the README and `CLAUDE.md`.
-- [ ] Tests for all of the above, with faked SubQ responses.
-- [ ] After the owner has put `SUBQ_API_KEY` in `.env` and confirmed each estimate, run `subq:probe`, `eval:run`, the `--reranker` comparison, the translator comparison and `bench:compare`. Then apply the default rules and record the results.
+- [x] Rename the JEV judge and translator to provider-neutral ones (`createSystemOneJudge`, `createSystemOneQueryTranslator`). The translator splits each area's tag questions into calls of at most 16 (the SubQ limit). JEV gets the same split, which is harmless.
+- [x] Generalise the fallback judge to `SystemOneError`. The judge config, factory and cache identity get `subq`, and `JudgeScore['judgedBy']` gets `'subq'`. Wherever `judgedBy` is counted or labelled (eval `answeredBy`, the report, the UI's source list), SubQ is handled.
+- [x] Add a `subq` reranker entry (remote) to the registry, and `subq` to `QUERY_TRANSLATOR_IMPL`, the translator factory and `translatorLabel`.
+- [x] Generalise `judge/probe.ts` to take the provider. `jev:probe` stays, and `subq:probe` is added in the backend and root `package.json`.
+- [x] Add the cost guard module, which counts calls and estimates tokens from the texts it will send, and wire it into `subq:probe`, `eval:run` (default, `--reranker`, `--sweep`) and `bench:compare`. Parse `--yes` in their argument parsers, and print the actual usage at the end.
+- [x] In eval: add the `tags+subq` mode (no key → the LLM answers, as for JEV, asked once when the judges are the same), statute/ruling split, the "no candidate approved" count and SubQ's score distribution. Add the translation time column and the translator name to the comparison rows.
+- [x] Update `.env.example`, the README and `CLAUDE.md`.
+- [x] Tests for all of the above, with faked SubQ responses.
+- [x] After the owner has put `SUBQ_API_KEY` in `.env` and confirmed each estimate, run `subq:probe`, `eval:run`, the `--reranker` comparison, the translator comparison and `bench:compare`. Then apply the default rules and record the results.
 
 ## Decisions
+
 - **One shared System One client (owner).** SubQ's Decisions API has JEV's request and answer shape, so JEV and SubQ share the client, the judge and the translator. Only the config (key, URL, model, timeout) and the provider name differ. This keeps the adapter thin, as the issue asks: the provider-specific part is the config and the error body.
 - **`tags+subq` is added, `tags+jev` kept (owner).** JEV can be re-run on the same set later without code changes. Without a key, a mode's judgements are answered by the LLM, and the LLM is asked only once when several modes resolve to the same judge.
 - **The cost guard covers the batch scripts only (owner).** These are `subq:probe`, `eval:run` in every variant and `bench:compare`. A single query in the UI or `npm run query` costs fractions of a cent and is not guarded. Claude also asks the owner once more, with the estimate, before any live SubQ run (owner, 2026-10-15).
@@ -98,5 +105,44 @@ Add SubQ Snap (`subq-snap-preview`, https://docs.subq.ai) as a judge (`RERANKER=
 - **Translation time is added to the comparison rows.** The translator rule needs a translation time from the same run as the recall, and today's comparison does not measure it.
 - **Statute/ruling split from `documents.type`.** It takes `law` and `ruling` from the database, where they already exist. Precision and recall per type count only the returned and relevant chunks of that type.
 
+- **Settled while implementing:**
+  - **One `systemOne` field.** Both the judge config and the translator config carry the model's settings in one `systemOne` field (`impl` names the provider). The JEV config tests changed only in that field's name and in the shared loader's signature (`loadSystemOneConfig(env, provider, …)`), with no assertion weakened.
+  - **Messages and logs keep their wording.** They are worded per provider (`JEV call failed`, `SubQ call failed`, `SubQ failed, judging with the LLM instead`), so the existing JEV assertions are unchanged.
+  - **Where `--yes` is read.** The eval CLI takes `--yes` off the arguments before the run, comparison, sweep and bench parsers see them, and `probe.ts` takes it after the provider (`subq:probe -- --yes`). The guard runs before any reranker or translator is built, so a stopped run cannot have called SubQ.
+  - **Actual usage from the logs.** The usage printed at the end is counted from the System One client's `SubQ call` log entries (`meterSubqUsage`), so no factory needs a new parameter.
+  - **A new comparison heading.** The comparison table's new columns (`translator`, `translation ms median / p90`) come with a new heading, `## Retriever and reranker comparison, graded, with translation`, so the same-day appends never mix column sets. E7-4 did the same.
+  - **The no-key fallback shares the LLM.** When `tags+subq` (or `tags+jev`) has no key, it uses the `llm` reranker. The LLM is asked once, under the first mode that uses it.
+  - **Score bands for every judge mode.** The distribution and the "none approved" count are reported for every judge mode, not only SubQ's, since the data is already there.
+
+- **Clean code (findings not applied):**
+  - **Eval judges in parallel.** `eval:run` still asks its judges one after another, as before E9-1. Running SubQ and the LLM at once would stack two `JUDGE_CONCURRENCY` pools on the Claude Code subscription.
+  - **The guard stays SubQ-only.** The spec scopes the paid-call guard to SubQ, and JEV is paused. Making it per provider waits for a second paid provider.
+  - **Usage stays metered from the client's log entries.** A typed `onUsage` hook would have to be threaded through every factory, and a test pins the meter to the client's entries.
+  - **No call budget enforced at run time.** The estimate is an upper bound shown before the run; enforcing it as a budget is new behaviour beyond the spec.
+
+- **Code review (findings fixed):**
+  - The comparison's estimate counts SubQ only when it has a key; without one, the comparison skips the `subq` reranker.
+  - The sweep's estimate uses the sweep's own reranker choice (`sweepRerankerName`).
+  - "None approved" counts only queries with judged candidates.
+  - P@K per document type is taken over the list's real top K.
+  - The translation estimate counts the most calls and the most characters separately, so both stay upper bounds.
+  - The actual SubQ usage is printed in a `finally`, after a failed run too.
+  - The estimate helpers moved from `systemone/` to `eval/subq-estimate.ts`, so `systemone/` no longer imports `query/`.
+  - `SystemOneError` carries its provider, so the fallback judge names the failed model without a second argument.
+- **Code review (findings not changed):**
+  - **The estimate is not derived from the built setups.** Building them loads the local models and vectors, which the guard should not wait for. Instead, the two selections that drifted now share code or mirror the setup exactly: the sweep's reranker, and the comparison's skip without a key.
+  - **No end-to-end test of the CLIs.** The eval and probe CLIs run at import time. Each command calls the guard before it builds any reranker, translator or client, and the guard's refusal is tested (`confirmSubqRun`, `confirmPaidRun`). A test that drives the CLI would first need the commands split out of the script.
+  - **Failed SubQ calls are not counted.** The meter counts only the calls SubQ answered, since only those report billed tokens.
+
+- **Migration `0008_judge_cache_subq` (found while verifying).** `judge_cache.judge` had a CHECK that allowed only `jev` and `llm`, so SubQ's scores were silently never cached: the write failed and was logged. The SubQ cache test found it. The migration rebuilds the table with `subq` allowed and keeps its rows, and an existing database needs `npm run db:migrate` once.
+
+- **Live runs (2026-10-15, after the owner confirmed about 0.09 USD).** They ran as `subq:probe`, `eval:run`, `eval:run -- --reranker subq,llm,minilm,bge --retriever tags`, the same with `QUERY_TRANSLATOR_IMPL=subq --reranker minilm`, and `bench:compare -- --runs 1` with `RERANKER=subq`. Together they cost 0.047 USD. The LLM roles ran on the subscription, with `ANTHROPIC_API_KEY` overridden by an invalid key.
+- **The default rules.** Neither rule holds, so `RERANKER` and `QUERY_TRANSLATOR_IMPL` stay `llm`.
+  - The judge: SubQ's central F1 is 0.330 against the LLM's 0.371, although SubQ is 20 times faster.
+  - The translator: SubQ's central R@cand is 0.332 against the LLM's 0.399, although SubQ is 7 times faster.
+  - SubQ's default `JUDGE_THRESHOLD` is now 0.6, the sweep's recommendation.
+- **Two characters per token in the estimate.** The translator comparison used 89,401 tokens against an estimate of at most 82,127 at 3 characters per token. The short tag questions came to about 2.8 characters per token, while chunks came to 3.7. The estimate now counts 2 characters per token, so it stays an upper bound.
+
 ## Open Questions
+
 - None.

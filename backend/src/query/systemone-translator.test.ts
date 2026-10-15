@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { createJevClient } from '../jev/client.js';
+import { createSystemOneClient } from '../systemone/client.js';
 import { createCapturingLogger } from '../llm/test-helpers.js';
-import { createJevQueryTranslator } from './jev-translator.js';
-import { createFakeJev, VOCABULARY } from './test-helpers.js';
+import { createSystemOneQueryTranslator } from './systemone-translator.js';
+import { MAX_QUESTIONS_PER_CALL } from './systemone-translator.js';
+import { createFakeJev, tag, VOCABULARY } from './test-helpers.js';
 
 const JEV = {
   apiKey: 'k',
@@ -12,16 +13,17 @@ const JEV = {
 };
 
 function translatorWith(fake: ReturnType<typeof createFakeJev>, threshold = 0.5) {
-  const client = createJevClient({
+  const client = createSystemOneClient({
+    provider: 'jev',
     ...JEV,
     role: 'queryTranslator',
     logger: createCapturingLogger(),
     fetch: fake.fetch,
   });
-  return createJevQueryTranslator(client, threshold);
+  return createSystemOneQueryTranslator(client, threshold);
 }
 
-describe('createJevQueryTranslator', () => {
+describe('createSystemOneQueryTranslator', () => {
   it('asks a Choice question over the areas, then Noul questions for the tags of the chosen areas', async () => {
     const fake = createFakeJev({ lon: 0.6, skadestand: 0.3, sekretess: 0, semester: 0.1 }, {});
 
@@ -97,7 +99,8 @@ describe('createJevQueryTranslator', () => {
 
   it('uses the single chosen area when no probabilities are given', async () => {
     const fake = createFakeJev({}, { sekretessklausul: 0.8 });
-    const client = createJevClient({
+    const client = createSystemOneClient({
+      provider: 'jev',
       ...JEV,
       role: 'queryTranslator',
       logger: createCapturingLogger(),
@@ -114,7 +117,7 @@ describe('createJevQueryTranslator', () => {
       },
     });
 
-    const { tags } = await createJevQueryTranslator(client, 0.5).translate('NDA', VOCABULARY);
+    const { tags } = await createSystemOneQueryTranslator(client, 0.5).translate('NDA', VOCABULARY);
 
     expect(tags).toEqual([{ slug: 'sekretessklausul', score: 0.8 }]);
   });
@@ -139,7 +142,8 @@ describe('createJevQueryTranslator', () => {
 
   it('cancels the other area calls when one fails', async () => {
     const signals: (AbortSignal | undefined)[] = [];
-    const client = createJevClient({
+    const client = createSystemOneClient({
+      provider: 'jev',
       ...JEV,
       role: 'queryTranslator',
       logger: createCapturingLogger(),
@@ -161,15 +165,16 @@ describe('createJevQueryTranslator', () => {
       },
     });
 
-    await expect(createJevQueryTranslator(client, 0.5).translate('x', VOCABULARY)).rejects.toThrow(
-      'JEV answered HTTP 503',
-    );
+    await expect(
+      createSystemOneQueryTranslator(client, 0.5).translate('x', VOCABULARY),
+    ).rejects.toThrow('JEV answered HTTP 503');
     expect(signals).toHaveLength(2);
     expect(signals.every((signal) => signal?.aborted)).toBe(true);
   });
 
   it('fails when a JEV call fails', async () => {
-    const client = createJevClient({
+    const client = createSystemOneClient({
+      provider: 'jev',
       ...JEV,
       role: 'queryTranslator',
       logger: createCapturingLogger(),
@@ -177,7 +182,40 @@ describe('createJevQueryTranslator', () => {
     });
 
     await expect(
-      createJevQueryTranslator(client, 0.5).translate('NDA', VOCABULARY),
+      createSystemOneQueryTranslator(client, 0.5).translate('NDA', VOCABULARY),
     ).rejects.toThrow('JEV answered HTTP 503');
+  });
+
+  it('asks SubQ at most 16 questions per call and scores every tag of a large area once', async () => {
+    const slugs = Array.from({ length: 30 }, (_, i) => `lon-${i}`);
+    const vocabulary = [...slugs.map((slug) => tag(slug, 'lon')), tag('vite', 'skadestand')];
+    const fake = createFakeJev(
+      { lon: 0.9 },
+      Object.fromEntries(slugs.map((slug, i) => [slug, i / 100])),
+    );
+    const client = createSystemOneClient({
+      ...JEV,
+      provider: 'subq',
+      baseUrl: 'https://api.subq.example/v1',
+      model: 'subq-snap-preview',
+      role: 'queryTranslator',
+      logger: createCapturingLogger(),
+      fetch: fake.fetch,
+    });
+
+    const { askedTags } = await createSystemOneQueryTranslator(client, 0.5).translate(
+      'Lön',
+      vocabulary,
+    );
+
+    const sizes = fake.requests.map(
+      (request) => Object.keys(request.body.questions as object).length,
+    );
+    expect(sizes).toEqual([1, 16, 14]);
+    expect(Math.max(...sizes)).toBeLessThanOrEqual(MAX_QUESTIONS_PER_CALL);
+    expect(
+      fake.requests.every((request) => request.url.startsWith('https://api.subq.example')),
+    ).toBe(true);
+    expect(askedTags?.map((scored) => scored.slug).sort()).toEqual([...slugs].sort());
   });
 });

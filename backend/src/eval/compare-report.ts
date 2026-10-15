@@ -14,10 +14,11 @@ import {
 import { formatScore } from './report.js';
 
 /**
- * E7-4 added the grade and precision before rerank; reports from before keep their earlier table
- * under `## Retriever and reranker comparison`.
+ * E7-4 added the grade and precision before rerank, E9-1 the query translator and its latency;
+ * reports from before keep their earlier tables under `## Retriever and reranker comparison` and
+ * `## Retriever and reranker comparison, graded`.
  */
-export const COMPARISON_HEADING = '## Retriever and reranker comparison, graded';
+export const COMPARISON_HEADING = '## Retriever and reranker comparison, graded, with translation';
 
 const COMPARISON_TABLE: ReportTable = {
   heading: COMPARISON_HEADING,
@@ -28,6 +29,7 @@ const COMPARISON_TABLE: ReportTable = {
     'the first K divided by K. Each pair has a row per grade: `central` counts the chunks the clause',
     'rests on, `all` every graded chunk (E7-4). `tags` is tag search without the full-text fallback',
     '(E5-3), `fts` the full-text baseline. The labels are not yet reviewed by the owner (#79).',
+    'A retriever that uses tags names the query translator and the time it took per query (E9-1).',
   ],
   columns: [
     'date',
@@ -35,6 +37,7 @@ const COMPARISON_TABLE: ReportTable = {
     'reranker',
     'model',
     'dtype',
+    'translator',
     'candidates',
     'grade',
     'R@5 before',
@@ -51,6 +54,7 @@ const COMPARISON_TABLE: ReportTable = {
     'P@10 after',
     'rerank ms median / p90',
     'retrieval ms median / p90',
+    'translation ms median / p90',
     'queries',
     'notes',
   ],
@@ -66,12 +70,14 @@ export function comparisonRows(rows: readonly ComparisonRow[], date: string): st
         row.reranker,
         row.model,
         row.dtype,
+        row.translator,
         row.candidates.toFixed(1),
         grade,
         ...measureCells(row.before[grade]),
         ...(row.after ? measureCells(row.after[grade]) : MEASURE_KEYS.map(() => '–')),
         row.rerankMs ? formatLatency(row.rerankMs) : '–',
         formatLatency(row.retrievalMs),
+        row.translationMs ? formatLatency(row.translationMs) : '–',
         String(row.queries),
         row.notes.join('; '),
       ]),

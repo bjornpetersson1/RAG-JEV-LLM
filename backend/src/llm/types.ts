@@ -1,4 +1,5 @@
 import type { LlmUsage } from './client.js';
+import type { SystemOneProvider } from '../systemone/config.js';
 
 export const ROLE_NAMES = ['tagger', 'queryTranslator', 'judge', 'generator'] as const;
 
@@ -48,8 +49,8 @@ export interface Chunk {
 export interface JudgeScore {
   /** Probability-like relevance score between 0 and 1. */
   score: number;
-  /** Which judge answered: JEV, or an LLM (also when it stood in for JEV). */
-  judgedBy: 'jev' | 'llm';
+  /** Which judge answered: JEV or SubQ, or an LLM (also when it stood in for either). */
+  judgedBy: SystemOneProvider | 'llm';
   /** Tokens used by the call. */
   usage: LlmUsage;
 }
@@ -81,14 +82,14 @@ export interface Tagger {
 
 export interface TranslatedTag {
   slug: string;
-  /** How well the tag fits the instruction, 0–1, when the translator scores tags (JEV). */
+  /** How well the tag fits the instruction, 0–1, when the translator scores tags (JEV or SubQ). */
   score?: number;
 }
 
 export interface Translation {
   /** Known, unique slugs, best first, at most the maximum per query. */
   tags: TranslatedTag[];
-  /** The area scores a translator that picks areas first used (JEV's Choice question). */
+  /** The area scores a translator that picks areas first used (JEV's or SubQ's Choice question). */
   areaScores?: Record<string, number>;
   /** Every tag a scoring translator asked about, with its score, kept or not (for the UI). */
   askedTags?: TranslatedTag[];
@@ -111,7 +112,7 @@ export interface QueryTranslator {
 
 /** Scores a chunk's relevance to an instruction; `createJudge` applies the threshold to it. */
 export interface ScoringJudge {
-  /** `signal` cancels a JEV call; an LLM call cannot be cancelled and runs to its end. */
+  /** `signal` cancels a JEV or SubQ call; an LLM call cannot be cancelled and runs to its end. */
   judge(instruction: string, chunk: Chunk, signal?: AbortSignal): Promise<JudgeScore>;
 }
 

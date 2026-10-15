@@ -15,7 +15,7 @@ export interface BenchFlow {
   name: QueryFlowName;
   /** The configuration the flow runs with, for the table. */
   configuration: string;
-  /** Whether its rerank is remote (an LLM or JEV), whose time counts as LLM time. */
+  /** Whether its rerank is remote (an LLM, JEV or SubQ), whose time counts as LLM time. */
   remoteRerank: boolean;
   run(query: ResolvedQuery, options: { draft: boolean }): Promise<QueryResult>;
 }
@@ -234,7 +234,7 @@ function measure(
   };
 }
 
-/** The time spent waiting for an LLM or JEV. */
+/** The time spent waiting for an LLM, JEV or SubQ. */
 function llmMs({ timings }: QueryResult, remoteRerank: boolean): number {
   return (
     (timings.translationMs ?? 0) +

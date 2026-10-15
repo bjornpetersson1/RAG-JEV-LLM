@@ -1,21 +1,35 @@
-// `npm run jev:probe -w backend`: measures what the JEV documentation leaves out (open point "JEV
-// limits"): latency per call, the largest state accepted and how a burst of concurrent calls is
-// answered, with the judge's timeout (`JUDGE_TIMEOUT_MS`). Needs JEV_API_KEY; every call is billed
-// by TypeSafe.
+// `npm run jev:probe` and `npm run subq:probe [-- --yes]`: measure what the JEV and SubQ
+// documentation leaves out (open points "JEV limits" and "SubQ limits"): latency per call, the
+// largest state accepted and how a burst of concurrent calls is answered, with the judge's timeout
+// (`JUDGE_TIMEOUT_MS`). Needs JEV_API_KEY or SUBQ_API_KEY; every call is billed. SubQ's probe first
+// prints what it will cost at most and asks to go on (E9-1).
 
 import { describeError } from '../errors.js';
 import { elapsedMs } from '../http.js';
-import { createJevClient, JevError, type JevClient } from '../jev/client.js';
-import { loadJevConfig } from '../jev/config.js';
 import { SILENT_LOGGER } from '../llm/client.js';
 import { relevanceQuestion } from '../llm/judge-question.js';
 import { percentile } from '../stats.js';
+import {
+  createSystemOneClient,
+  SystemOneError,
+  type SystemOneClient,
+} from '../systemone/client.js';
+import { loadSystemOneConfig, PROVIDER_NAMES, SYSTEM_ONE_PROVIDERS } from '../systemone/config.js';
+import {
+  addCalls,
+  callsOf,
+  confirmPaidRun,
+  estimateCost,
+  formatUsage,
+  meterSubqUsage,
+} from '../systemone/paid-run.js';
+import { isOneOf } from '../env.js';
 import { loadJudgeTimeoutMs } from './config.js';
 
 const LATENCY_CALLS = 10;
 const BURST_CALLS = 20;
 const FIRST_STATE_CHARS = 1000;
-// Far above any chunk (CHUNK_MAX_CHARS is 2000 by default); stops the doubling if JEV never refuses.
+// Far above any chunk (CHUNK_MAX_CHARS is 2000 by default); stops the doubling if nothing is refused.
 const MAX_STATE_CHARS = 256_000;
 
 const SENTENCE =
@@ -27,26 +41,69 @@ const QUESTIONS = {
   },
 };
 
+const USAGE = 'Usage: probe <jev | subq> [--yes]';
+
 try {
-  const env = process.env;
-  const config = loadJevConfig(env, 'jev:probe calls JEV', loadJudgeTimeoutMs(env));
-  const client = createJevClient({ ...config, role: 'judge', logger: SILENT_LOGGER });
-  console.log(
-    `Probing ${config.baseUrl} with model ${config.model}, timeout ${config.timeoutMs} ms`,
-  );
-  // Each probe reports its own failure, so one failing call does not lose the other measurements.
-  for (const probe of [probeLatency, probeStateSize, probeBurst]) {
-    await probe(client).catch((error: unknown) => {
-      console.error(`${probe.name} failed: ${describeError(error)}`);
-      process.exitCode = 1;
-    });
-  }
+  process.exitCode = await probe(process.argv.slice(2));
 } catch (error) {
   console.error(describeError(error));
   process.exitCode = 1;
 }
 
-async function probeLatency(client: JevClient): Promise<void> {
+async function probe(args: string[]): Promise<number> {
+  const [provider, ...flags] = args;
+  if (!isOneOf(SYSTEM_ONE_PROVIDERS, provider) || flags.some((flag) => flag !== '--yes')) {
+    console.error(USAGE);
+    return 1;
+  }
+  const env = process.env;
+  const config = loadSystemOneConfig(
+    env,
+    provider,
+    `${provider}:probe calls ${PROVIDER_NAMES[provider]}`,
+    loadJudgeTimeoutMs(env),
+  );
+  const meter = meterSubqUsage(SILENT_LOGGER);
+  if (
+    provider === 'subq' &&
+    !(await confirmPaidRun(estimateCost(probeCalls()), { yes: flags.includes('--yes') }))
+  ) {
+    return 1;
+  }
+  const client = createSystemOneClient({
+    ...config,
+    provider,
+    role: 'judge',
+    logger: meter.logger,
+  });
+  console.log(
+    `Probing ${config.baseUrl} with model ${config.model}, timeout ${config.timeoutMs} ms`,
+  );
+  let exitCode = 0;
+  // Each probe reports its own failure, so one failing call does not lose the other measurements.
+  for (const measure of [probeLatency, probeStateSize, probeBurst]) {
+    await measure(client).catch((error: unknown) => {
+      console.error(`${measure.name} failed: ${describeError(error)}`);
+      exitCode = 1;
+    });
+  }
+  if (provider === 'subq') console.log(formatUsage(meter.used()));
+  return exitCode;
+}
+
+/** The probe's calls at most: every state size accepted up to the cap. */
+function probeCalls() {
+  const question = QUESTIONS.relevant.instructions.length;
+  const sizes: number[] = [];
+  for (let chars = FIRST_STATE_CHARS; chars <= MAX_STATE_CHARS; chars *= 2) sizes.push(chars);
+  return addCalls(
+    callsOf(LATENCY_CALLS, FIRST_STATE_CHARS + question),
+    ...sizes.map((chars) => callsOf(1, chars + question)),
+    callsOf(BURST_CALLS, FIRST_STATE_CHARS + question),
+  );
+}
+
+async function probeLatency(client: SystemOneClient): Promise<void> {
   const latencies: number[] = [];
   for (let i = 0; i < LATENCY_CALLS; i++) {
     const started = performance.now();
@@ -61,10 +118,11 @@ async function probeLatency(client: JevClient): Promise<void> {
 }
 
 /**
- * Doubles the state until JEV refuses it. Only a client error other than 429 counts as a refusal;
- * a timeout, rate limit, server or network error stops the probe without claiming a size limit.
+ * Doubles the state until the model refuses it. Only a client error other than 429 counts as a
+ * refusal; a timeout, rate limit, server or network error stops the probe without claiming a size
+ * limit.
  */
-async function probeStateSize(client: JevClient): Promise<void> {
+async function probeStateSize(client: SystemOneClient): Promise<void> {
   let accepted = 0;
   for (let chars = FIRST_STATE_CHARS; chars <= MAX_STATE_CHARS; chars *= 2) {
     try {
@@ -81,7 +139,7 @@ async function probeStateSize(client: JevClient): Promise<void> {
   console.log(`State size: ${accepted} characters accepted, no refusal up to the probe's cap`);
 }
 
-async function probeBurst(client: JevClient): Promise<void> {
+async function probeBurst(client: SystemOneClient): Promise<void> {
   const started = performance.now();
   const results = await Promise.allSettled(
     Array.from({ length: BURST_CALLS }, () => client.ask(stateOf(FIRST_STATE_CHARS), QUESTIONS)),
@@ -90,7 +148,7 @@ async function probeBurst(client: JevClient): Promise<void> {
     result.status === 'rejected' ? [result.reason] : [],
   );
   const rateLimited = failures.filter(
-    (reason) => reason instanceof JevError && reason.status === 429,
+    (reason) => reason instanceof SystemOneError && reason.status === 429,
   ).length;
   console.log(
     `Burst of ${BURST_CALLS} concurrent calls in ${elapsedMs(started)} ms: ` +
@@ -99,10 +157,10 @@ async function probeBurst(client: JevClient): Promise<void> {
   );
 }
 
-/** Whether JEV turned the request down (4xx other than 429), as opposed to failing to answer. */
+/** Whether the model turned the request down (4xx other than 429), as opposed to failing to answer. */
 function isRefusal(error: unknown): boolean {
   return (
-    error instanceof JevError &&
+    error instanceof SystemOneError &&
     error.status !== undefined &&
     error.status >= 400 &&
     error.status < 500 &&

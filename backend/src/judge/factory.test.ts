@@ -7,6 +7,7 @@ import { createJudge, createJudging } from './factory.js';
 
 const CHUNK = { id: 'c7', text: 'Uppsägningstiden är en månad.', source: 'SFS 1982:80 11 §' };
 const JEV_URL = 'https://api.typesafe.ai/v1/systemone';
+const SUBQ_URL = 'https://api.subq.ai/v1/systemone';
 
 /**
  * Builds the judge from `env` alone, as the app will, with one fake `fetch` for both JEV and the
@@ -21,7 +22,7 @@ function judgeFrom(
   const urls: string[] = [];
   const fetch = (async (url: string | URL | Request, init?: RequestInit) => {
     urls.push(String(url));
-    if (String(url) !== JEV_URL) return anthropic.fetch(url, init);
+    if (String(url) !== JEV_URL && String(url) !== SUBQ_URL) return anthropic.fetch(url, init);
     const result = await jev(init);
     if (result instanceof Error) throw result;
     return result;
@@ -51,6 +52,87 @@ function hangingJev(init: RequestInit | undefined): Promise<Response> {
 }
 
 describe('createJudge', () => {
+  it('uses SubQ for subq', async () => {
+    const { judge, urls } = judgeFrom({ SUBQ_API_KEY: 'k' }, jevAnswers(0.9), 'subq');
+
+    await expect(judge.judge('Anställningsavtal', CHUNK)).resolves.toMatchObject({
+      relevant: true,
+      score: 0.9,
+      judgedBy: 'subq',
+    });
+    expect(urls).toEqual([SUBQ_URL]);
+  });
+
+  it.each([
+    [
+      'out of credits',
+      () =>
+        Response.json(
+          { detail: { error_type: 'insufficient_credits', message: 'Add credits' } },
+          { status: 402 },
+        ),
+      'http',
+      'SubQ is out of credits (HTTP 402): insufficient_credits: Add credits',
+    ],
+    [
+      'an HTTP 422',
+      () =>
+        Response.json(
+          { detail: { error_type: 'validation_error', message: 'Bad state' } },
+          { status: 422 },
+        ),
+      'http',
+      'SubQ answered HTTP 422: validation_error: Bad state',
+    ],
+    ['an HTTP 503', () => new Response('down', { status: 503 }), 'http', 'SubQ answered HTTP 503'],
+    [
+      'a timeout',
+      () => new DOMException('timed out', 'TimeoutError'),
+      'timeout',
+      'SubQ did not answer',
+    ],
+    [
+      'a network error',
+      () => new TypeError('fetch failed'),
+      'network',
+      'SubQ could not be reached',
+    ],
+    [
+      'a malformed response',
+      () => Response.json({ answers: {} }),
+      'response',
+      'SubQ answered with a malformed response',
+    ],
+  ])('falls back from SubQ to the LLM on %s and names it', async (_case, subq, kind, message) => {
+    const { judge, urls, logger } = judgeFrom({ SUBQ_API_KEY: 'k' }, subq, 'subq');
+
+    await expect(judge.judge('Anställningsavtal', CHUNK)).resolves.toMatchObject({
+      score: 0.3,
+      judgedBy: 'llm',
+    });
+    expect(urls[0]).toBe(SUBQ_URL);
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        role: 'judge',
+        chunkId: 'c7',
+        kind,
+        error: expect.stringContaining(message),
+      }),
+      'SubQ failed, judging with the LLM instead',
+    );
+  });
+
+  it('rethrows a cancelled SubQ call instead of asking the LLM', async () => {
+    const { judge, urls } = judgeFrom(
+      { SUBQ_API_KEY: 'k' },
+      () => new DOMException('cancelled', 'AbortError'),
+      'subq',
+    );
+
+    await expect(judge.judge('x', CHUNK)).rejects.toMatchObject({ kind: 'aborted' });
+    expect(urls).toEqual([SUBQ_URL]);
+  });
+
   it('uses JEV for jev', async () => {
     const { judge, urls } = judgeFrom({ JEV_API_KEY: 'k' }, jevAnswers(0.9));
 
@@ -179,8 +261,13 @@ describe('createJudge', () => {
       deps,
     );
     const llm = createJudging(loadJudgeConfig({}, 'llm'), deps);
+    const subq = createJudging(loadJudgeConfig({ SUBQ_API_KEY: 'k' }, 'subq'), deps);
 
     expect(jev).toMatchObject({ primary: { impl: 'jev', model: 'jev-latest' }, threshold: 0.6 });
+    expect(subq).toMatchObject({
+      primary: { impl: 'subq', model: 'subq-snap-preview' },
+      threshold: 0.6,
+    });
     expect(llm).toMatchObject({
       primary: { impl: 'llm', model: 'claude-haiku-5-5' },
       threshold: 0.8,

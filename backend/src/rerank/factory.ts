@@ -1,6 +1,6 @@
 import { readOneOf, readPositiveInteger, type Env } from '../env.js';
 import { bgeReranker } from './bge-reranker.js';
-import { jevReranker, llmReranker } from './judge-reranker.js';
+import { jevReranker, llmReranker, subqReranker } from './judge-reranker.js';
 import { minilmReranker } from './minilm-reranker.js';
 import { qwen3Reranker } from './qwen3-reranker.js';
 import type { CrossEncoderSpec, Reranker, RerankerDependencies, RerankerEntry } from './types.js';
@@ -14,6 +14,7 @@ export const RERANKERS: Readonly<Record<string, RerankerEntry>> = {
   jev: jevReranker,
   llm: llmReranker,
   qwen3: qwen3Reranker,
+  subq: subqReranker,
 };
 
 /** The local cross-encoders in the registry, e.g. for `bench:rerank`. */
@@ -22,8 +23,8 @@ export function localCrossEncoders(registry = RERANKERS): CrossEncoderSpec[] {
 }
 
 // A judge that says yes or no per chunk against JUDGE_THRESHOLD, as the requirements' query flow
-// has it, until JEV can be used (E7-7). The local cross-encoders only rank: `minilm` (fast) and
-// `bge` are chosen in .env, as is `jev`.
+// has it (E7-7). The local cross-encoders only rank: `minilm` (fast) and `bge` are chosen in .env,
+// as are the System One judges `subq` and `jev` (paused).
 const DEFAULT_RERANKER = 'llm';
 export const DEFAULT_RERANK_TOP_K = 8;
 
@@ -44,7 +45,7 @@ export function loadRerankerConfig(env: Env, registry = RERANKERS): RerankerConf
   return config;
 }
 
-/** Whether the reranker calls a remote model (an LLM or JEV), as its registry entry says. */
+/** Whether the reranker calls a remote model (an LLM, JEV or SubQ), as its registry entry says. */
 export function isRemoteReranker(reranker: Pick<Reranker, 'name'>, registry = RERANKERS): boolean {
   return registry[reranker.name]?.remote ?? false;
 }

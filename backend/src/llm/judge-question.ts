@@ -1,4 +1,4 @@
-// What both judges are asked, so JEV and the LLM judge the same text against the same question.
+// What every judge is asked, so JEV, SubQ and the LLM judge the same text against the same question.
 
 import type { Chunk } from './types.js';
 

@@ -226,7 +226,7 @@ function queryTranslatorSystemPrompt(vocabulary: readonly Tag[]): string {
   ].join('\n');
 }
 
-/** Asks the LLM the JEV judge's question, for the probability that the answer is yes. */
+/** Asks the LLM the System One judges' question, for the probability that the answer is yes. */
 export function createLlmJudge(client: LlmClient): ScoringJudge {
   return {
     async judge(instruction, chunk) {
