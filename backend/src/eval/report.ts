@@ -1,9 +1,24 @@
 // The evaluation's terminal table and Markdown report (E5-3).
 
 import { escapeCell } from '../reports.js';
+import { apiKeyName, PROVIDER_NAMES, type SystemOneProvider } from '../systemone/config.js';
 import type { ModeScores, RankedScores, SweepRow } from './metrics.js';
 import { GRADE_SCOPES } from './queries.js';
-import { EVAL_MODES, JUDGE_MODES, type EvalResult, type JudgeMode } from './run.js';
+import {
+  DOCUMENT_TYPES,
+  EVAL_MODES,
+  JUDGE_MODES,
+  SCORE_BANDS,
+  type EvalResult,
+  type JudgeMode,
+} from './run.js';
+
+/** The System One model a judge mode is for; `tags+llm` has none. */
+const MODE_PROVIDERS: Record<JudgeMode, SystemOneProvider | undefined> = {
+  'tags+jev': 'jev',
+  'tags+subq': 'subq',
+  'tags+llm': undefined,
+};
 
 export interface ReportContext {
   /** When the run started. */
@@ -63,9 +78,35 @@ export function formatAsMarkdown(result: EvalResult, context: ReportContext): st
       ),
     ),
     '',
+    '## Relevance per document type',
+    '',
+    'The same measures counting only the returned and relevant chunks from laws (`law`) or from rulings (`ruling`), averaged over the queries with at least one relevant chunk of that type in that grade.',
+    '',
+    '| Mode | Type | Grade | Queries | Precision | Recall | F1 | P@5 | P@10 |',
+    '| --- | --- | --- | --- | --- | --- | --- | --- | --- |',
+    ...EVAL_MODES.flatMap((mode) =>
+      DOCUMENT_TYPES.flatMap((type) =>
+        GRADE_SCOPES.map((scope) => {
+          const scores = result.modesByType[mode][type][scope];
+          return `| ${mode} | ${type} | ${scope} | ${scores.queries} | ${rankedCells(scores)} |`;
+        }),
+      ),
+    ),
+    '',
     '## Judges',
     '',
     ...JUDGE_MODES.map((mode) => `- **${mode}**: ${judgeNote(result, mode)}.`),
+    '',
+    '### Approvals and scores',
+    '',
+    `"None approved" counts the queries where the judge approved none of the candidates at its configured threshold. The bands are the share of the judge's scores from 0.0–0.1 up to 0.9–1.0.`,
+    '',
+    `| Mode | None approved | ${bandLabels().join(' | ')} |`,
+    `|${' --- |'.repeat(2 + SCORE_BANDS)}`,
+    ...JUDGE_MODES.map(
+      (mode) =>
+        `| ${mode} | ${result.noneApproved[mode]} | ${result.scoreDistribution[mode].map((share) => share.toFixed(2)).join(' | ')} |`,
+    ),
     ...JUDGE_MODES.flatMap((mode) => [
       '',
       `## Threshold sweep: ${mode}`,
@@ -108,15 +149,26 @@ function failureLines({ failed }: EvalResult): string[] {
   ];
 }
 
-/** Which judge was configured and which actually answered, e.g. when the LLM stood in for JEV. */
+/** Which judge was configured and which answered: the LLM stands in for a model without a key. */
 function judgeNote(result: EvalResult, mode: JudgeMode): string {
   const { name, model } = result.judges[mode];
-  const { jev, llm } = result.answeredBy[mode];
+  const answered = result.answeredBy[mode];
   const configured = `configured judge ${name} (${model})`;
-  if (mode === 'tags+jev' && name === 'llm') {
-    return `${configured}: no JEV_API_KEY, so the LLM answered all ${llm} judgements instead of JEV`;
+  const provider = MODE_PROVIDERS[mode];
+  if (!provider) return `${configured}; answered by the LLM ${answered.llm}`;
+  const providerName = PROVIDER_NAMES[provider];
+  if (name === 'llm') {
+    return `${configured}: no ${apiKeyName(provider)}, so the LLM answered all ${answered.llm} judgements instead of ${providerName}`;
   }
-  return `${configured}; answered by JEV ${jev}, by the LLM ${llm}`;
+  return `${configured}; answered by ${providerName} ${answered[provider]}, by the LLM ${answered.llm}`;
+}
+
+/** `0.0–0.1`, … `0.9–1.0`. */
+function bandLabels(): string[] {
+  return Array.from(
+    { length: SCORE_BANDS },
+    (_, i) => `${(i / SCORE_BANDS).toFixed(1)}–${((i + 1) / SCORE_BANDS).toFixed(1)}`,
+  );
 }
 
 /** A grade scope's three score columns and the gap after them, in the terminal sweep. */

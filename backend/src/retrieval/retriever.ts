@@ -44,6 +44,11 @@ export interface RetrieverDependencies {
   vectorIndex?: VectorIndex;
 }
 
+/** Whether `name` searches with the query's tags, so the query is translated first. */
+export function retrieverUsesTags(name: RetrieverName): boolean {
+  return name !== 'bge';
+}
+
 export function createRetriever(config: RetrievalConfig, deps: RetrieverDependencies): Retriever {
   const { retriever: name, candidates: limit, rrfK, weights } = config;
   const { db, candidateSearch, embedder, vectorIndex } = deps;
@@ -51,7 +56,7 @@ export function createRetriever(config: RetrievalConfig, deps: RetrieverDependen
   if (name === 'tags') {
     return {
       name,
-      usesTags: true,
+      usesTags: retrieverUsesTags(name),
       async retrieve(instruction, tags) {
         const started = performance.now();
         const { candidates } = candidateSearch.search({ instruction, tags, mode: 'tags+fts' });
@@ -65,7 +70,7 @@ export function createRetriever(config: RetrievalConfig, deps: RetrieverDependen
   }
   return {
     name,
-    usesTags: name === 'both',
+    usesTags: retrieverUsesTags(name),
     // With the dense half switched off (weight 0), the instruction is never embedded.
     ...(weights.dense > 0 && { embedder }),
     async retrieve(instruction, tags) {

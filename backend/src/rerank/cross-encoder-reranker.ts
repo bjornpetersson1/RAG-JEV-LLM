@@ -25,7 +25,7 @@ export interface CrossEncoderRerankerConfig extends LocalModelConfig {
 export function loadCrossEncoderRerankerConfig(env: Env, name: string): CrossEncoderRerankerConfig {
   return {
     ...loadLocalModelConfig(env, 'RERANKER'),
-    // A cross-encoder's scores are not calibrated like JEV's or the LLM's, so by default only topK
+    // A cross-encoder's scores are not calibrated like JEV's, SubQ's or the LLM's, so by default only topK
     // cuts.
     threshold: readShare(env, thresholdVariable(name), 0),
   };

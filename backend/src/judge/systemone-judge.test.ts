@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { createJevClient } from '../jev/client.js';
+import { createSystemOneClient } from '../systemone/client.js';
 import { createCapturingLogger, createFakeFetch } from '../llm/test-helpers.js';
-import { createJevJudge } from './jev-judge.js';
+import { createSystemOneJudge } from './systemone-judge.js';
 
 const JEV = {
   apiKey: 'k',
@@ -10,23 +10,24 @@ const JEV = {
   timeoutMs: 1000,
 };
 
-function judgeAnswering(noul: number) {
+function judgeAnswering(noul: number, provider: 'jev' | 'subq' = 'jev') {
   const fake = createFakeFetch(() =>
     Response.json({
       answers: { relevant: { type: 'noul', noul } },
       usage: { input_tokens: 120, output_tokens: 1 },
     }),
   );
-  const client = createJevClient({
+  const client = createSystemOneClient({
     ...JEV,
+    provider,
     role: 'judge',
     logger: createCapturingLogger(),
     fetch: fake.fetch,
   });
-  return { judge: createJevJudge(client), requests: fake.requests };
+  return { judge: createSystemOneJudge(client), requests: fake.requests };
 }
 
-describe('createJevJudge', () => {
+describe('createSystemOneJudge', () => {
   it('sends the source and text as state and the instruction as one Noul question', async () => {
     const { judge, requests } = judgeAnswering(0.8);
 
@@ -60,5 +61,14 @@ describe('createJevJudge', () => {
       score: 0.2,
     });
     expect(requests[0].body.state).toBe('Bara text.');
+  });
+
+  it('names SubQ as the judge when SubQ answers', async () => {
+    const { judge } = judgeAnswering(0.6, 'subq');
+
+    await expect(judge.judge('x', { id: 'c1', text: 'Text.' })).resolves.toMatchObject({
+      score: 0.6,
+      judgedBy: 'subq',
+    });
   });
 });

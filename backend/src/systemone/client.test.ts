@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createCapturingLogger, createFakeFetch } from '../llm/test-helpers.js';
-import { createJevClient, JevError } from './client.js';
+import { createSystemOneClient, SystemOneError } from './client.js';
 
 const CONFIG = {
   apiKey: 'jev-key',
@@ -9,7 +9,7 @@ const CONFIG = {
   timeoutMs: 1000,
 };
 
-describe('createJevClient', () => {
+describe('createSystemOneClient', () => {
   it('posts the state, model and questions with the bearer key and reads the answers', async () => {
     const { fetch, requests } = createFakeFetch(() =>
       Response.json({
@@ -27,7 +27,13 @@ describe('createJevClient', () => {
       }),
     );
     const logger = createCapturingLogger();
-    const client = createJevClient({ ...CONFIG, role: 'queryTranslator', logger, fetch });
+    const client = createSystemOneClient({
+      ...CONFIG,
+      provider: 'jev',
+      role: 'queryTranslator',
+      logger,
+      fetch,
+    });
     const questions = {
       area: {
         type: 'choice' as const,
@@ -131,13 +137,19 @@ describe('createJevClient', () => {
   ])('raises a typed error for %s', async (_case, respond, kind, message) => {
     const { fetch } = createFakeFetch(respond as () => Response | Error);
     const logger = createCapturingLogger();
-    const client = createJevClient({ ...CONFIG, role: 'queryTranslator', logger, fetch });
+    const client = createSystemOneClient({
+      ...CONFIG,
+      provider: 'jev',
+      role: 'queryTranslator',
+      logger,
+      fetch,
+    });
 
     const error = await client
       .ask('text', { vite: { type: 'noul', instructions: 'Handlar texten om vite?' } })
       .catch((caught: unknown) => caught);
 
-    expect(error).toBeInstanceOf(JevError);
+    expect(error).toBeInstanceOf(SystemOneError);
     expect(error).toMatchObject({ kind });
     expect((error as Error).message).toContain(message);
     expect(logger.error).toHaveBeenCalledWith(
@@ -149,7 +161,13 @@ describe('createJevClient', () => {
   it('raises a typed error for a cancelled call and logs it as a cancellation, not a failure', async () => {
     const { fetch } = createFakeFetch(() => new DOMException('cancelled', 'AbortError'));
     const logger = createCapturingLogger();
-    const client = createJevClient({ ...CONFIG, role: 'judge', logger, fetch });
+    const client = createSystemOneClient({
+      ...CONFIG,
+      provider: 'jev',
+      role: 'judge',
+      logger,
+      fetch,
+    });
 
     const error = await client
       .ask('text', { vite: { type: 'noul', instructions: 'Handlar texten om vite?' } })
@@ -161,5 +179,79 @@ describe('createJevClient', () => {
       expect.objectContaining({ role: 'judge', error: 'The JEV call was cancelled' }),
       'JEV call cancelled',
     );
+  });
+
+  describe('with SubQ', () => {
+    const SUBQ = {
+      provider: 'subq' as const,
+      apiKey: 'subq-key',
+      baseUrl: 'https://api.subq.example/v1',
+      model: 'subq-snap-preview',
+      timeoutMs: 1000,
+    };
+    const QUESTION = { vite: { type: 'noul' as const, instructions: 'Handlar texten om vite?' } };
+
+    it('posts to SubQ and logs the calls under its name', async () => {
+      const { fetch, requests } = createFakeFetch(() =>
+        Response.json({
+          model: 'subq-snap-preview',
+          answers: { vite: { type: 'noul', noul: 0.92 } },
+          usage: { input_tokens: 477, output_tokens: 0 },
+        }),
+      );
+      const logger = createCapturingLogger();
+      const client = createSystemOneClient({ ...SUBQ, role: 'judge', logger, fetch });
+
+      const response = await client.ask('text', QUESTION);
+
+      expect(client.provider).toBe('subq');
+      expect(requests).toEqual([
+        {
+          url: 'https://api.subq.example/v1/systemone',
+          headers: { 'content-type': 'application/json', authorization: 'Bearer subq-key' },
+          body: { state: 'text', model: 'subq-snap-preview', questions: QUESTION },
+        },
+      ]);
+      expect(response.answers.vite).toEqual({ type: 'noul', noul: 0.92 });
+      expect(response.usage.inputTokens).toBe(477);
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.objectContaining({ provider: 'subq', model: 'subq-snap-preview' }),
+        'SubQ call',
+      );
+    });
+
+    it.each([
+      [
+        'out of credits',
+        402,
+        { detail: { error_type: 'insufficient_credits', message: 'Add credits' } },
+        'SubQ is out of credits (HTTP 402): insufficient_credits: Add credits',
+      ],
+      [
+        'a rate limit',
+        429,
+        { detail: { error_type: 'rate_limit', message: 'Slow down' } },
+        'SubQ answered HTTP 429: rate_limit: Slow down',
+      ],
+      [
+        'an error body without detail',
+        503,
+        { error: 'unavailable' },
+        'SubQ answered HTTP 503: {"error":"unavailable"}',
+      ],
+    ])('names the error for %s with its detail', async (_case, status, body, message) => {
+      const { fetch } = createFakeFetch(() => Response.json(body, { status }));
+      const logger = createCapturingLogger();
+      const client = createSystemOneClient({ ...SUBQ, role: 'judge', logger, fetch });
+
+      const error = await client.ask('text', QUESTION).catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(SystemOneError);
+      expect(error).toMatchObject({ kind: 'http', status, message });
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.objectContaining({ provider: 'subq', error: message }),
+        'SubQ call failed',
+      );
+    });
   });
 });

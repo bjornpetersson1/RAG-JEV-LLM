@@ -69,6 +69,7 @@ describe('migrate', () => {
       '5_chunks_fts',
       '6_judge_cache',
       '7_chunk_embeddings',
+      '8_judge_cache_subq',
     ]);
     expect(tableNames(db)).toEqual(SCHEMA_TABLES);
     expect(recordedVersions(db)).toEqual([
@@ -97,6 +98,11 @@ describe('migrate', () => {
       {
         version: 7,
         name: 'chunk_embeddings',
+        applied_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+      },
+      {
+        version: 8,
+        name: 'judge_cache_subq',
         applied_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
       },
     ]);

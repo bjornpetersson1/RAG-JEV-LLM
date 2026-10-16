@@ -11,11 +11,11 @@ export interface ScoredChunk {
   chunk: Chunk;
   /** Relevance from 0 to 1, normalised by the reranker. */
   score: number;
-  /** The `RERANKER` value that produced the score, e.g. `jev`. */
+  /** The `RERANKER` value that produced the score, e.g. `subq`. */
   reranker: string;
-  /** The reranker's model, e.g. `jev-latest` or `claude-haiku-5-5`. */
+  /** The reranker's model, e.g. `subq-snap-preview` or `claude-haiku-5-5`. */
   model: string;
-  /** For the judge-based rerankers: JEV, or the LLM (also when it stood in for JEV). */
+  /** For the judge-based rerankers: JEV or SubQ, or the LLM (also when it stood in for either). */
   answeredBy?: JudgeScore['judgedBy'];
 }
 
@@ -73,7 +73,7 @@ export interface CrossEncoderSpec {
 
 /** One `RERANKER` value: adding a reranker is a new file with one of these plus a registry entry. */
 export interface RerankerEntry {
-  /** Whether it calls a remote model (an LLM or JEV): its time then counts as LLM time. */
+  /** Whether it calls a remote model (an LLM, JEV or SubQ): its time then counts as LLM time. */
   remote: boolean;
   /** For a local cross-encoder: its name and model, so `bench:rerank` can build it directly. */
   crossEncoder?: CrossEncoderSpec;

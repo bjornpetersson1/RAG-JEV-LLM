@@ -14,6 +14,9 @@ import { loadRetrievalResources, type RetrievalResources } from '../retrieval/se
 import type { CompareDependencies, ComparedReranker, ComparedRetriever } from './compare.js';
 import { createEvalReranker, createSearchSetup } from './setup.js';
 
+/** Queries a reranker's latency is taken over when its cache answered. */
+export const LATENCY_QUERIES = 5;
+
 export function createCompareSetup(
   db: DatabaseSync,
   env: Env,
@@ -71,8 +74,9 @@ export function createCompareSetup(
         compared.flatMap((reranker) => ('cached' in reranker ? [reranker.cached] : [])),
       ),
     translate: (query) => search.translate(query),
+    translator: search.settings['query translator'],
     loadChunks: search.loadChunks,
-    latencyQueries: 5,
+    latencyQueries: LATENCY_QUERIES,
   };
 }
 

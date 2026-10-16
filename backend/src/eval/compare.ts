@@ -6,6 +6,7 @@
 import { describeError } from '../errors.js';
 import type { Chunk } from '../llm/types.js';
 import type { Reranker } from '../rerank/types.js';
+import { elapsedMs } from '../http.js';
 import { latencyOf, mean, type Latency } from '../stats.js';
 import { precisionAt, recallAt } from './metrics.js';
 import { byGradeScope, relevantFor, type GradeScope, type ResolvedQuery } from './queries.js';
@@ -39,6 +40,8 @@ export interface CompareDependencies {
   retrievers: readonly ComparedRetriever[];
   rerankers: readonly ComparedReranker[];
   translate(query: ResolvedQuery): Promise<string[]>;
+  /** The configured query translator, e.g. `subq subq-snap-preview`, for the rows. */
+  translator: string;
   loadChunks(ids: readonly string[]): Chunk[];
   /** Queries a latency is taken over when the cache answered (5). */
   latencyQueries: number;
@@ -71,6 +74,10 @@ export interface ComparisonRow {
   /** The reranker's score order. */
   after?: GradedMeasures;
   retrievalMs: Latency;
+  /** The query translator a tag retriever's rows used; `–` for one that uses no tags. */
+  translator: string;
+  /** The translation's latency over the row's queries; absent for a retriever without tags (E9-1). */
+  translationMs?: Latency;
   /** Absent when no latency could be measured. */
   rerankMs?: Latency;
   /** Queries the row averages over. */
@@ -79,6 +86,11 @@ export interface ComparisonRow {
   /** Whether queries failed in this row, or it is skipped for a reason other than its setup. */
   failed: boolean;
 }
+
+/** The query translator a row names and its latency; none for a retriever without tags. */
+type Translation = Pick<ComparisonRow, 'translator' | 'translationMs'>;
+
+const NO_TRANSLATION: Translation = { translator: '–' };
 
 /** One query's list from a retriever or a reranker, and the time it took. */
 interface QueryList {
@@ -112,6 +124,7 @@ export async function compareRerankers(
   const reranked = new Map<string, RerankedList[]>();
   const failures = new Map<string, { first: string; inARow: number }>();
   const failedQueries = new Map<string, number>();
+  const translationMs = new Map<string, number>();
 
   /** `work`'s result, or undefined when it throws, reported: one failure must not lose a run. */
   async function attempt<T>(
@@ -157,7 +170,9 @@ export async function compareRerankers(
   }
 
   for (const [index, query] of queries.entries()) {
+    const started = performance.now();
     const tags = usesTags ? await attempt('translation', query, () => deps.translate(query)) : [];
+    if (usesTags && tags) translationMs.set(query.id, elapsedMs(started));
     for (const retriever of deps.retrievers) {
       const result =
         tags === undefined && retriever.usesTags
@@ -183,7 +198,18 @@ export async function compareRerankers(
   const rows: ComparisonRow[] = [];
   for (const retriever of deps.retrievers) {
     const lists = retrieved.get(retriever.name) ?? [];
-    const before = beforeRow(retriever.name, lists, failedQueries.get(retriever.name) ?? 0);
+    const translation: Translation = retriever.usesTags
+      ? {
+          translator: deps.translator,
+          translationMs: latencyOf(lists.map(({ query }) => translationMs.get(query.id) ?? 0)),
+        }
+      : NO_TRANSLATION;
+    const before = beforeRow(
+      retriever.name,
+      lists,
+      failedQueries.get(retriever.name) ?? 0,
+      translation,
+    );
     rows.push(before);
     if (retriever.baseline) continue;
     for (const reranker of deps.rerankers) {
@@ -254,6 +280,7 @@ function beforeRow(
   retriever: string,
   lists: readonly QueryList[],
   failedQueries: number,
+  translation: Translation,
 ): ComparisonRow {
   return {
     retriever,
@@ -263,6 +290,7 @@ function beforeRow(
     candidates: mean(lists.map(({ ids }) => ids.length)),
     before: gradedMeasures(lists),
     retrievalMs: latencyOf(lists.map(({ elapsedMs }) => elapsedMs)),
+    ...translation,
     queries: lists.length,
     notes: failedQueries > 0 ? [`${failedQueries} queries failed`] : [],
     failed: failedQueries > 0,
@@ -281,7 +309,10 @@ function afterRow(
   const sameQueries = lists.filter(({ query }) => done.has(query.id));
   const failed = lists.length - results.length;
   return {
-    ...beforeRow(before.retriever, sameQueries, 0),
+    ...beforeRow(before.retriever, sameQueries, 0, {
+      translator: before.translator,
+      translationMs: before.translationMs,
+    }),
     reranker: reranker.name,
     model: reranker.model,
     dtype: reranker.dtype ?? '–',
