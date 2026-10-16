@@ -58,7 +58,7 @@ export function RunsPage() {
 
   const pages = page ? Math.max(1, Math.ceil(page.total / page.pageSize)) : 1;
   return (
-    <section className="runs" aria-label="Tidigare körningar">
+    <section className="runs card" aria-label="Tidigare körningar">
       <h2>Tidigare körningar</h2>
       <p className="lead">{SECTION_LEADS.runs}</p>
       <div className="filters">
@@ -176,7 +176,7 @@ function RunDetail({ request, onBack }: { request: LoggedRequest; onBack(): void
     request.flows.map((entry) => [entry.flow, timingFlowOf(entry)]),
   );
   return (
-    <section className="run-detail" aria-label="Körning">
+    <section className="run-detail card" aria-label="Körning">
       <p>
         <button type="button" onClick={onBack}>
           Tillbaka till listan
@@ -188,7 +188,7 @@ function RunDetail({ request, onBack }: { request: LoggedRequest; onBack(): void
       <p>Instruktion: {instructionOf(request)}</p>
       <TimingPanel flows={flows} reference={flows.reference !== undefined} running={false} />
       {request.flows.map((entry) => (
-        <section key={entry.flow} className="flow" aria-label={FLOW_TITLES[entry.flow]}>
+        <section key={entry.flow} className="flow card" aria-label={FLOW_TITLES[entry.flow]}>
           <h3>{FLOW_TITLES[entry.flow]}</h3>
           {entry.error && <p className="error">Körningen misslyckades: {entry.error}</p>}
           <table className="counts">

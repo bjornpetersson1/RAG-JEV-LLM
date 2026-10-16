@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { INTRODUCTION } from './explanations';
+import { Motif } from './Motif';
 import { FlowProgress, type FlowState } from './FlowProgress';
 import { QueryForm } from './QueryForm';
 import { RunsPage } from './RunsPage';
@@ -82,8 +83,13 @@ export function App() {
 
   return (
     <main>
-      <h1>Legal RAG POC</h1>
-      <p className="health">Backend: {status ?? 'checking…'}</p>
+      <header className="masthead">
+        <Motif />
+        <div>
+          <h1>Legal RAG POC</h1>
+          <p className="health">Backend: {status ?? 'checking…'}</p>
+        </div>
+      </header>
       <nav className="views" aria-label="Vyer">
         {VIEWS.map(({ hash, title }) => (
           <a key={title} href={hash || '#'} aria-current={view === hash ? 'page' : undefined}>

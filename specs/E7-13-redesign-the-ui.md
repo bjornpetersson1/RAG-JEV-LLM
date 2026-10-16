@@ -4,18 +4,21 @@
 - **Labels:** `E7 UI and measurement`
 - **Phase:** E7 UI and measurement
 - **Depends on:** none (related: E7-1 (#22), E7-2 (#23), E7-3 (#24), E7-11 (#98), E7-12 (#103))
-- **Status:** Approved
+- **Status:** Implemented — all acceptance criteria verified (lint, format:check, typecheck, 936 backend + 109 frontend tests and build exit 0; scrollWidth 375 on every view at 375 px)
 
 ## Summary
+
 Give the whole UI a designed look in the spirit of the owner's reference image, a retro-modern flat poster illustration (cream paper, warm orange, burnt red, salmon and mustard, near-black outlines, simple geometric shapes, light print grain). The data stays in focus: clear, airy and modern. Appearance only; behaviour, data and Swedish copy do not change.
 
 ## Goals
+
 - One design system in CSS: tokens for colour, type, spacing, radii, borders and shadows on `:root`.
 - Every view restyled: form, flow progress, result view (sources, draft, references, post-check), timing panel, info texts, _Tidigare körningar_ (list and detail).
 - The retro style lives in the frame (header, cards, buttons, tabs, accents); the data (tables, numbers, sources, draft) gets high contrast, generous whitespace and a clear hierarchy.
 - Accessible and responsive.
 
 ## Non-goals
+
 - No change in behaviour, API, data or UI text. The Swedish copy stays word for word.
 - No dark mode (owner decision); the tokens make it possible later.
 - No CSS framework, CSS-in-JS or component library.
@@ -23,6 +26,7 @@ Give the whole UI a designed look in the spirit of the owner's reference image, 
 - No automated visual regression testing.
 
 ## Acceptance Criteria
+
 1. **All colours, font sizes and spacing come from tokens on `:root`; no stray hex values in the component styles.**
    - `frontend/src/styles.css` (and any new stylesheet) defines colour, font-size, spacing, radius, border and shadow tokens as custom properties on `:root`.
    - Outside the `:root` token block, no hex, `rgb()`/`hsl()` colour literal and no `px`/`rem` font size appears; a grep over the stylesheets proves it (the decorative SVG/grain data URI is the only allowed exception and is itself built from token colours or documented in a comment).
@@ -46,19 +50,21 @@ Give the whole UI a designed look in the spirit of the owner's reference image, 
    - The canonical checks pass: `npm run lint && npm run format:check && npm run typecheck && npm test && npm run build`.
 
 ## Tasks
-- [ ] Take the before screenshots (desktop and 375 px) with faked responses.
-- [ ] Add `@fontsource-variable/fraunces` and `@fontsource-variable/inter` to `frontend` and import them in `main.tsx`.
-- [ ] Define the tokens on `:root`: palette (cream background, paper surface, near-black ink, muted ink, orange/burnt-red accent, mustard, salmon, error and success colours that fit the palette), type scale, spacing scale, radii, outline widths, shadows.
-- [ ] Global base: body background with light grain, typography (Fraunces for headings, Inter with tabular figures for body and numbers), links, focus ring, buttons, inputs, radio buttons, textarea.
-- [ ] Header: app title with a geometric motif (arch, circle, stripes) drawn in CSS or inline SVG from token colours; the view tabs (_Ny förfrågan_ / _Tidigare körningar_) styled as tabs.
-- [ ] Cards: thick dark outline, flat offset shadow, generous padding, used for form, flow, result, timing panel and runs.
-- [ ] Restyle each view: form, flow progress and tags, result (draft, disclaimer, references, flagged references, post-check), source list, timing panel (table, bars, totals, comparison, configuration), info buttons and texts, runs list, filters, paging and run detail.
-- [ ] Layout: wider main column where tables need it, consistent spacing, table containers with `overflow-x: auto`, works at 375 px.
-- [ ] Contrast unit test over the token values.
-- [ ] Take the after screenshots and save both sets under `docs/screenshots/E7-13/`.
-- [ ] Update a test only where it asserted a renamed class or markup.
+
+- [x] Take the before screenshots (desktop and 375 px) with faked responses.
+- [x] Add `@fontsource-variable/fraunces` and `@fontsource-variable/inter` to `frontend` and import them in `main.tsx`.
+- [x] Define the tokens on `:root`: palette (cream background, paper surface, near-black ink, muted ink, orange/burnt-red accent, mustard, salmon, error and success colours that fit the palette), type scale, spacing scale, radii, outline widths, shadows.
+- [x] Global base: body background with light grain, typography (Fraunces for headings, Inter with tabular figures for body and numbers), links, focus ring, buttons, inputs, radio buttons, textarea.
+- [x] Header: app title with a geometric motif (arch, circle, stripes) drawn in CSS or inline SVG from token colours; the view tabs (_Ny förfrågan_ / _Tidigare körningar_) styled as tabs.
+- [x] Cards: thick dark outline, flat offset shadow, generous padding, used for form, flow, result, timing panel and runs.
+- [x] Restyle each view: form, flow progress and tags, result (draft, disclaimer, references, flagged references, post-check), source list, timing panel (table, bars, totals, comparison, configuration), info buttons and texts, runs list, filters, paging and run detail.
+- [x] Layout: wider main column where tables need it, consistent spacing, table containers with `overflow-x: auto`, works at 375 px.
+- [x] Contrast unit test over the token values.
+- [x] Take the after screenshots and save both sets under `docs/screenshots/E7-13/`.
+- [x] Update a test only where it asserted a renamed class or markup (none needed: every existing test passes unchanged).
 
 ## Decisions
+
 - **Fonts: Fraunces for headings, Inter for body and data** (owner). Fraunces is a soft retro serif that matches the reference; Inter is highly readable and has tabular figures for timings and counts. Self-hosted through the variable `@fontsource` packages so nothing is fetched at runtime. This adds two frontend dependencies, accepted with the font choice.
 - **Decoration: moderate** (owner). A geometric header motif, thick dark outlines on cards and buttons and light print grain on the page background. Nothing decorative inside tables, sources or the draft.
 - **No dark mode** (owner). The reference is built on cream paper; the tokens leave the door open.
@@ -67,6 +73,17 @@ Give the whole UI a designed look in the spirit of the owner's reference image, 
 - **Contrast is checked by a unit test**, which makes criterion 3 objectively checkable instead of by eye. Sharpens the issue's criterion.
 - **The issue's "no stray hex values" is read as no colour literals or font sizes outside the token block**, the decorative data URI excepted. Sharpens the issue's criterion.
 - **Accessibility criteria for focus and colour-only states** are split into their own criterion (6), from the issue's Scope.
+- **Tokens live in their own `frontend/src/tokens.css`**, imported before `styles.css`, so "outside the token block" is simply "in `styles.css`" and the test can check that file whole. The grain data URI is a token too (`--grain`), so `styles.css` needs no exception.
+- **Fraunces is loaded with its `soft` axes** (`@fontsource-variable/fraunces/soft.css`: weight and `SOFT`) for the soft retro shape of the headings. `full.css` would add `WONK` and `opsz` for 121 KB against 62 KB (clean-code pass); Inter with its default weight axis.
+- **Cards share one `card` class** whose padding, border and shadow are CSS variables: a card inside a card (a run's detail) and phone width change the variables, not a list of section selectors (clean-code pass).
+- **The header motif is an inline SVG component (`Motif.tsx`)** coloured by CSS classes from the tokens, `aria-hidden`.
+- **Orange and mustard are fills only** (contrast 2.8 and 1.8 on surface), always inside an ink outline; the bars get an ink border for 3:1. The time-to-sources bar is striped as well as coloured, the highlighted source gets an accent bar on its left, and the selected contract type is bold as well as tinted.
+- **The draft keeps line breaks inside paragraphs but no longer `pre-wrap`s the whole article**, which drew empty lines between Markdown blocks. Only `p` keeps `pre-wrap`: react-markdown puts newlines between the blocks of a list item, so `pre-wrap` on `li` would bring the empty lines back (code review). A soft line break inside a tight list item now shows as a space. Appearance only.
+- **The timing table has a minimum width of 30rem and scrolls inside `.table-scroll` on a phone.** The counts table needs no scroll container: it is fixed-layout at 100% and its labels wrap instead of running into the values (code review).
+- **The contrast and literal test runs in Vitest's node environment** (`// @vitest-environment node`) and reads the files with `node:fs`: in jsdom, `?raw` CSS imports come back empty, which would let the test pass without checking anything.
+- **Screenshots were taken with headless Chrome over the DevTools protocol** from a script kept outside the repo, against the app on its own ports with every LLM role `fake`, `RERANKER=llm` and `JUDGE_THRESHOLD=0.1` (so the fake judge passes some sources and a draft shows). No paid call was made; the fake runs were removed from `logs/runs.jsonl` afterwards. The before shots show the old layout overflowing at 375 px (431 and 448 px); the after shots stay at 375 px.
+- **Code review fixes:** border and focus-ring widths are tokens too (`--outline-hairline` to `--outline-heavy`, `--outline-focus`) and the literals test checks them, together with spacing; the grain sits on `:root`, so it covers the whole canvas; an opened (i) keeps its fill on hover; the source groups' h3 keep body size (`.flow > h3`); no status dot on the backend pill, since it showed the same colour whatever the status; no italic on the (i) and the pending text, since only upright font files are bundled; ink-muted on mustard-soft is a tested pair.
 
 ## Open Questions
+
 - None.
