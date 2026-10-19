@@ -307,6 +307,12 @@ select {
   resize: vertical;
 }
 
+/* Firefox dims placeholders with opacity, which would undo the muted colour's contrast. */
+.instruction textarea::placeholder {
+  color: var(--color-ink-muted);
+  opacity: 1;
+}
+
 .query-form button[type='submit'] {
   justify-self: start;
   padding: var(--space-3) var(--space-5);
@@ -343,7 +349,16 @@ select {
   color: var(--color-ink-muted);
 }
 
-.pending {
+/* Running work gets a dot as well as the muted colour, so it does not read as a lead text. */
+.pending::before {
+  content: '';
+  display: inline-block;
+  width: 0.5em;
+  height: 0.5em;
+  margin-right: var(--space-2);
+  border: var(--outline-hairline) solid var(--color-ink);
+  border-radius: 50%;
+  background: var(--color-orange);
 }
 
 /* Flow progress */
