@@ -256,6 +256,8 @@ export const SECTION_LEADS = {
 /**
  * Why the UI's comparison is a demo, under the comparison: saved judge answers only with the judge
  * cache on, and the reference RAG reusing the main flow's judgements only when they share a judge.
+ * With different judges it claims only reuse from earlier runs: a local cross-encoder saves
+ * nothing, but the reference RAG's LLM judge always does.
  */
 export function demoNotice(config?: AppConfig): string {
   return [
@@ -270,7 +272,6 @@ function savedAnswersSentence(config: AppConfig): string {
   return sameJudge(config)
     ? 'Domarens svar sparas, och referens-RAG:en körs efter huvudflödet med samma instruktion, så ' +
         'den kan återanvända huvudflödets bedömningar och verka snabbare.'
-    : // A local cross-encoder saves nothing, but the reference RAG's LLM judge always does.
-      'Bedömningar från en tidigare körning av samma instruktion kan återanvändas, så en ' +
+    : 'Bedömningar från en tidigare körning av samma instruktion kan återanvändas, så en ' +
         'upprepad instruktion kan gå snabbare.';
 }
