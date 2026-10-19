@@ -1,3 +1,4 @@
+import { registerConfigRoute } from './api/config-route.js';
 import { registerQueryRoute, type QueryFlows } from './api/query-route.js';
 import { registerRunsRoute } from './api/runs-route.js';
 import { createQueryFlows, openQueryDatabase } from './api/setup.js';
@@ -5,6 +6,7 @@ import { buildApp } from './app.js';
 import { resolveDatabasePath } from './db/config.js';
 import { elapsedMs } from './http.js';
 import { loadEmbedderConfig } from './embedding/factory.js';
+import { loadJudgingConfig } from './judge/config.js';
 import { describeError } from './errors.js';
 import { loadContextLimits } from './generation/config.js';
 import { createRunLog } from './generation/run-log.js';
@@ -23,8 +25,9 @@ const app = buildApp();
 
 try {
   app.tagIndex = loadTagIndex(databasePath, buildTagIndex, app.log);
-  // Earlier runs are listed also without a database: the run log is a file of its own.
+  // Earlier runs and the configuration are served also without a database.
   registerRunsRoute(app);
+  registerConfigRoute(app);
   const flows = registerQueryFlows(databasePath);
   // Before listening, so the first query's timings do not include loading the local models.
   const warmUpStarted = performance.now();
@@ -74,6 +77,7 @@ function readStartupConfig(): {
     loadLlmConfig(process.env);
     loadQueryTranslatorConfig(process.env);
     loadRerankerConfig(process.env);
+    loadJudgingConfig(process.env);
     loadEmbedderConfig(process.env);
     loadReferenceConfig(process.env);
     loadContextLimits(process.env);

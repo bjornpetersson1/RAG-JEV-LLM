@@ -522,11 +522,22 @@ Above the results, the timing panel (E7-3) shows each step's time and the total 
 
 The UI explains its numbers in plain Swedish, written for a lawyer (E7-11). There are three kinds of text:
 
-- An introduction above the form says what the comparison is about: tags against vectors, with the same judge and generator.
+- An introduction above the form says what the comparison is about, as `.env` configures it (E7-14):
+  - With `RERANKER=llm`, both flows use the same LLM judge and generator, so the comparison is tags against vectors.
+  - With another `RERANKER` (e.g. `subq`), it is the POC's goal: tag search plus a small judge against a regular RAG with the LLM judge. The introduction names both judges ("en liten domarmodell (SubQ)", "AI-domaren (LLM)") and says the difference is both how the sources are found and how they are judged.
+  - Before the configuration has loaded, or without a backend, it makes no claim about the judges.
 - Each section has one always-visible sentence: the timing panel, the draft's post-check and the source list.
 - Each measure has an (i) button that opens what it measures, why, and how to read it, in place. The measures are each timing row and its details, the configuration, the source accuracy and flags, a source's score and origin, and the source groups.
 
-The comparison under the timing panel also reads the result in words. It names what the gap in time to sources consists of (the translation, the search and the judge) and which flow knew its sources first. It ends with the notice that the UI's numbers are a demo and that `npm run bench:compare` is the measurement. The texts live in `frontend/src/explanations.ts`.
+The comparison under the timing panel also reads the result in words. It names what the gap in time to sources consists of (the translation, the search and the judge) and which flow knew its sources first. It ends with the notice that the UI's numbers are a demo and that `npm run bench:compare` is the measurement. With `JUDGE_CACHE=on` it adds that judgements from an earlier run of the same instruction can be reused. When both flows also use the same judge, it says instead that judge answers are saved and the reference RAG can reuse the main flow's judgements. The texts live in `frontend/src/explanations.ts`.
+
+The introduction and the notice read `GET /api/config` (`/config` on the backend). It returns each flow's judge, as its `RERANKER` value, and whether the judge cache is on:
+
+```json
+{ "judges": { "main": { "name": "subq" }, "reference": { "name": "llm" } }, "judgeCache": true }
+```
+
+It is read from `.env` at startup without building a flow, so it answers also without a database.
 
 The tab _Tidigare körningar_ (`#korningar`) lists every run in the [run log](#run-log), newest first, grouped per request. Each request shows its time, contract type and instruction, and each flow's time to sources and total, or its error. It filters by contract type and flow, 20 requests per page. Opening a request shows its timing panel, counts and source accuracy, with the same info texts. The run log keeps no drafts or sources, so an earlier run shows neither. A field an older entry lacks shows `–`.
 

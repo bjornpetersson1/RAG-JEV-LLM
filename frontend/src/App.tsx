@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { INTRODUCTION } from './explanations';
+import { fetchConfig, type AppConfig } from './config';
+import { introduction } from './explanations';
 import { Motif } from './Motif';
 import { FlowProgress, type FlowState } from './FlowProgress';
 import { QueryForm } from './QueryForm';
@@ -16,6 +17,9 @@ import {
 } from './query';
 
 const UNREACHABLE = 'unreachable';
+
+/** How long to wait before asking for the configuration again, e.g. while the backend starts. */
+const CONFIG_RETRY_MS = 2000;
 
 /** The two views, by `#` address so a reload or a link keeps the view (E7-11). */
 const VIEWS = [
@@ -41,6 +45,8 @@ interface Run {
 
 export function App() {
   const [status, setStatus] = useState<string>();
+  // Absent while loading or when the backend cannot answer: the texts then claim nothing about it.
+  const [config, setConfig] = useState<AppConfig>();
   const [run, setRun] = useState<Run>();
   const [view, setView] = useState<View>(currentView);
 
@@ -52,13 +58,26 @@ export function App() {
 
   useEffect(() => {
     let cancelled = false;
+    let retry: ReturnType<typeof setTimeout> | undefined;
     fetchHealthStatus()
       .catch(() => UNREACHABLE)
       .then((result) => {
         if (!cancelled) setStatus(result);
       });
+    // The backend warms up its models before it listens, so a page opened meanwhile asks again.
+    const loadConfig = () =>
+      fetchConfig().then(
+        (result) => {
+          if (!cancelled) setConfig(result);
+        },
+        () => {
+          if (!cancelled) retry = setTimeout(loadConfig, CONFIG_RETRY_MS);
+        },
+      );
+    void loadConfig();
     return () => {
       cancelled = true;
+      clearTimeout(retry);
     };
   }, []);
 
@@ -100,7 +119,7 @@ export function App() {
       {/* The query view stays mounted, so a running query and its result survive a look at the runs. */}
       {view === '#korningar' && <RunsPage />}
       <div hidden={view === '#korningar'}>
-        <p className="introduction">{INTRODUCTION}</p>
+        <p className="introduction">{introduction(config)}</p>
         <QueryForm running={run?.running ?? false} onSubmit={submit} />
         {run?.error && (
           <p className="error" role="alert">
@@ -113,6 +132,7 @@ export function App() {
             reference={run.reference}
             skipped={run.skipped.reference}
             running={run.running}
+            config={config}
           />
         )}
         {run && preparingReference(run) && (
