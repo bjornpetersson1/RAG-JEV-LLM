@@ -1,10 +1,11 @@
-// The run log (E7-3): every run of a query flow, from the UI or `npm run query`, as one JSON line in
-// `logs/runs.jsonl`, with its configuration, timings and counts, or its error and the timings it
-// reached. A log that cannot be written is a warning, never a failed query.
+// The run log (E7-3): every run of a query flow, from the UI, `npm run query` or `bench:compare`
+// (E7-12), as one JSON line in `logs/runs.jsonl`, with its configuration, timings and counts, or its
+// error and the timings it reached. A log that cannot be written is a warning, never a failed query.
 
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
+import { isOneOf } from '../env.js';
 import { describeError } from '../errors.js';
 import { REPO_ROOT } from '../repo-root.js';
 import { isTemplate } from '../tagging/vocabulary.js';
@@ -22,14 +23,29 @@ import {
 
 export const RUN_LOG_PATH = join(REPO_ROOT, 'logs', 'runs.jsonl');
 
-/** Where a run was started. */
-export type RunSource = 'api' | 'cli';
+/** Where a run was started: the UI, `npm run query` or `bench:compare`. */
+export const RUN_SOURCES = ['api', 'cli', 'bench'] as const;
+export type RunSource = (typeof RUN_SOURCES)[number];
+
+export function isRunSource(value: string): value is RunSource {
+  return isOneOf(RUN_SOURCES, value);
+}
+
+/** Which evaluation query and run of `bench:compare` an entry is. */
+export interface BenchRun {
+  queryId: string;
+  /** From 1. */
+  run: number;
+  runs: number;
+}
 
 export interface RunLogEntry {
   timestamp: string;
   /** Shared by the flows of one request (the main flow and its reference RAG). */
   runId: string;
   source: RunSource;
+  /** Only on a `bench:compare` entry. */
+  bench?: BenchRun;
   flow: QueryFlowName;
   template: string;
   /** As the user wrote it; empty for a template alone. */
@@ -117,19 +133,21 @@ export interface LoggedRun extends QueryOptions {
   log: RunLog;
   source: RunSource;
   runId: string;
+  bench?: BenchRun;
 }
 
 /** `runQuery`, logging the run when it ends: its result, or its error and the steps it finished. */
 export async function runAndLog(
   request: QueryRequest,
   deps: QueryFlowDependencies,
-  { log, source, runId, ...options }: LoggedRun,
+  { log, source, runId, bench, ...options }: LoggedRun,
 ): Promise<QueryResult> {
   const reached: Partial<StepTimings> = {};
   const entry = {
     timestamp: new Date().toISOString(),
     runId,
     source,
+    bench,
     flow: flowName(deps),
     template: request.template,
     instruction: request.instruction,

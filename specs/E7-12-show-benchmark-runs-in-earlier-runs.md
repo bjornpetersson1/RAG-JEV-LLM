@@ -4,18 +4,21 @@
 - **Labels:** `E7 UI and measurement`
 - **Phase:** 5. UI and measurement
 - **Depends on:** E7-11 (#98, closed) (related: E5-4 (#18), E9-1 (#101, PR #102))
-- **Status:** Approved
+- **Status:** Implemented — all acceptance criteria verified (npm ci, lint, format:check, typecheck, 1050 tests (940 backend, 110 frontend; `npm test` offline under sandbox-exec, loopback only) and build exit 0; `GET /runs` also checked against the real `logs/runs.jsonl`: its 20 older `api` requests list as before)
 
 ## Summary
+
 `bench:compare` writes every flow run to the run log (`logs/runs.jsonl`) with `source: "bench"`, so benchmark runs show under _Tidigare körningar_ next to the UI's and `npm run query`'s, and the runs list shows and filters on where each request came from.
 
 ## Goals
+
 - Every `bench:compare` flow run (main flow and reference RAG, per query and run) appended to the run log through the existing `RunLog`, in the existing entry format.
 - The two flows of one query and run share one `runId`.
 - A benchmark entry also says which evaluation query and which run it was.
 - `GET /api/runs` filters on source; the UI shows and filters on it, in Swedish.
 
 ## Non-goals
+
 - `eval:run` and the probes (`subq:probe` etc.): they do not run the query flow, so they stay out of the run log.
 - Back-filling the run log from earlier `eval/report-*.md` files.
 - A flag to turn benchmark logging off (owner: always log).
@@ -23,6 +26,7 @@
 - Changing the report `eval/report-<date>.md` or the benchmark's measures.
 
 ## Acceptance Criteria
+
 1. **After `bench:compare -- --runs 2 --limit 1` against fakes, the run log has 4 entries (2 flows × 2 runs), each with `source: "bench"`, and the two flows of each run share a `runId`.**
    - The two runs have different `runId`s.
    - Each entry has `bench: { queryId, run, runs }` with the evaluation query's id, the run (from 1) and the run count (2).
@@ -51,23 +55,34 @@
    - The canonical checks pass: `npm run lint && npm run format:check && npm run typecheck && npm test && npm run build`.
 
 ## Tasks
-- [ ] `RunSource` gets `'bench'`; `RunLogEntry` gets an optional `bench: { queryId: string; run: number; runs: number }`; `LoggedRun` can carry it to the entry.
-- [ ] `benchCompare` gives each query and run one `runId` and passes it (with the query id, run and run count) to each flow's `run`.
-- [ ] `createBenchSetup` runs each flow through `runAndLog` with a `RunLog` (default: `createRunLog` on `RUN_LOG_PATH` warning to stderr; injectable for tests).
-- [ ] `GET /runs` takes an optional `source` filter (a request matches on its first flow's source).
-- [ ] Frontend: `RunLogEntry.source` and `bench` types, `RunsFilter.source`, `fetchRuns` sends it; Swedish source labels; source in list row and detail view; "Källa" filter.
-- [ ] Tests for criteria 1–6.
-- [ ] README: run log, runs list and source line.
+
+- [x] `RunSource` gets `'bench'`; `RunLogEntry` gets an optional `bench: { queryId: string; run: number; runs: number }`; `LoggedRun` can carry it to the entry.
+- [x] `benchCompare` gives each query and run one `runId` and passes it (with the query id, run and run count) to each flow's `run`.
+- [x] `createBenchSetup` runs each flow through `runAndLog` with a `RunLog` (default: `createRunLog` on `RUN_LOG_PATH` warning to stderr; injectable for tests).
+- [x] `GET /runs` takes an optional `source` filter (a request matches on its first flow's source).
+- [x] Frontend: `RunLogEntry.source` and `bench` types, `RunsFilter.source`, `fetchRuns` sends it; Swedish source labels; source in list row and detail view; "Källa" filter.
+- [x] Tests for criteria 1–6.
+- [x] README: run log, runs list and source line.
 
 ## Decisions
+
 - **Benchmark entries carry `bench: { queryId, run, runs }`** (owner): so a given evaluation run can be found in the list; optional, so older lines are unaffected. `run` counts from 1 in the log, as shown to the user.
 - **Always log, no opt-out flag** (owner), as the issue says.
 - **Source shown in each list row and in the detail view, plus a "Källa" filter** (owner).
 - **Labels:** `api` → "UI", `cli` → "Terminal", `bench` → "Benchmark", as in the issue.
 - **The `runId` is made by `benchCompare` per query and run**, so the two flows of one pair share it whatever order they run in; it is passed to `BenchFlow.run`.
 - **Logged through the existing `runAndLog`**, so the logged configuration, timings, counts, judging and source accuracy are those of the `QueryResult` the benchmark measures, and a failed run is logged with its error and reached timings exactly as the query flow already does.
-- **A request's source is its first flow's**: both flows of a request are always written by the same caller.
+- **A request matches a source filter when any of its flows has that source** (code review): both flows of a request are written by one caller, but matching on any flow does not depend on which line comes first.
+- **A request's flows are listed main flow first** (code review): `bench:compare` alternates which flow runs first, so log order would put the reference RAG first in half the benchmark rows.
+- **A benchmark list row shows its query and run in the source tag** (code review), e.g. "Benchmark (q03, körning 2 av 5)", so a given evaluation run can be found without opening rows; this goes beyond criterion 3's "UI"/"Terminal"/"Benchmark" only by adding the query and run.
+- **The logged `template` is the query's contract type (`query.kind`), not kept from code review**: it is the `template` the benchmark's `QueryRequest` runs with (the prompt template the draft is written from), the same field the UI and `npm run query` log. Only the main flow's translation gets the query's own chosen template (E5-3), which the run log has no field for today; adding one is out of scope.
+- **`GET /runs` still reads the whole log on every call, not changed from code review**: E7-11 chose that for a local file. `bench:compare` makes the log grow faster (about 200 lines per full run), but at that size reading it takes milliseconds; caching or a tail read is a follow-up if it ever matters.
 - **An entry without `source`** (none should exist, but `readRunLog` does not require it today) still lists without a filter and matches no source filter.
 
+- **`createBenchSetup` takes the `RunLog` as an optional last parameter** (default `createRunLog` on `logs/runs.jsonl`, warning with `console.warn`, as `npm run query` does), so tests write to a temporary log and never to the real one.
+- **The `runId` is a `randomUUID()`**, as the UI and `npm run query` make theirs; `BenchFlow.run` now gets `{ draft, runId, run, runs }` (`BenchRunOptions`).
+- **The source shows as a small tag at the start of each list row** (the existing `.tag` style) and as a "Källa:" line in the detail view.
+
 ## Open Questions
+
 - None.

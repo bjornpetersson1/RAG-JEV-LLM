@@ -101,6 +101,10 @@ describe('RunsPage', () => {
     expect(items[0].textContent).toContain('Huvudflödet: källor 26,0 s, totalt 70,0 s');
     expect(items[0].textContent).toContain('Referens-RAG: källor 27,2 s, totalt 64,0 s');
     expect(items[1].textContent).toContain('Huvudflödet: fel: The judge timed out');
+    expect(items.map((item) => item.querySelector('.run-source')?.textContent)).toEqual([
+      'UI',
+      'UI',
+    ]);
     expect(screen.getByText('Sida 1 av 1 (2 körningar)', { exact: false })).toBeDefined();
   });
 
@@ -120,6 +124,56 @@ describe('RunsPage', () => {
     await vi.waitFor(() =>
       expect(fetchMock).toHaveBeenLastCalledWith('/api/runs?page=1&template=nda&flow=reference'),
     );
+  });
+
+  it('shows each request’s source, filters on it, and shows a benchmark run’s query and run', async () => {
+    const bench = (overrides: Partial<RunLogEntry>) =>
+      entry({
+        runId: 'c',
+        source: 'bench',
+        bench: { queryId: 'q03', run: 2, runs: 5 },
+        ...overrides,
+      });
+    const BENCH: LoggedRequest = {
+      runId: 'c',
+      timestamp: '2026-10-13T13:00:00.000Z',
+      flows: [bench({}), bench({ flow: 'reference' })],
+    };
+    const CLI: LoggedRequest = {
+      ...FAILED,
+      flows: FAILED.flows.map((flow) => ({ ...flow, source: 'cli' })),
+    };
+    const fetchMock = stubRuns((url) =>
+      url.searchParams.get('source') === 'bench' ? page([BENCH]) : page([BENCH, PAIR, CLI]),
+    );
+    render(<RunsPage />);
+
+    const items = await screen.findAllByRole('listitem');
+    expect(items.map((item) => item.querySelector('.run-source')?.textContent)).toEqual([
+      'Benchmark (q03, körning 2 av 5)',
+      'UI',
+      'Terminal',
+    ]);
+    const source = screen.getByLabelText('Källa');
+    expect(
+      within(source)
+        .getAllByRole('option')
+        .map((option) => option.textContent),
+    ).toEqual(['Alla', 'UI', 'Terminal', 'Benchmark']);
+
+    fireEvent.change(screen.getByLabelText('Flöde'), { target: { value: 'main' } });
+    await vi.waitFor(() =>
+      expect(fetchMock).toHaveBeenLastCalledWith('/api/runs?page=1&flow=main'),
+    );
+    await screen.findAllByRole('listitem');
+    fireEvent.change(source, { target: { value: 'bench' } });
+    await vi.waitFor(() =>
+      expect(fetchMock).toHaveBeenLastCalledWith('/api/runs?page=1&flow=main&source=bench'),
+    );
+    await vi.waitFor(() => expect(screen.getAllByRole('listitem')).toHaveLength(1));
+
+    fireEvent.click(screen.getByRole('button', { name: /Benchmark/ }));
+    expect(screen.getByText('Källa: Benchmark (q03, körning 2 av 5)')).toBeDefined();
   });
 
   it('shows no old rows under a new filter while it loads', async () => {

@@ -728,6 +728,12 @@ select {
   font-weight: 650;
 }
 
+.run-source {
+  margin-bottom: 0;
+  font-weight: 600;
+  vertical-align: 0.1em;
+}
+
 .run-flow {
   color: var(--color-ink-muted);
   font-size: var(--text-sm);

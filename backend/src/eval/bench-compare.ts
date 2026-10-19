@@ -3,6 +3,7 @@
 // time, precision and recall of the chunks sent to the generator, and source accuracy. The flows
 // are passed in, so the same code runs against the database and models or against fakes in tests.
 
+import { randomUUID } from 'node:crypto';
 import { describeError } from '../errors.js';
 import { sourceAccuracy } from '../generation/post-check.js';
 import type { QueryFlowName, QueryResult } from '../generation/query-flow.js';
@@ -17,7 +18,16 @@ export interface BenchFlow {
   configuration: string;
   /** Whether its rerank is remote (an LLM, JEV or SubQ), whose time counts as LLM time. */
   remoteRerank: boolean;
-  run(query: ResolvedQuery, options: { draft: boolean }): Promise<QueryResult>;
+  run(query: ResolvedQuery, options: BenchRunOptions): Promise<QueryResult>;
+}
+
+export interface BenchRunOptions {
+  draft: boolean;
+  /** Shared by every flow's run of the same query and run, for the run log (E7-12). */
+  runId: string;
+  /** From 0. */
+  run: number;
+  runs: number;
 }
 
 export interface BenchOptions {
@@ -113,9 +123,10 @@ export async function benchCompare(
     for (const [index, query] of queries.entries()) {
       const order = flows.map((flow, i) => ({ flow, tally: tallies[i] }));
       if ((run + index) % 2 === 1) order.reverse();
+      const runOptions = { draft: options.draft, runId: randomUUID(), run, runs: options.runs };
       for (const { flow, tally } of order) {
         try {
-          const result = await flow.run(query, { draft: options.draft });
+          const result = await flow.run(query, runOptions);
           const relevance = precisionRecall(sentIds(result), query.relevantIds);
           tally.samples.push({ run, queryId: query.id, result, relevance });
           options.onResult?.({ flow: flow.name, query, run, index, result });
