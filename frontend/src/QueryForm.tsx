@@ -19,7 +19,7 @@ export function QueryForm({ running, onSubmit }: QueryFormProps) {
   }
 
   return (
-    <form className="query-form" onSubmit={submit}>
+    <form className="query-form card" onSubmit={submit}>
       <fieldset>
         <legend>Avtalstyp</legend>
         {TEMPLATES.map(({ value, label }) => (

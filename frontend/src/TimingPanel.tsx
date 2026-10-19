@@ -90,45 +90,47 @@ export function TimingPanel({ flows, reference, skipped, running }: TimingPanelP
   );
 
   return (
-    <section className="timing" aria-label="Tidspanel">
+    <section className="timing card" aria-label="Tidspanel">
       <h2>Tid per steg</h2>
       <p className="lead">{SECTION_LEADS.timing}</p>
-      <table>
-        <thead>
-          <tr>
-            <th scope="col">Steg</th>
-            {columns.map(({ flow, title }) => (
-              <th key={flow} scope="col">
-                {title}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {ROWS.map((row) => (
-            <ExplainedRow
-              key={row.label}
-              label={row.label}
-              measure={row.measure}
-              detail={row.detail}
-              columns={columns.length + 1}
-              className={row.className}
-            >
-              {columns.map(({ flow, state, timings }) => (
-                <td key={flow}>
-                  <TimingCell
-                    ms={timings[row.timing]}
-                    pending={running && isPending(state, row)}
-                    state={state}
-                    row={row}
-                    scale={scale}
-                  />
-                </td>
+      <div className="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Steg</th>
+              {columns.map(({ flow, title }) => (
+                <th key={flow} scope="col">
+                  {title}
+                </th>
               ))}
-            </ExplainedRow>
-          ))}
-        </tbody>
-      </table>
+            </tr>
+          </thead>
+          <tbody>
+            {ROWS.map((row) => (
+              <ExplainedRow
+                key={row.label}
+                label={row.label}
+                measure={row.measure}
+                detail={row.detail}
+                columns={columns.length + 1}
+                className={row.className}
+              >
+                {columns.map(({ flow, state, timings }) => (
+                  <td key={flow}>
+                    <TimingCell
+                      ms={timings[row.timing]}
+                      pending={running && isPending(state, row)}
+                      state={state}
+                      row={row}
+                      scale={scale}
+                    />
+                  </td>
+                ))}
+              </ExplainedRow>
+            ))}
+          </tbody>
+        </table>
+      </div>
       <Difference flows={flows} />
       {!reference && <p>Referens-RAG:en kördes inte.</p>}
       {skipped && <p>Referens-RAG:en kördes inte: {skipped}</p>}

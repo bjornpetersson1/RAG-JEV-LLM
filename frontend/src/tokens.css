@@ -1,0 +1,70 @@
+/*
+ * The design tokens (E7-13): a retro poster palette on cream paper, with the data in near-black ink.
+ * Every colour, font size and spacing in styles.css comes from here.
+ *
+ * Contrast (WCAG 2.1), checked by tokens.test.ts:
+ * - text (4.5:1): ink on paper 14.9, on surface 16.5, on sunken 13.9, on mustard-soft 13.9, on
+ *   salmon-soft 13.3, on mustard 9.2, on orange 5.8; surface on ink 16.5; ink-muted on paper 6.9, on
+ *   surface 7.6, on sunken 6.4, on mustard-soft 6.4; accent on surface 6.2, on paper 5.6, on
+ *   mustard-soft 5.2; error on surface 7.5, on error-soft 6.4.
+ * - UI (3:1): orange and mustard are fills only, always inside an ink outline; the focus ring is
+ *   accent, 5.6 on paper.
+ */
+:root {
+  /* Palette */
+  --color-paper: #f8eedb;
+  --color-surface: #fffaf0;
+  --color-sunken: #f3e6cc;
+  --color-ink: #211a16;
+  --color-ink-muted: #5e4e43;
+  --color-accent: #a8391a;
+  --color-orange: #e8772e;
+  --color-mustard: #f2b33d;
+  --color-mustard-soft: #fbe6b0;
+  --color-salmon: #f4a48c;
+  --color-salmon-soft: #fcdcd0;
+  --color-error: #9c2414;
+  --color-error-soft: #fde3dc;
+
+  /* Type */
+  --font-display: 'Fraunces Variable', Georgia, serif;
+  --font-body: 'Inter Variable', system-ui, sans-serif;
+  --text-xs: 0.8125rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.625rem;
+  --text-2xl: clamp(2rem, 6vw, 3rem);
+  --leading-tight: 1.2;
+  --leading-normal: 1.6;
+
+  /* Spacing */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+
+  /* Shape */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1.25rem;
+  --radius-pill: 999px;
+  --outline-hairline: 1px;
+  --outline-thin: 1.5px;
+  --outline-thick: 2.5px;
+  --outline-heavy: 0.5rem;
+  --outline-focus: 3px;
+  --outline-focus-offset: 2px;
+  --shadow-lg: 5px 5px 0 var(--color-ink);
+  --shadow-md: 4px 4px 0 var(--color-ink);
+  --shadow-sm: 3px 3px 0 var(--color-ink);
+  --shadow-xs: 1px 1px 0 var(--color-ink);
+  --content-width: 64rem;
+  --reading-width: 46rem;
+
+  /* Print grain on the page background: monochrome noise, drawn at low opacity. */
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.09 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}

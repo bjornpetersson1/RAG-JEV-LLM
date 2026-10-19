@@ -39,7 +39,7 @@ export const FlowProgress = memo(function FlowProgress({
   const { planned, steps, result } = state;
   const pending = active ? planned.find((step) => !steps[step]) : undefined;
   return (
-    <section className="flow" aria-label={title}>
+    <section className="flow card" aria-label={title}>
       <h2>{title}</h2>
       {result?.defaultInstruction && (
         <p className="notice">
