@@ -144,7 +144,9 @@ describe('RunsPage', () => {
       flows: FAILED.flows.map((flow) => ({ ...flow, source: 'cli' })),
     };
     const fetchMock = stubRuns((url) =>
-      url.searchParams.get('source') === 'bench' ? page([BENCH]) : page([BENCH, PAIR, CLI]),
+      url.searchParams.get('source') === 'bench'
+        ? page([BENCH])
+        : page([BENCH, PAIR, CLI], { total: 40, page: Number(url.searchParams.get('page')) }),
     );
     render(<RunsPage />);
 
@@ -164,6 +166,11 @@ describe('RunsPage', () => {
     fireEvent.change(screen.getByLabelText('Flöde'), { target: { value: 'main' } });
     await vi.waitFor(() =>
       expect(fetchMock).toHaveBeenLastCalledWith('/api/runs?page=1&flow=main'),
+    );
+    await screen.findAllByRole('listitem');
+    fireEvent.click(screen.getByRole('button', { name: 'Nästa' }));
+    await vi.waitFor(() =>
+      expect(fetchMock).toHaveBeenLastCalledWith('/api/runs?page=2&flow=main'),
     );
     await screen.findAllByRole('listitem');
     fireEvent.change(source, { target: { value: 'bench' } });

@@ -82,6 +82,7 @@
 - **`createBenchSetup` takes the `RunLog` as an optional last parameter** (default `createRunLog` on `logs/runs.jsonl`, warning with `console.warn`, as `npm run query` does), so tests write to a temporary log and never to the real one.
 - **The `runId` is a `randomUUID()`**, as the UI and `npm run query` make theirs; `BenchFlow.run` now gets `{ draft, runId, run, runs }` (`BenchRunOptions`).
 - **The source shows as a small tag at the start of each list row** (the existing `.tag` style) and as a "Källa:" line in the detail view.
+- **The frontend test changes "Källa" from page 2** (PR review): so it proves the filter goes back to page 1, not only that page 1 is sent when already there; checked by making the filter keep the page, which fails the test.
 
 ## Open Questions
 

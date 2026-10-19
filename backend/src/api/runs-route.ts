@@ -1,6 +1,7 @@
 // `GET /runs` (E7-11): the run log's requests for the UI's earlier runs, newest first. A request is
 // the flows that shared a `runId` (the main flow and its reference RAG). It filters by contract type,
-// by flow and by source (E7-12) and returns one page at a time. The log is read on every call: it is a local file.
+// by flow and by source (E7-12) and returns one page at a time. The log is read on every call: it is
+// a local file.
 
 import type { FastifyInstance } from 'fastify';
 import { parsePositiveInteger } from '../env.js';
