@@ -1,6 +1,8 @@
 // What each number in the UI measures, why, and how to read it (E7-11), for a lawyer or client:
 // plain words, a technical term explained in the same sentence.
 
+import type { AppConfig } from './config';
+
 /** Every measure the UI shows with an (i) button. */
 export type Measure =
   | 'translation'
@@ -185,13 +187,55 @@ export const EXPLANATIONS: Record<Measure, Explanation> = {
   },
 };
 
-/** What the comparison is about, above the results. */
-export const INTRODUCTION =
-  'Här jämförs två sätt att hitta källor till ett avtalsutkast. Huvudflödet översätter i ' +
-  'standardinställningen din instruktion till juridiska ämnestaggar och söker på dem; ' +
-  'referens-RAG:en letar i stället efter texter som liknar instruktionen. Båda låter sedan samma ' +
-  'AI-domare välja de relevanta källorna, och samma AI skriver utkastet, så skillnaden ligger i ' +
-  'hur källorna hittas. Under tabellen står vad varje flöde körde med.';
+/** How the introduction names a judge, by its `RERANKER` value; any other value by its name. */
+const JUDGE_LABELS = new Map([
+  ['llm', 'AI-domaren (LLM)'],
+  ['subq', 'en liten domarmodell (SubQ)'],
+  ['jev', 'en liten domarmodell (JEV)'],
+  ['minilm', 'en liten lokal modell (mMiniLM)'],
+  ['bge', 'en liten lokal modell (BGE-reranker)'],
+]);
+
+/**
+ * What the comparison is about, above the results (E7-14): with the same judge in both flows, how
+ * the sources are found; with a small judge in the main flow, the POC's goal of tag search plus a
+ * small judge against a regular RAG. Without the configuration it makes no claim about the judges.
+ */
+export function introduction(config?: AppConfig): string {
+  return [
+    'Här jämförs två sätt att hitta källor till ett avtalsutkast. Huvudflödet översätter i ' +
+      'standardinställningen din instruktion till juridiska ämnestaggar och söker på dem; ' +
+      'referens-RAG:en letar i stället efter texter som liknar instruktionen.',
+    judgesSentence(config),
+    'Under tabellen står vad varje flöde körde med.',
+  ].join(' ');
+}
+
+function judgesSentence(config?: AppConfig): string {
+  if (!config) {
+    return 'Båda låter sedan en domare välja de relevanta källorna, och samma AI skriver utkastet.';
+  }
+  const { main, reference } = config.judges;
+  if (sameJudge(config)) {
+    return (
+      'Båda låter sedan samma AI-domare välja de relevanta källorna, och samma AI skriver ' +
+      'utkastet, så skillnaden ligger i hur källorna hittas.'
+    );
+  }
+  return (
+    `Sedan väljer ${judgeLabel(main.name)} huvudflödets källor och ${judgeLabel(reference.name)} ` +
+    'referens-RAG:ens. Samma AI skriver båda utkasten, så skillnaden ligger både i hur källorna ' +
+    'hittas och i hur de bedöms.'
+  );
+}
+
+function sameJudge({ judges }: AppConfig): boolean {
+  return judges.main.name === judges.reference.name;
+}
+
+function judgeLabel(name: string): string {
+  return JUDGE_LABELS.get(name) ?? name;
+}
 
 /** One sentence per section, always visible. */
 export const SECTION_LEADS = {
@@ -209,9 +253,25 @@ export const SECTION_LEADS = {
     'tiderna, antalen och konfigurationen.',
 } as const;
 
-/** Why the UI's comparison is a demo, under the comparison. */
-export const DEMO_NOTICE =
-  'Siffrorna här är en demonstration. Domarens svar sparas, och referens-RAG:en körs efter ' +
-  'huvudflödet med samma instruktion, så den kan återanvända huvudflödets bedömningar och verka ' +
-  'snabbare. Den egentliga mätningen görs med npm run bench:compare, som kör alla testfrågor ' +
-  'utan sparade svar.';
+/**
+ * Why the UI's comparison is a demo, under the comparison: saved judge answers only with the judge
+ * cache on, and the reference RAG reusing the main flow's judgements only when they share a judge.
+ * With different judges it claims only reuse from earlier runs: a local cross-encoder saves
+ * nothing, but the reference RAG's LLM judge always does.
+ */
+export function demoNotice(config?: AppConfig): string {
+  return [
+    'Siffrorna här är en demonstration.',
+    ...(config?.judgeCache ? [savedAnswersSentence(config)] : []),
+    'Den egentliga mätningen görs med npm run bench:compare, som kör alla testfrågor utan ' +
+      'sparade svar.',
+  ].join(' ');
+}
+
+function savedAnswersSentence(config: AppConfig): string {
+  return sameJudge(config)
+    ? 'Domarens svar sparas, och referens-RAG:en körs efter huvudflödet med samma instruktion, så ' +
+        'den kan återanvända huvudflödets bedömningar och verka snabbare.'
+    : 'Bedömningar från en tidigare körning av samma instruktion kan återanvändas, så en ' +
+        'upprepad instruktion kan gå snabbare.';
+}

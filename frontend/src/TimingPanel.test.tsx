@@ -2,9 +2,9 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { afterEach, describe, expect, it } from 'vitest';
 import { App } from './App';
 import type { FlowState } from './FlowProgress';
-import { DEMO_NOTICE } from './explanations';
+import { demoNotice } from './explanations';
 import { formatMs, TimingPanel } from './TimingPanel';
-import { controlledStream, queryResult, stubFetch } from './test-helpers';
+import { controlledStream, queryResult, stubFetch, SUBQ_CONFIG } from './test-helpers';
 
 const CONFIGURATION = {
   retriever: 'tags',
@@ -155,7 +155,7 @@ describe('TimingPanel', () => {
     expect(
       screen.getByText('Totalt var huvudflödet 10,0 s snabbare än referens-RAG:en.'),
     ).toBeDefined();
-    expect(screen.getByText(DEMO_NOTICE)).toBeDefined();
+    expect(screen.getByText(demoNotice())).toBeDefined();
     const bars = [...document.querySelectorAll<HTMLElement>('tr.total .bar')].map(
       (bar) => bar.style.width,
     );
@@ -186,7 +186,7 @@ describe('an opened info text', () => {
 describe('the comparison', () => {
   afterEach(cleanup);
 
-  it('says the main flow knew its sources first when it did, also with the translation', () => {
+  it('says the main flow knew its sources first when it did, also with the translation, with the configured demo notice', () => {
     const main: FlowState = {
       planned: ['translation', 'search', 'rerank', 'generation'],
       steps: {},
@@ -208,7 +208,9 @@ describe('the comparison', () => {
         timings: { searchMs: 300, judgingMs: 2000, sourcesMs: 2300, totalMs: 7000 },
       }),
     };
-    render(<TimingPanel flows={{ main, reference }} reference running={false} />);
+    render(
+      <TimingPanel flows={{ main, reference }} reference running={false} config={SUBQ_CONFIG} />,
+    );
 
     expect(
       screen.getByText(
@@ -220,7 +222,8 @@ describe('the comparison', () => {
         /Räknat med översättningen visste huvudflödet först vilka källor utkastet skulle bygga på\.$/,
       ),
     ).toBeDefined();
-    expect(screen.getByText(DEMO_NOTICE)).toBeDefined();
+    // The configured judges differ, so the notice says nothing about reused judgements.
+    expect(screen.getByText(demoNotice(SUBQ_CONFIG))).toBeDefined();
   });
 });
 
