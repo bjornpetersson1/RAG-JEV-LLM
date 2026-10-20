@@ -4,6 +4,7 @@ import { ExplainedRow } from './Info';
 import { FLOWS, TEMPLATES, type FlowName, type QueryStepName } from './query';
 import {
   fetchRuns,
+  RUN_SOURCES,
   type LoggedRequest,
   type RunLogEntry,
   type RunsFilter,
@@ -13,6 +14,9 @@ import { formatMs, TimingPanel, type TimingFlow } from './TimingPanel';
 
 const TEMPLATE_NAMES = Object.fromEntries(TEMPLATES.map(({ value, label }) => [value, label]));
 const FLOW_TITLES = Object.fromEntries(FLOWS.map(({ flow, title }) => [flow, title]));
+const SOURCE_LABELS: Partial<Record<string, string>> = Object.fromEntries(
+  RUN_SOURCES.map(({ value, label }) => [value, label]),
+);
 
 /** The counts a logged flow has, each with its (i) text. */
 const COUNTS: { label: string; key: keyof NonNullable<RunLogEntry['counts']>; measure: Measure }[] =
@@ -25,7 +29,10 @@ const COUNTS: { label: string; key: keyof NonNullable<RunLogEntry['counts']>; me
     { label: 'Citerade', key: 'cited', measure: 'cited' },
   ];
 
-/** Earlier runs from the run log, with filters and pages; opening one shows its timings (E7-11). */
+/**
+ * Earlier runs from the run log, with filters and pages; opening one shows its timings (E7-11). Each
+ * request shows where it was started, which it can also be filtered on (E7-12).
+ */
 export function RunsPage() {
   const [filter, setFilter] = useState<RunsFilter>({ page: 1 });
   const [page, setPage] = useState<Page>();
@@ -73,6 +80,12 @@ export function RunsPage() {
           options={FLOWS.map(({ flow, title }) => ({ value: flow, label: title }))}
           value={filter.flow}
           onChange={(flow) => changeFilter({ ...filter, flow, page: 1 })}
+        />
+        <FilterSelect
+          label="Källa"
+          options={RUN_SOURCES}
+          value={filter.source}
+          onChange={(source) => changeFilter({ ...filter, source, page: 1 })}
         />
       </div>
       {error && (
@@ -149,12 +162,17 @@ function FilterSelect<T extends string>({ label, options, value, onChange }: Fil
   );
 }
 
-/** A request's time, contract type and instruction, and each flow's time to sources and total. */
+/**
+ * A request's source (for a benchmark run with its query and run), time, contract type and
+ * instruction, and each flow's time to sources and total.
+ */
 function RequestSummary({ request }: { request: LoggedRequest }) {
   const [first] = request.flows;
+  const source = sourceOf(first);
   return (
     <>
       <span className="run-heading">
+        {source && <span className="tag run-source">{source}</span>}
         {formatTimestamp(request.timestamp)} · {TEMPLATE_NAMES[first.template]} ·{' '}
         {instructionOf(request)}
       </span>
@@ -172,6 +190,7 @@ function RequestSummary({ request }: { request: LoggedRequest }) {
 
 function RunDetail({ request, onBack }: { request: LoggedRequest; onBack(): void }) {
   const [first] = request.flows;
+  const source = sourceOf(first);
   const flows: Partial<Record<FlowName, TimingFlow>> = Object.fromEntries(
     request.flows.map((entry) => [entry.flow, timingFlowOf(entry)]),
   );
@@ -185,6 +204,7 @@ function RunDetail({ request, onBack }: { request: LoggedRequest; onBack(): void
       <h2>
         {TEMPLATE_NAMES[first.template]}, {formatTimestamp(request.timestamp)}
       </h2>
+      {source && <p>Källa: {source}</p>}
       <p>Instruktion: {instructionOf(request)}</p>
       <TimingPanel flows={flows} reference={flows.reference !== undefined} running={false} />
       {request.flows.map((entry) => (
@@ -238,6 +258,13 @@ function instructionOf({ flows }: LoggedRequest): string {
     flows.find((entry) => entry.defaultInstruction)?.defaultInstruction ||
     '(mallens instruktion)'
   );
+}
+
+/** The source's label, with the evaluation query and run for a benchmark run; none if unknown. */
+function sourceOf({ source, bench }: RunLogEntry): string | undefined {
+  const label = SOURCE_LABELS[source];
+  if (!label || !bench) return label;
+  return `${label} (${bench.queryId}, körning ${bench.run} av ${bench.runs})`;
 }
 
 function formatOptional(ms: number | undefined): string {

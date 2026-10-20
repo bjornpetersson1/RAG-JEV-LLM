@@ -43,10 +43,10 @@ describe('GET /runs', () => {
     return response;
   }
 
-  it('groups the flows of a request, newest request first, and skips broken lines', async () => {
+  it('groups the flows of a request, main flow first, newest request first, and skips broken lines', async () => {
     writeLog([
-      entry({ runId: 'a', timestamp: '2026-10-13T10:00:00.000Z' }),
-      entry({ runId: 'a', flow: 'reference', timestamp: '2026-10-13T10:01:00.000Z' }),
+      entry({ runId: 'a', flow: 'reference', timestamp: '2026-10-13T10:00:00.000Z' }),
+      entry({ runId: 'a', timestamp: '2026-10-13T10:01:00.000Z' }),
       'not json',
       JSON.stringify({ flow: 'main', timestamp: '2026-10-13T11:00:00.000Z' }),
       JSON.stringify({ runId: 'c', timestamp: '2026-10-13T11:30:00.000Z' }),
@@ -79,6 +79,49 @@ describe('GET /runs', () => {
     expect(reference.requests.map((request: { runId: string }) => request.runId)).toEqual(['a']);
   });
 
+  it('filters by source, combined with the other filters, and lists every source without it', async () => {
+    const withoutSource: Partial<RunLogEntry> = entry({
+      runId: 'old',
+      template: 'nda',
+      timestamp: '2026-10-13T09:00:00.000Z',
+    });
+    delete withoutSource.source;
+    writeLog([
+      // Lines written before E7-12: an `api` and a `cli` run, without `bench`.
+      entry({ runId: 'a', source: 'api', timestamp: '2026-10-13T10:00:00.000Z' }),
+      entry({ runId: 'c', source: 'cli', timestamp: '2026-10-13T11:00:00.000Z' }),
+      JSON.stringify(withoutSource),
+      entry({
+        runId: 'b',
+        source: 'bench',
+        bench: { queryId: 'q01', run: 1, runs: 2 },
+        timestamp: '2026-10-13T12:00:00.000Z',
+      }),
+      entry({
+        runId: 'b',
+        source: 'bench',
+        flow: 'reference',
+        bench: { queryId: 'q01', run: 1, runs: 2 },
+      }),
+      entry({
+        runId: 'n',
+        source: 'bench',
+        template: 'nda',
+        timestamp: '2026-10-13T13:00:00.000Z',
+      }),
+    ]);
+    const ids = async (url: string) =>
+      (await get(url)).json().requests.map((request: { runId: string }) => request.runId);
+
+    expect(await ids('/runs')).toEqual(['n', 'b', 'c', 'a', 'old']);
+    expect(await ids('/runs?source=bench')).toEqual(['n', 'b']);
+    expect(await ids('/runs?source=api')).toEqual(['a']);
+    expect(await ids('/runs?source=cli')).toEqual(['c']);
+    expect(await ids('/runs?source=bench&template=employment&flow=reference')).toEqual(['b']);
+    const [bench] = (await get('/runs?source=bench&template=employment')).json().requests;
+    expect(bench.flows[0].bench).toEqual({ queryId: 'q01', run: 1, runs: 2 });
+  });
+
   it('returns one page at a time with the total', async () => {
     writeLog(
       Array.from({ length: RUNS_PAGE_SIZE + 3 }, (_, i) =>
@@ -105,6 +148,9 @@ describe('GET /runs', () => {
     });
     expect((await get('/runs?template=lease')).statusCode).toBe(400);
     expect((await get('/runs?flow=other')).statusCode).toBe(400);
+    const source = await get('/runs?source=eval');
+    expect(source.statusCode).toBe(400);
+    expect(source.json().error).toBe('"source" must be api or cli or bench');
     expect((await get('/runs?page=0')).statusCode).toBe(400);
   });
 });

@@ -445,6 +445,8 @@ A judge can approve nothing, and then no draft is written, so the flows can writ
 
 The table is printed and appended to the "Main flow vs reference RAG: the same judge" table (E7-9; before it, "Main flow vs reference RAG: time to sources", and before E7-8, "Main flow vs reference RAG") in that day's `eval/report-<date>.md`. `--limit <n>` runs only the first n queries and `--no-draft` measures retrieval and rerank without generation. A query that fails in a run is listed, and that query and run is left out of both flows, so the rows are compared on the same samples (the `samples` column counts them); a flow with no measured sample shows `–`. The command then exits non-zero.
 
+Every flow run is also written to the [run log](#run-log) with `source: "bench"` and the evaluation query and run, so the runs show under _Tidigare körningar_ in the UI (E7-12). The two flows of one query and run share a `runId`. A failed run is logged with its error.
+
 The first full run (2026-10-12, in `eval/report-2026-10-12.md`, 84 of 100 query and run pairs after the subscription's session limit stopped some calls): the reference RAG took a median 29.5 s against the main flow's 71.8 s with `RERANKER=bge`, almost all of the difference being the BGE rerank (37.0 s); the main flow sent better chunks (precision 0.398 against 0.302, recall 0.254 against 0.208); source accuracy was about equal (0.917 and 0.914).
 
 With the same LLM judge in both flows (E7-9, 2026-10-13, one run with drafts on Haiku, in `eval/report-2026-10-13.md`), both have their sources in about 26.5 s. The judge takes that long in both, and tag search beats vector search by only 53 ms (2 ms against 55 ms). Counting the 7.4 s translation into tags, the main flow has its sources 7.2 s later. It sends better chunks (precision 0.516 against 0.419, recall 0.279 against 0.204), with about the same source accuracy (0.973 and 0.954). The labels were made from tag and full-text candidates, which favours the main flow; #95 labels the chunks only vector search finds.
@@ -528,23 +530,23 @@ The UI explains its numbers in plain Swedish, written for a lawyer (E7-11). Ther
 
 The comparison under the timing panel also reads the result in words. It names what the gap in time to sources consists of (the translation, the search and the judge) and which flow knew its sources first. It ends with the notice that the UI's numbers are a demo and that `npm run bench:compare` is the measurement. The texts live in `frontend/src/explanations.ts`.
 
-The tab _Tidigare körningar_ (`#korningar`) lists every run in the [run log](#run-log), newest first, grouped per request. Each request shows its time, contract type and instruction, and each flow's time to sources and total, or its error. It filters by contract type and flow, 20 requests per page. Opening a request shows its timing panel, counts and source accuracy, with the same info texts. The run log keeps no drafts or sources, so an earlier run shows neither. A field an older entry lacks shows `–`.
+The tab _Tidigare körningar_ (`#korningar`) lists every run in the [run log](#run-log), newest first, grouped per request. Each request shows where it was started ("UI", "Terminal" for `npm run query` or "Benchmark" for `bench:compare`), its time, contract type and instruction, and each flow's time to sources and total, or its error. It filters by contract type, flow and source, 20 requests per page. Opening a request shows its source (for a benchmark run with its evaluation query and run, e.g. "Benchmark (q03, körning 2 av 5)"), timing panel, counts and source accuracy, with the same info texts. The run log keeps no drafts or sources, so an earlier run shows neither. A field an older entry lacks shows `–`.
 
 The list comes from `GET /api/runs` (`/runs` on the backend):
 
 ```bash
-curl 'http://localhost:3000/runs?template=nda&flow=reference&page=2'
+curl 'http://localhost:3000/runs?template=nda&flow=reference&source=bench&page=2'
 ```
 
-- `template` (`employment` or `nda`) and `flow` (`main` or `reference`, a request with that flow) are optional filters.
+- `template` (`employment` or `nda`), `flow` (`main` or `reference`, a request with that flow) and `source` (`api`, `cli` or `bench`) are optional filters.
 - `page` starts at 1.
-- The answer has `requests` (each with `runId`, `timestamp` and its `flows`' log entries), `total`, `page` and `pageSize`.
+- The answer has `requests` (each with `runId`, `timestamp` and its `flows`' log entries, the main flow first), `total`, `page` and `pageSize`.
 - A line in the log that is not JSON, or lacks `runId`, `timestamp`, `flow`, `template` or `timings`, is skipped. A missing log gives an empty list.
 - A request's `timestamp` is when its first flow started; the list is ordered by it.
 
 ### Run log
 
-Every run of a flow, from the UI or `npm run query`, is appended as one JSON line to `logs/runs.jsonl` (git-ignored; the folder is created when missing):
+Every run of a flow, from the UI, `npm run query` or `bench:compare`, is appended as one JSON line to `logs/runs.jsonl` (git-ignored; the folder is created when missing):
 
 ```json
 {
@@ -578,11 +580,13 @@ Every run of a flow, from the UI or `npm run query`, is appended as one JSON lin
 The fields:
 
 - `runId` is shared by the flows of one request.
+- `source` is where the run was started: `api` (the UI), `cli` (`npm run query`) or `bench` (`bench:compare`, E7-12).
+- `bench` is only on a `bench:compare` entry: `{ "queryId": "q03", "run": 2, "runs": 5 }`, the evaluation query and the run (from 1) of how many.
 - `instruction` is the free text as written; with a template alone it is empty, and `defaultInstruction` holds the instruction the flow used instead.
 - `counts` holds the query's tags and the candidates, those from the full-text fallback, those approved, those sent to the generator and those the draft cites.
 - `judging` holds the rerank's relevant chunks, cache hits, scoring calls and the chunks it could not score; it is absent for a flow without a rerank step.
 - A run that fails has an `error` and the timings of the steps it finished, and no counts.
-- A log line that cannot be written is a warning; the query itself goes on.
+- A log line that cannot be written is a warning; the query, or the benchmark, goes on.
 
 ### `POST /query`
 

@@ -3,10 +3,21 @@
 
 import type { FlowConfiguration, FlowName, QueryResult, StepTimings, Template } from './query';
 
+/** Where a run was started: the UI, `npm run query` or `bench:compare` (E7-12). */
+export const RUN_SOURCES = [
+  { value: 'api', label: 'UI' },
+  { value: 'cli', label: 'Terminal' },
+  { value: 'bench', label: 'Benchmark' },
+] as const;
+
+export type RunSource = (typeof RUN_SOURCES)[number]['value'];
+
 export interface RunLogEntry {
   timestamp: string;
   runId: string;
-  source: 'api' | 'cli';
+  source: RunSource;
+  /** Which evaluation query and run (from 1) of `bench:compare`; only on a benchmark entry. */
+  bench?: { queryId: string; run: number; runs: number };
   flow: FlowName;
   template: Template;
   instruction: string;
@@ -43,15 +54,17 @@ export interface RunsPage {
 export interface RunsFilter {
   template?: Template;
   flow?: FlowName;
+  source?: RunSource;
   page: number;
 }
 
 /** One page of earlier runs; throws a message for the user when the backend cannot answer. */
-export async function fetchRuns({ template, flow, page }: RunsFilter): Promise<RunsPage> {
+export async function fetchRuns({ template, flow, source, page }: RunsFilter): Promise<RunsPage> {
   const params = new URLSearchParams({
     page: String(page),
     ...(template && { template }),
     ...(flow && { flow }),
+    ...(source && { source }),
   });
   let response: Response;
   try {
