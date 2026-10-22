@@ -17,7 +17,6 @@ import { TimingPanel } from './TimingPanel';
 const SHOWN: Measure[] = [
   'translation',
   'search',
-  'embedding',
   'rerank',
   'rerankDetail',
   'sources',
@@ -178,7 +177,7 @@ describe('introduction', () => {
     expect(introduction(SAME_JUDGE_CONFIG)).toBe(
       'Här jämförs två sätt att hitta källor till ett avtalsutkast. Huvudflödet översätter i ' +
         'standardinställningen din instruktion till juridiska ämnestaggar och söker på dem; ' +
-        'referens-RAG:en letar i stället efter texter som liknar instruktionen. Båda låter sedan ' +
+        'referens-RAG:en söker i stället direkt på instruktionens ord (BM25). Båda låter sedan ' +
         'samma AI-domare välja de relevanta källorna, och samma AI skriver utkastet, så skillnaden ' +
         'ligger i hur källorna hittas. Under tabellen står vad varje flöde körde med.',
     );
@@ -188,8 +187,6 @@ describe('introduction', () => {
     const withMain = (name: string) =>
       introduction({ ...SUBQ_CONFIG, judges: { ...SUBQ_CONFIG.judges, main: { name } } });
 
-    expect(withMain('minilm')).toContain('väljer en liten lokal modell (mMiniLM) huvudflödets');
-    expect(withMain('bge')).toContain('väljer en liten lokal modell (BGE-reranker) huvudflödets');
     expect(withMain('jev')).toContain('väljer en liten domarmodell (JEV) huvudflödets');
     expect(withMain('qwen3')).toContain('väljer qwen3 huvudflödets');
     expect(withMain('constructor')).toContain('väljer constructor huvudflödets');

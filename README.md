@@ -1,6 +1,6 @@
 # RAG-JEV-LLM
 
-Legal RAG proof of concept: tag search or local bge-m3 hybrid retrieval, followed by a judge (an LLM judge by default; SubQ, or the local mMiniLM and BGE rankers, optional; JEV paused), find relevant Swedish laws and rulings, and an LLM drafts employment agreements and NDAs from them.
+Legal RAG proof of concept: tag search, followed by a judge (an LLM judge by default; SubQ optional; JEV paused), find relevant Swedish laws and rulings, and an LLM drafts employment agreements and NDAs from them.
 
 ## Prerequisites
 
@@ -158,36 +158,23 @@ The benchmark generates the same seeded data every run (3–8 tags per chunk out
 
 Migration `0005_chunks_fts` adds an SQLite FTS5 index over each chunk's text, context and source reference, kept in step with `chunks` by triggers. Its tokenizer folds case but keeps å, ä and ö apart from a and o. The full-text query takes the words of the instruction and the chosen tags' labels, and drops common Swedish stop words and words shorter than 3 characters. Numbers must match exactly. Every other word becomes a prefix term, so inflected forms match: a word of 6 letters or more is first cut by up to 3 letters, keeping at least 5 (`uppsägningen` → `uppsägnin*`). The terms are joined with OR and ranked by bm25.
 
-Candidate search (`createCandidateSearch`; the query flow and `eval:run` use it through `RETRIEVER=tags` or `both`; no HTTP route uses it yet) takes the tag index's ranked hits. With fewer than `MIN_TAG_CANDIDATES` (default 10), full-text hits not already found are appended, up to `MAX_CANDIDATES` (default 30, confirmed by the sweep in [Precision and candidate counts](#precision-and-candidate-counts-e7-4)). Each candidate records whether it came from `tag` or `fts`, and every search logs whether the fallback ran and how many candidates it added. The modes `fts` (full text only) and `tags` (tags only) are baselines for the evaluation.
+Candidate search (`createCandidateSearch`; the query flow and `eval:run` use it through `RETRIEVER=tags`; no HTTP route uses it yet) takes the tag index's ranked hits. With fewer than `MIN_TAG_CANDIDATES` (default 10), full-text hits not already found are appended, up to `MAX_CANDIDATES` (default 30, confirmed by the sweep in [Precision and candidate counts](#precision-and-candidate-counts-e7-4)). Each candidate records whether it came from `tag` or `fts`, and every search logs whether the fallback ran and how many candidates it added. The modes `fts` (full text only) and `tags` (tags only) are baselines for the evaluation.
 
-## Hybrid retrieval
+## Retrieval
 
-`RETRIEVER` picks where the reranker's candidates come from (E8-4):
-
-- `tags` (default): tag search with the full-text fallback, as above, up to `MAX_CANDIDATES`.
-- `bge`: bge-m3 hybrid search. Chunks of a provision the instruction names come first (see below). The instruction is embedded (law abbreviations spelled out, see [Local models](#local-models)) and compared with every chunk's vector by cosine similarity (the dense half). SQLite FTS5 ranks the chunks by BM25 for the instruction's words and numbers, with law abbreviations replaced by their SFS number so `7 § LAS` matches `SFS 1982:80 7 §` (the lexical half). The two rankings are fused by reciprocal rank fusion and the best `RETRIEVE_CANDIDATES` (default 20, from the same sweep) go on. The query is not translated into tags.
-- `both`: the tag ranking fused with the two halves of `bge` the same way.
-
-Each ranking adds `weight / (RRF_K + rank)` to a chunk's score; `RRF_K` (default 60) and `RRF_WEIGHT_DENSE` / `RRF_WEIGHT_LEXICAL` / `RRF_WEIGHT_TAGS` (0–1, default 1) tune the fusion.
+`RETRIEVER` picks where the reranker's candidates come from. Only `tags` is left (the default): tag search with the full-text fallback, as above, up to `MAX_CANDIDATES`.
 
 ```bash
-npm run index:embed                                         # embed every new or changed chunk
 npm run retrieve -- "konkurrensklausul efter anställningens slut" [--top-k 8]
 ```
 
-`index:embed` embeds each chunk's heading path and text with the configured embedder and stores the vector in SQLite (`chunk_embeddings`), keyed by the model, precision (`EMBEDDER_DTYPE`) and a hash of the text. A second run embeds nothing; a changed chunk, model or precision is embedded again. Neither the server nor `retrieve` nor `query` ever embeds chunks: with `RETRIEVER=bge` or `both` they fail with a message to run `npm run index:embed` when any chunk's vector is missing or stale. Embedding all chunks takes 25–45 minutes on the demo machine.
+`retrieve` prints the reranked top `RERANK_TOP_K` (or `--top-k`) chunks with their source, rerank score and place in the retriever's list, and the time for query translation, retrieval, reranking and in total. `npm run query` uses the same retriever before drafting.
 
-`retrieve` prints the reranked top `RERANK_TOP_K` (or `--top-k`) chunks with their source, rerank score and place in the retriever's list, and the time for query translation, embedding the question, retrieval, reranking and in total. The first question in a process also loads bge-m3 (about 4 s), which counts as embedding time; the first rerank likewise loads the reranker. `npm run query` uses the same retriever before drafting.
-
-### Vector storage
-
-The vectors live in SQLite as BLOBs (`chunk_embeddings`) and are loaded into one contiguous `Float32Array` when the retriever is built; a search compares the query with every chunk (brute-force cosine similarity on unit vectors). Measured on the demo machine with the whole corpus: 2,116 chunks × 1,024 dimensions = 8.7 MB in memory, 0.4 s to load (including checking every chunk's hash), and 4.8 ms per full scan (median of 100, p90 5.8 ms). Embedding the question takes far longer (about 1–5 s). A vector database or `sqlite-vec` would only pay off at a corpus hundreds of times larger, and would add a native extension; brute force needs nothing.
-
-A chunk the instruction names by provision, e.g. "7 § LAS" or "2 kap. 9 § DL" (found as the post-check finds references), is always a candidate, ahead of the fused ranking. Neither half ranks an exact section reliably: other sections of the same law share its words, and its section number is a common token.
+**Removed local models (E10-1).** E8 ran bge-m3 hybrid retrieval (`RETRIEVER=bge|both`) and two local cross-encoders (`RERANKER=bge|minilm`) in Node through transformers.js; they took about 6 GB of downloads and are gone. Their settings are rejected at startup with a message naming them: `RETRIEVE_CANDIDATES`, `RRF_K`, `RRF_WEIGHT_*`, `RERANK_THRESHOLD_BGE`, `RERANK_THRESHOLD_MINILM`, `RERANKER_DTYPE`, `RERANKER_BATCH_SIZE`, `MODEL_CACHE_DIR`, `EMBEDDER`, `EMBEDDER_DTYPE`, `EMBEDDER_BATCH_SIZE`, and the values `RETRIEVER=bge|both` and `RERANKER=bge|minilm|qwen3`. Migration 9 drops their vectors (`chunk_embeddings`). Their measurements stay in the earlier reports in `eval/`. Hybrid retrieval through an embedding API is [#111](https://github.com/bjornpetersson1/RAG-JEV-LLM/issues/111).
 
 ## Query translation
 
-A lawyer's instruction becomes vocabulary tags for the search (`translateQuery`; the query flow calls it when the retriever uses tags, `tags` or `both`, and skips it for `RETRIEVER=bge`). `QUERY_TRANSLATOR_IMPL` chooses how:
+A lawyer's instruction becomes vocabulary tags for the search (`translateQuery`; the main flow always calls it, the reference RAG never). `QUERY_TRANSLATOR_IMPL` chooses how:
 
 - `llm` (default): the query translator's LLM, with the whole vocabulary in a cached Swedish system prompt. It returns at most 8 slugs, and unknown or repeated ones are dropped.
 - `subq`: Subquadratic's decision model SubQ Snap (E9-1), with the instruction as the state. Every call is billed.
@@ -204,20 +191,15 @@ Choosing a template (`employment` or `nda`) adds its preset tags from `sources/t
 
 ## Reranking
 
-The relevance step sits behind one `Reranker` interface (`backend/src/rerank/`). `RERANKER` in `.env` picks the implementation, and nothing else in the code branches on it. A judge (`llm`, `subq`, `jev`) says yes or no per chunk against `JUDGE_THRESHOLD`, as the requirements' query flow has it, so a query with no relevant candidate gets no draft. The cross-encoders (`minilm`, `bge`) only rank: at threshold 0 every scored chunk counts and only `RERANK_TOP_K` cuts, so they always pass the best few on. The UI says which: "N bedömda som relevanta av M" for a judge, "N högst rankade av M" for a ranker.
+The relevance step sits behind one `Reranker` interface (`backend/src/rerank/`). `RERANKER` in `.env` picks the implementation, and nothing else in the code branches on it. Every reranker is a judge (`llm`, `subq`, `jev`) that says yes or no per chunk against `JUDGE_THRESHOLD`, as the requirements' query flow has it, so a query with no relevant candidate gets no draft. The UI says "N bedömda som relevanta av M".
 
-- `bge`: the local cross-encoder bge-reranker-v2-m3 (see [Local models](#local-models)). It scores each chunk's heading path and text against the instruction and turns the logit into a score with a sigmoid. Pairs over 1,024 tokens are cut at the end of the chunk, with a warning. Its scores are not calibrated like a judge's, so it has its own threshold, `RERANK_THRESHOLD_BGE` (default 0: only `RERANK_TOP_K` cuts); `RERANKER_DTYPE` (`int8` default, or `fp32`) and `RERANKER_BATCH_SIZE` (default 8) tune it. Nothing is cached.
-- `minilm`: the small local cross-encoder mMiniLM-L12 (E7-5, about 118M parameters, a fifth of BGE's size), run the same way as `bge` with pairs of at most 512 tokens. It has its own threshold, `RERANK_THRESHOLD_MINILM` (default 0), and shares `RERANKER_DTYPE` and `RERANKER_BATCH_SIZE`; in int8 it runs the AVX2-quantised export. See [Small reranker (E7-5)](#small-reranker-e7-5).
 - `llm` (default; E7-7): the judge's LLM (`LLM_JUDGE_PROVIDER`/`LLM_JUDGE_MODEL`, Haiku in `.env.example`), asked for the probability that the answer is yes.
 - `subq` (E9-1): SubQ, with the chunk as the state and the question as one Noul question. When a SubQ call fails (timeout, network or HTTP error, malformed answer), the judge's LLM answers that chunk instead, and a warning names the chunk and the cause, with SubQ's own error type and message; an HTTP 402 says SubQ is out of credits. Needs `SUBQ_API_KEY`; without it the server refuses to start. Every call is billed.
 - `jev`: the same with JEV. Paused (#79); needs `JEV_API_KEY`.
-- `qwen3`: a placeholder for a later experiment.
 
 `JUDGE_IMPL` was replaced by `RERANKER`; a `.env` that still sets it fails at startup. A reranker scores every candidate, drops those below the threshold and unknown chunks, and returns the best `RERANK_TOP_K` (default 8), best first. Every reranker returns the same shape: the chunk, a score from 0 to 1, the reranker and its model. Adding one is a new file with a `RerankerEntry` and one entry in `RERANKERS` (`backend/src/rerank/factory.ts`).
 
 The `subq`, `jev` and `llm` rerankers ask the same question about the same text: the chunk's source reference and text, "Är texten relevant för följande uppdrag: <instruktion>?". A chunk is relevant when its score reaches `JUDGE_THRESHOLD`. Its default is per judge: 0.8 for `llm`, from E7-7's sweep with the Haiku judge (see [The judge step (E7-7)](#the-judge-step-e7-7)), 0.6 for `subq`, from E9-1's sweep (see [SubQ as the judge (E9-1)](#subq-as-the-judge-e9-1)), and 0.5 for `jev` until #79 measures JEV.
-
-An `Embedder` interface (`backend/src/embedding/`, `EMBEDDER=bge`) gives the local bge-m3 embeddings (see [Local models](#local-models)); `npm run index:embed` and `RETRIEVER=bge`/`both` use it (see [Hybrid retrieval](#hybrid-retrieval)).
 
 SubQ and JEV get `JUDGE_TIMEOUT_MS` (default 10000) per judgement and are not retried. Chunks are sent whole; one that is refused as too large falls back like any other error.
 
@@ -261,76 +243,13 @@ JEV is paused (#79). TypeSafe does not document JEV's maximum state size, pricin
 
 **Observed so far: nothing.** The project has no JEV key yet, so the limits are not measured, and JEV's request shape is only checked against the documentation with faked responses. Run the probe once a key exists and record the results here.
 
-## Local models
-
-bge-m3 (embeddings) and the rerankers mMiniLM-L12 and bge-reranker-v2-m3 run locally, in Node, through [transformers.js](https://github.com/huggingface/transformers.js) 3.x on onnxruntime-node, on the CPU. They are downloaded from Hugging Face on first use into `MODEL_CACHE_DIR` (default `data/models.nosync`, git-ignored; the `.nosync` suffix keeps iCloud Drive from uploading the models when the repo is in a synced folder such as `~/Documents`): about 0.6 GB per BGE model in int8 and 2.3 GB in fp32, and 0.1 GB (int8) or 0.5 GB (fp32) for mMiniLM. `EMBEDDER_DTYPE` picks the precision (`int8` by default). mMiniLM's int8 export is quantised per processor: the AVX2 one on x86, as on the demo machine, and the ARM one on Apple Silicon (not measured here).
-
-transformers.js stays on 3.x because 4.x's onnxruntime-node has no Intel macOS binary. Its image library `sharp`, which this app never uses, is pinned to 0.35.5 by `overrides` in the root `package.json`, which fixes the libvips advisories `npm audit` reported for 0.34. The remaining moderate advisories (`sprintf-js` and others, in onnxruntime-node's install-time downloader) are fixed only in 4.x.
-
-```bash
-npm run embed:smoke                   # "7 § LAS" must be nearer LAS 7 § than Dataskyddslagen 1 kap. 7 §
-npm run models:bench -- --dtype int8  # load and run times, peak memory (once per precision)
-```
-
-### Runtime decision (E8-2)
-
-Measured on the demo machine (MacBook Pro, Intel Core i5-8257U, 4 cores, 8 GB RAM, no GPU), with `npm run models:bench`: load time from the local cache, 100 real chunks (about 1,000 characters each) embedded in batches of 8, 100 (instruction, chunk) pairs scored in batches of 8 with at most 1,024 tokens, and the process's peak resident memory with both models loaded (`maxRSS`).
-
-| dtype | bge-m3 load | embed 100 chunks | reranker load | score 100 pairs | peak RSS |
-| ----- | ----------- | ---------------- | ------------- | --------------- | -------- |
-| int8  | 3.7 s       | 73.1 s           | 4.1 s         | 74.5 s          | 1.84 GB  |
-| fp32  | 8.1 s       | 100.2 s          | 9.6 s         | 116.2 s         | 2.37 GB  |
-
-Run-to-run variation on this laptop is large: earlier runs, with other work on the machine, took 117–125 s (int8) and 114–120 s (fp32) to embed the same 100 chunks.
-
-**Decision: transformers.js in Node, no Python sidecar.**
-
-- Both models load and run in TypeScript. A sidecar would run the same models on the same four cores, so it could not remove the cost their size sets (below); it would only add a second runtime.
-- The time is set by the models' size: each has about 568M parameters, so a chunk of a few hundred tokens takes 0.7–1.2 s on this CPU. int8 is up to about a quarter faster than fp32 here and a quarter of the download, and is the default; E8-5 decides between them on recall.
-- Embedding all ~2,100 chunks once (E8-4) takes roughly 25–45 minutes; reranking 30 candidates takes roughly 20–40 seconds per query.
-- Peak memory stays under 2.4 GB with both models loaded, even in fp32, which leaves room on the 8 GB machine.
-- transformers.js **3.x**, not 4.x: 4.x requires onnxruntime-node 1.30, which ships no Intel macOS binary; 3.x uses 1.21, which does.
-- `npm audit` reports 6 advisories through transformers.js 3.x (2 high in `sharp`, its image library; 4 moderate in `global-agent`/`sprintf-js`, used only by onnxruntime-node's install script, which npm does not run here). The project processes no images and never runs that script, so none of the vulnerable code is reached. The only fix is transformers.js 4.x; move to it when the demo machine is Apple Silicon or ONNX Runtime ships an Intel macOS binary again.
-
-**Sparse output is not available.** The ONNX export gives bge-m3's dense vectors only; its sparse (lexical) weights come from a separate `sparse_linear.pt` head that is not part of any ONNX repackaging. E8-4 therefore uses SQLite FTS5 BM25 as the lexical half of hybrid search.
-
-**Law abbreviations.** bge-m3 does not know Swedish law abbreviations: "7 § LAS" came out nearer Dataskyddslagen 1 kap. 7 § (cosine 0.485) than LAS 7 § (0.478), in int8 and fp32 alike. The embedder therefore spells out known abbreviations in queries (E6-3's table: "7 § LAS" → "7 § LAS (Lag (1982:80) om anställningsskydd)"), after which LAS 7 § wins clearly (0.578 against 0.474).
-
-### Rerank latency (E8-3)
-
-`npm run bench:rerank -- --reranker bge --dtype int8|fp32` reranks 30 and 50 real chunks (spread over the corpus, 1,033 characters on average) against a Swedish instruction on the demo machine, 5 runs each, in batches of 8 pairs of similar length:
-
-| dtype | 30 chunks (median of 5) | 50 chunks (median of 5) | model load |
-| ----- | ----------------------- | ----------------------- | ---------- |
-| int8  | 29.2 s                  | 54.6 s                  | 4.2 s      |
-| fp32  | 41.7 s                  | 79.2 s                  | 9.7 s      |
-
-Measured with a 1-minute load average of 3.9 at the start (iCloud Drive was still syncing); the model load includes scoring one pair. Batching pairs of similar length made this about 15–20 % faster than batching in candidate order (35.9 s and 64.6 s in int8). int8 is about 30 % faster than fp32 here. At about 1 s per chunk, reranking 30 candidates takes about half a minute per query on this laptop.
-
-### Small reranker (E7-5)
-
-`npm run bench:rerank -- --reranker minilm|bge --dtype int8|fp32` (without `--reranker`, minilm) on the demo machine on 2026-10-13, under the same conditions for both models (30 and 50 real chunks of 1,006 characters on average, 5 runs each, batches of 8 pairs of similar length):
-
-| reranker | dtype | 30 chunks (median of 5) | 50 chunks (median of 5) | per chunk | model load |
-| -------- | ----- | ----------------------- | ----------------------- | --------- | ---------- |
-| minilm   | int8  | 2.69 s                  | 4.39 s                  | 0.09 s    | 1.57 s     |
-| minilm   | fp32  | 3.08 s                  | 4.94 s                  | 0.10 s    | 2.64 s     |
-| bge      | int8  | 22.89 s                 | 37.68 s                 | 0.75 s    | 3.06 s     |
-| bge      | fp32  | 39.13 s                 | 55.25 s                 | 1.11 s    | 8.60 s     |
-
-mMiniLM is about 8–9 times faster than BGE in int8. Its position limit is 512 tokens, so the longest chunks are cut at the end (with a warning); BGE takes 1,024.
-
-The default rule (spec E7-5): `minilm` becomes the default when its recall@8 after rerank is at most 0.03 below BGE's with both `tags` and `both`, and its median rerank time at most a third of BGE's. On the evaluation set (`eval/report-2026-10-13.md`): with `tags`, recall@8 is 0.234 against 0.256 (−0.022) at 3.0 s against 27.7 s; with `both`, 0.211 against 0.230 (−0.019) at 4.5 s against 36.6 s. Both conditions hold, so `RERANKER` defaulted to `minilm` until E7-7 (below); `RERANKER=bge` brings the larger model back.
-
-E7-7 then made the LLM judge the default again: minilm only ranks (threshold 0), so with it the main flow had no relevance judgement. minilm stays the fastest option in `.env`.
-
-`gte-multilingual-reranker-base`, the other candidate, does not run: transformers.js (3.8.1, and the newest 4.3.1) does not support its model type (`new`).
+## Judge measurements
 
 ### The judge step (E7-7)
 
 The requirements' query flow has a judge that says yes or no per candidate, so `RERANKER=llm` is the default, with Haiku as the judge (`LLM_JUDGE_MODEL`). The LLM judge's default `JUDGE_THRESHOLD` is 0.8, the highest F1 on the central chunks in a sweep with that judge (`eval/report-2026-10-13.md`, "Judge threshold"). `eval:run` now sweeps the threshold against the central chunks and against all graded ones, keeps at most `RERANK_TOP_K` per query as the query flow does, and recommends by the central F1. A blank `LLM_JUDGE_MODEL` means Haiku, not `LLM_MODEL`.
 
-Measured without drafts (`bench:compare -- --runs 1 --no-draft`, judge cache off), the main flow has its sources in 35 s with the judge (27 s of it judging, through the Claude Code CLI) and 11 s with minilm; the reference RAG in 50 ms. The judge gives the most relevant sources (precision 0.44 against 0.35 and 0.29) and can return none, in which case no draft is written. SubQ (E9-1) is the faster judge being measured; JEV (#79) is paused.
+Measured without drafts (`bench:compare -- --runs 1 --no-draft`, judge cache off), the main flow has its sources in 35 s with the judge (27 s of it judging, through the Claude Code CLI) and 11 s with a local ranker since removed (E10-1); the reference RAG in 50 ms. The judge gives the most relevant sources (precision 0.44 against 0.35 and 0.29) and can return none, in which case no draft is written. SubQ (E9-1) is the faster judge being measured; JEV (#79) is paused.
 
 ### SubQ as the judge (E9-1)
 
@@ -342,22 +261,12 @@ SubQ Snap was measured against the LLM judge on the evaluation set (`eval/report
 - **Default rules.** The rule fixed before the run needs SubQ's F1 to be at least the LLM's, so `RERANKER` stays `llm`. As the query translator SubQ is 7 times faster, but its tags find fewer relevant chunks (central R@cand 0.332 against 0.399), so `QUERY_TRANSLATOR_IMPL` stays `llm` too.
 - **Cost.** All of E9-1's SubQ runs cost 0.047 USD.
 
-### Licences
-
-Checked on the Hugging Face model cards on 2026-10-11:
-
-| Model                | Repository used                                                                                                                                                                                    | Licence                                                                                                                                 |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| bge-m3               | [`Xenova/bge-m3`](https://huggingface.co/Xenova/bge-m3) (ONNX), from [`BAAI/bge-m3`](https://huggingface.co/BAAI/bge-m3)                                                                           | MIT (both)                                                                                                                              |
-| bge-reranker-v2-m3   | [`onnx-community/bge-reranker-v2-m3-ONNX`](https://huggingface.co/onnx-community/bge-reranker-v2-m3-ONNX) (ONNX), from [`BAAI/bge-reranker-v2-m3`](https://huggingface.co/BAAI/bge-reranker-v2-m3) | Apache-2.0 (BAAI); the ONNX repackaging states no licence of its own and inherits the base model's                                      |
-| mMiniLM-L12 reranker | [`cross-encoder/mmarco-mMiniLMv2-L12-H384-v1`](https://huggingface.co/cross-encoder/mmarco-mMiniLMv2-L12-H384-v1), its own ONNX files (`onnx/model.onnx`, `onnx/model_quint8_avx2.onnx`)           | Apache-2.0 (checked 2026-10-13); its base model, `nreimers/mMiniLMv2-L12-H384-distilled-from-XLMR-Large`, states no licence on its card |
-
 ## Evaluation
 
-`eval/queries.yaml` holds 20 lawyer instructions (10 employment agreements, 10 NDAs, 6 with a template). Each lists the chunks relevant to it, by document identifier and stored source reference. Claude drafted the queries and marked the chunks from the candidates `eval:label` lists, and the owner reviews the file. Since E7-10 `eval:label` also lists the reference RAG's dense candidates (the `MAX_CANDIDATES` chunks nearest the instruction, which needs `npm run index:embed`), and marks each candidate with every search that found it (`tags`, `fts`, `dense`), so a chunk only vector search finds gets labelled too.
+`eval/queries.yaml` holds 20 lawyer instructions (10 employment agreements, 10 NDAs, 6 with a template). Each lists the chunks relevant to it, by document identifier and stored source reference. Claude drafted the queries and marked the chunks from the candidates `eval:label` lists, and the owner reviews the file. Since E7-10 `eval:label` also lists the reference RAG's candidates (the `MAX_CANDIDATES` chunks BM25 ranks best for the instruction since E10-1; vector search before it), and marks each candidate with every search that found it (`tags`, `fts`, `reference`), so a chunk only the reference RAG finds gets labelled too.
 
 ```bash
-npm run eval:label -- anst-01 [--chars 300]   # candidates for one query: tag search, full text, then vectors
+npm run eval:label -- anst-01 [--chars 300]   # candidates for one query: tag search, full text, then the reference RAG's BM25
 npm run eval:run                              # precision, recall and the threshold sweep
 ```
 
@@ -382,23 +291,22 @@ LLM_PROVIDER=claude-code LLM_MODEL=claude-haiku-5-5 LLM_TIMEOUT_MS=120000 \
 
 The first run's report is kept in `eval/report-2026-10-11.md`. A query that fails, e.g. because the CLI keeps failing, is listed in the report and left out of the averages, and the command exits non-zero.
 
-### Comparing retrievers and rerankers
+### Comparing rerankers
 
 ```bash
-npm run eval:run -- --reranker bge,llm [--retriever tags,bge,both]
+npm run eval:run -- --reranker subq,llm
 ```
 
-With `--reranker`, `eval:run` compares rerankers instead (E8-5). Every query goes through each retriever (`--retriever`, default the configured `RETRIEVER`; `fts` is always added as a baseline), and each candidate list through each reranker, which keeps every relevant candidate. One row per retriever and reranker gives recall@5/@8/@10 and recall over all candidates, before rerank (the retriever's own order, reranker `none`) and after it, precision@5/@10 after rerank, and the median and p90 latency per query of the rerank and of retrieval. A retriever that uses tags also names the query translator and the translation's latency per query (E9-1), so two runs with `QUERY_TRANSLATOR_IMPL=llm` and `subq` compare the translators. The table is printed and appended to the table in that day's `eval/report-<date>.md`; every report has the same columns, so rows from different days can be put side by side. The command exits non-zero when queries failed.
+With `--reranker`, `eval:run` compares rerankers instead (E8-5). Every query goes through tag search and, as a baseline, full-text search (`fts`), and each candidate list through each reranker, which keeps every relevant candidate. One row per retriever and reranker gives recall@5/@8/@10 and recall over all candidates, before rerank (the retriever's own order, reranker `none`) and after it, precision@5/@10 after rerank, and the median and p90 latency per query of the rerank and of retrieval. The tag search row also names the query translator and the translation's latency per query (E9-1), so two runs with `QUERY_TRANSLATOR_IMPL=llm` and `subq` compare the translators. The table is printed and appended to the table in that day's `eval/report-<date>.md`; every report has the same columns, so rows from different days can be put side by side (E10-1 dropped the `dtype` column). The command exits non-zero when queries failed.
 
-- `tags` here is E5-3's tag search without the full-text fallback; `bge` and `both` need `npm run index:embed`.
-- A reranker that cannot run is a skipped row with the reason, e.g. `subq` without `SUBQ_API_KEY` or `qwen3` (not implemented); the others still run.
-- The local models are loaded before anything is timed. A reranker whose scores came from the judge cache takes its latency from the queries without cache hits, or, with fewer than 5 of those, from a cache-off pass over the first 5 queries; its row says which.
-- BGE in int8 and fp32 are two runs: `RERANKER_DTYPE=int8` and `RERANKER_DTYPE=fp32`.
+- `tags` here is E5-3's tag search without the full-text fallback.
+- A reranker that cannot run is a skipped row with the reason, e.g. `subq` without `SUBQ_API_KEY`; the others still run.
+- A reranker whose scores came from the judge cache takes its latency from the queries without cache hits, or, with fewer than 5 of those, from a cache-off pass over the first 5 queries; its row says which.
 
 ### Switch reranker in three steps
 
-1. Set `RERANKER=` in `.env`: `llm` (default), `subq`, `jev` (paused), `minilm` (local, fast), `bge` (local, larger) or `qwen3` (not implemented yet).
-2. Fill in what it needs: `SUBQ_API_KEY` for `subq`, `JEV_API_KEY` for `jev`; the judge's LLM settings for `llm`; nothing for `minilm` or `bge`, whose models download into `MODEL_CACHE_DIR` on first use (`RERANKER_DTYPE` picks int8 or fp32).
+1. Set `RERANKER=` in `.env`: `llm` (default), `subq` or `jev` (paused).
+2. Fill in what it needs: `SUBQ_API_KEY` for `subq`, `JEV_API_KEY` for `jev`; the judge's LLM settings for `llm`.
 3. Verify with `npm run retrieve -- "<question>"` (one question, the reranked chunks and their scores) or `npm run eval:run -- --reranker <name>` (the evaluation set).
 
 Nothing else changes: the query flow and `eval:run` only know the `Reranker` interface.
@@ -416,13 +324,12 @@ Claude graded the 266 labels (131 central); the owner's review of them, and the 
 npm run eval:run -- --sweep
 ```
 
-`--sweep` tries 10, 20, 30, 40 and 50 candidates with top 5, 8, 10 and 12, for the retrievers `tags` and `both` and the reranker `RERANKER` names (minilm when it is not set, since the default LLM judge would make thousands of uncached calls). For each count, the retriever gives the list it gives with that setting: `tags` with `MAX_CANDIDATES` = N, `both` with `RETRIEVE_CANDIDATES` = N over the configured tag search (a fused list of 10 is not the first 10 of one of 50). Each query's lists are reranked once together, without the cache, and each list keeps its chunks in that score order; since each chunk is scored on its own, that is what reranking the list alone gives. The rerank times are estimates from that one rerank. The table goes into that day's report, with the setting a rule picks per retriever: the highest central F1 among the settings whose central recall is at most 0.03 below the old defaults', and on a tie within 0.01 the fewest candidates, and of those the highest central F1.
+`--sweep` tries 10, 20, 30, 40 and 50 candidates with top 5, 8, 10 and 12, for tag search (`MAX_CANDIDATES` = N) and the reranker `RERANKER` names (the LLM judge by default; uncached, it makes many calls, so run it on the subscription). Until E10-1 it also swept a hybrid retriever and defaulted to a local ranker. Each query's lists are reranked once together, without the cache, and each list keeps its chunks in that score order; since each chunk is scored on its own, that is what reranking the list alone gives. The rerank times are estimates from that one rerank. The table goes into that day's report, with the setting a rule picks per retriever: the highest central F1 among the settings whose central recall is at most 0.03 below the old default's, and on a tie within 0.01 the fewest candidates, and of those the highest central F1.
 
-The first sweep (2026-10-13, `minilm`) set the defaults:
+The first sweep (2026-10-13, with a local ranker since removed; in `eval/report-2026-10-13.md`) set the defaults:
 
 - `MAX_CANDIDATES` stays 30: with top 8 it has the best central F1 with `tags` (0.221), and fewer candidates lose central recall.
-- `RETRIEVE_CANDIDATES` 40 → 20: with top 12, central F1 0.194 against 0.123 with `both`, at an estimated 1.8 s instead of 3.5 s.
-- `RERANK_TOP_K` stays 8: it is shared, so it follows the default retriever `tags`. With `RETRIEVER=both`, set `RERANK_TOP_K=12`.
+- `RERANK_TOP_K` stays 8.
 
 ### Main flow vs reference RAG
 
@@ -430,26 +337,26 @@ The first sweep (2026-10-13, `minilm`) set the defaults:
 npm run bench:compare [-- --runs 5] [--limit <n>] [--no-draft] [--yes]
 ```
 
-`bench:compare` (E5-4) runs every evaluation query through the main flow (as `.env` configures it) and the [reference RAG](#reference-rag), `--runs` times each (default 5). Within a run the two flows take turns going first, the embedder and a local reranker are loaded before anything is timed, and the judge cache is off, so an `llm`, `subq` or `jev` reranker is measured on every run. With `RERANKER=subq` or `QUERY_TRANSLATOR_IMPL=subq` it asks first (see [Paid SubQ runs](#paid-subq-runs)). One row per flow gives the median and p90 over every run of:
+`bench:compare` (E5-4) runs every evaluation query through the main flow (as `.env` configures it) and the [reference RAG](#reference-rag), `--runs` times each (default 5). Within a run the two flows take turns going first, and the judge cache is off, so an `llm`, `subq` or `jev` reranker is measured on every run. With `RERANKER=subq` or `QUERY_TRANSLATOR_IMPL=subq` it asks first (see [Paid SubQ runs](#paid-subq-runs)). One row per flow gives the median and p90 over every run of:
 
 - total time;
 - query translation (main flow only), and time to sources (E7-8): search plus rerank, without the translation; this is the measure the comparison is about, since the drafts' length weighs on the total;
-- search time: retrieval and loading the chunks, embedding the instruction included, and the embedding time on its own (`–` for tag search, which embeds nothing);
+- search time: retrieval and loading the chunks;
 - rerank time, with the median number of candidates the rerank judged (`judged`) and the candidates it could not score over every run (`unknown`, a failed or timed-out call);
 - generation time, also per output token (`ms/token`, one decimal) with the drafts' output tokens, so a longer draft does not read as a slower flow;
-- LLM time: query translation, generation and, for `llm`, `subq` or `jev`, the rerank (a local reranker such as `bge` is not LLM time);
+- LLM time: query translation, generation and the rerank;
 - precision and recall of the chunks sent to the generator (each flow's approved chunks, those that fit the context limits when a draft is written), macro averages over the queries, averaged over the runs;
 - source accuracy: valid references / all references (E6-3).
 
 A judge can approve nothing, and then no draft is written, so the flows can write drafts for different queries. Generation, ms/token, output tokens and source accuracy are therefore computed only over the query and run pairs where both flows wrote a draft, and `without draft` counts each flow's pairs with none.
 
-The table is printed and appended to the "Main flow vs reference RAG: the same judge" table (E7-9; before it, "Main flow vs reference RAG: time to sources", and before E7-8, "Main flow vs reference RAG") in that day's `eval/report-<date>.md`. `--limit <n>` runs only the first n queries and `--no-draft` measures retrieval and rerank without generation. A query that fails in a run is listed, and that query and run is left out of both flows, so the rows are compared on the same samples (the `samples` column counts them); a flow with no measured sample shows `–`. The command then exits non-zero.
+The table is printed and appended to the "Main flow vs BM25 reference RAG: the same judge" table (E10-1, without the embedding column; before it, "Main flow vs reference RAG: the same judge" from E7-9, "Main flow vs reference RAG: time to sources", and before E7-8, "Main flow vs reference RAG") in that day's `eval/report-<date>.md`. `--limit <n>` runs only the first n queries and `--no-draft` measures retrieval and rerank without generation. A query that fails in a run is listed, and that query and run is left out of both flows, so the rows are compared on the same samples (the `samples` column counts them); a flow with no measured sample shows `–`. The command then exits non-zero.
 
 Every flow run is also written to the [run log](#run-log) with `source: "bench"` and the evaluation query and run, so the runs show under _Tidigare körningar_ in the UI (E7-12). The two flows of one query and run share a `runId`. A failed run is logged with its error.
 
-The first full run (2026-10-12, in `eval/report-2026-10-12.md`, 84 of 100 query and run pairs after the subscription's session limit stopped some calls): the reference RAG took a median 29.5 s against the main flow's 71.8 s with `RERANKER=bge`, almost all of the difference being the BGE rerank (37.0 s); the main flow sent better chunks (precision 0.398 against 0.302, recall 0.254 against 0.208); source accuracy was about equal (0.917 and 0.914).
+The first full run (2026-10-12, in `eval/report-2026-10-12.md`, 84 of 100 query and run pairs after the subscription's session limit stopped some calls): the reference RAG, then with vector search, took a median 29.5 s against the main flow's 71.8 s with a local reranker since removed, almost all of the difference being that rerank (37.0 s); the main flow sent better chunks (precision 0.398 against 0.302, recall 0.254 against 0.208); source accuracy was about equal (0.917 and 0.914).
 
-With the same LLM judge in both flows (E7-9, 2026-10-13, one run with drafts on Haiku, in `eval/report-2026-10-13.md`), both have their sources in about 26.5 s. The judge takes that long in both, and tag search beats vector search by only 53 ms (2 ms against 55 ms). Counting the 7.4 s translation into tags, the main flow has its sources 7.2 s later. It sends better chunks (precision 0.516 against 0.419, recall 0.279 against 0.204), with about the same source accuracy (0.973 and 0.954). The labels were made from tag and full-text candidates, which favours the main flow; #95 labels the chunks only vector search finds.
+With the same LLM judge in both flows (E7-9, 2026-10-13, one run with drafts on Haiku, in `eval/report-2026-10-13.md`), both have their sources in about 26.5 s. The judge takes that long in both, and tag search beats the reference RAG's vector search (before E10-1) by only 53 ms (2 ms against 55 ms). Counting the 7.4 s translation into tags, the main flow has its sources 7.2 s later. It sends better chunks (precision 0.516 against 0.419, recall 0.279 against 0.204), with about the same source accuracy (0.973 and 0.954). The labels were made from tag and full-text candidates, which favours the main flow; #95 labels the chunks only vector search finds.
 
 The full run (20 queries × 5 runs × 2 flows, each with a draft) takes about three hours, and a long run can reach the subscription's session limit: those calls fail and their query and run pairs are left out of both rows. To run it on the Claude Code subscription instead of the paid API:
 
@@ -464,7 +371,7 @@ The generator drafts contracts from the Swedish prompt templates in [`prompts/`]
 
 ## Query and draft
 
-`npm run query` runs the whole query flow in the terminal: query translation (skipped for `RETRIEVER=bge`), retrieval with the configured `RETRIEVER` (`tags` is tag search with the full-text fallback), reranking and the draft.
+`npm run query` runs the whole query flow in the terminal: query translation, retrieval with the configured `RETRIEVER` (`tags`, tag search with the full-text fallback), reranking and the draft.
 
 ```bash
 npm run query -- "Anställningsavtal för en säljare med sex månaders provanställning" --template employment
@@ -494,13 +401,13 @@ The token line shows the normally billed input plus cache writes and reads (e.g.
 
 ## Reference RAG
 
-The "100 % LLM" counterpart of the main flow, to measure it against (E5-4, E7-9): it does the same steps, but finds its candidates with vector search instead of tags. It embeds the instruction with the configured `EMBEDDER` and takes the `MAX_CANDIDATES` (default 30) chunks most similar to it by cosine similarity over the `index:embed` vectors. The LLM judge then scores them as in the main flow, at `JUDGE_THRESHOLD`, keeping at most `RERANK_TOP_K`, and the same generator, template, context limits and post-check write and check the draft. The reference always judges with the LLM, whatever `RERANKER` the main flow uses; with `RERANKER=llm` both flows share one judge. When the judge approves nothing, no draft is written. There is no query translation or lexical search. It needs `npm run index:embed`.
+The "100 % LLM" counterpart of the main flow, to measure it against (E5-4, E7-9): it does the same steps, but finds its candidates without tags. Since E10-1 it takes the `MAX_CANDIDATES` (default 30) chunks SQLite FTS5 ranks best by BM25 for the instruction's words and numbers, with law abbreviations replaced by their SFS number so `7 § LAS` matches `SFS 1982:80 7 §` (until E10-1 it searched with local vectors). The LLM judge then scores them as in the main flow, at `JUDGE_THRESHOLD`, keeping at most `RERANK_TOP_K`, and the same generator, template, context limits and post-check write and check the draft. The reference always judges with the LLM, whatever `RERANKER` the main flow uses; with `RERANKER=llm` both flows share one judge. When the judge approves nothing, no draft is written. There is no query translation.
 
 ```bash
 npm run query -- "Anställningsavtal för en säljare med sex månaders provanställning" --template employment --reference
 ```
 
-The output has the main flow's format, without tags, and the time for embedding the instruction, search (embedding included), judging, generation and in total. `npm run bench:compare` compares the two flows on the evaluation queries (see [Main flow vs reference RAG](#main-flow-vs-reference-rag)).
+The output has the main flow's format, without tags, and the time for search, judging, generation and in total. `npm run bench:compare` compares the two flows on the evaluation queries (see [Main flow vs reference RAG](#main-flow-vs-reference-rag)).
 
 ## Web UI
 
@@ -514,18 +421,18 @@ As each step finishes, the UI shows the tags (marked _mall_ for a preset, _över
 When a flow is done, the result view (E7-2) shows its draft and sources:
 
 - **Draft.** The draft is rendered as Markdown (with `react-markdown`, raw HTML off), below a reminder that it is source material, not legal advice. Every `[K:<id>]` citation (each id of a group such as `[K:12, K:40]`) and every free-text reference the post-check matched to a sent chunk, such as "7 § LAS", is a link. Clicking it opens that chunk's text in the source list, scrolls to it and highlights it. A reference the post-check flagged is red with the reason as a tooltip. The source accuracy and the number of flags are shown above the draft, and "Kopiera utkastet" copies the Markdown as written.
-- **Sources.** The sources come in three groups: the sources the draft cites, those sent but not cited, and a collapsed list of the candidates that were not sent, i.e. turned down by the reranker or left out by the context limits. Each source shows its `source_ref`, the document's title, the reranker's score and name, where the candidate came from (_tagg_, _fritext_, _vektor_, _BM25_, _namngiven paragraf_), its text when opened, and a link to the original source when the document has a `source_url`.
+- **Sources.** The sources come in three groups: the sources the draft cites, those sent but not cited, and a collapsed list of the candidates that were not sent, i.e. turned down by the reranker or left out by the context limits. Each source shows its `source_ref`, the document's title, the reranker's score and name, where the candidate came from (_tagg_, _fritext_, or _BM25_ for the reference RAG), its text when opened, and a link to the original source when the document has a `source_url`.
 
 The result carries what this needs: `sources` lists every candidate with its document, origin, score and what became of it (`status`: `cited`, `sent`, `left-out` or `turned-down`), and the post-check returns its `matches` next to its `flags`.
 
-Above the results, the timing panel (E7-3) shows each step's time and the total for both flows, side by side, with a bar per flow on one shared scale. The steps are query translation, search (with the time spent embedding the instruction), rerank (with the average per candidate the reranker scored, and the judge cache hits), time to sources (E7-8: search plus rerank, without the translation), generation (with the draft's output tokens and ms per token) and the total. A step appears as soon as it finishes, a step still running shows `…`, and a step the flow does not run shows `–`. The UI keeps the judge cache on, and the reference runs after the main flow on the same question, so a chunk both flows found is a cache hit for the reference: its judge time and time to sources can come out lower than a fresh run's. The panel's comparison is therefore a demo; `bench:compare`, which runs with the cache off, is the measured result. When both flows are done, the panel says how much sooner or later the main flow had its sources, once without and once with the query translation (whose time it names), and then how much faster or slower it was in total. A line per flow names its configuration: retriever, tag index, query translator, reranker with model and precision, `RERANK_TOP_K` and generator. The reference RAG option is on by default. Without it, the panel says the reference was not run.
+Above the results, the timing panel (E7-3) shows each step's time and the total for both flows, side by side, with a bar per flow on one shared scale. The steps are query translation, search, rerank (with the average per candidate the reranker scored, and the judge cache hits), time to sources (E7-8: search plus rerank, without the translation), generation (with the draft's output tokens and ms per token) and the total. A step appears as soon as it finishes, a step still running shows `…`, and a step the flow does not run shows `–`. The UI keeps the judge cache on, and the reference runs after the main flow on the same question, so a chunk both flows found is a cache hit for the reference: its judge time and time to sources can come out lower than a fresh run's. The panel's comparison is therefore a demo; `bench:compare`, which runs with the cache off, is the measured result. When both flows are done, the panel says how much sooner or later the main flow had its sources, once without and once with the query translation (whose time it names), and then how much faster or slower it was in total. A line per flow names its configuration: retriever, tag index, query translator, reranker with model, `RERANK_TOP_K` and generator. The reference RAG option is on by default. Without it, the panel says the reference was not run.
 
 ### Info texts and earlier runs
 
 The UI explains its numbers in plain Swedish, written for a lawyer (E7-11). There are three kinds of text:
 
 - An introduction above the form says what the comparison is about, as `.env` configures it (E7-14):
-  - With `RERANKER=llm`, both flows use the same LLM judge and generator, so the comparison is tags against vectors.
+  - With `RERANKER=llm`, both flows use the same LLM judge and generator, so the comparison is tags against BM25.
   - With another `RERANKER` (e.g. `subq`), it is the POC's goal: tag search plus a small judge against a regular RAG with the LLM judge. The introduction names both judges ("en liten domarmodell (SubQ)", "AI-domaren (LLM)") and says the difference is both how the sources are found and how they are judged.
   - Before the configuration has loaded, or without a backend, it makes no claim about the judges.
 - Each section has one always-visible sentence: the timing panel, the draft's post-check and the source list.
@@ -571,7 +478,7 @@ Every run of a flow, from the UI, `npm run query` or `bench:compare`, is appende
     "retriever": "tags",
     "tagIndex": "roaring",
     "translator": "…",
-    "reranker": "minilm … int8",
+    "reranker": "llm claude-haiku-5-5",
     "generator": "…",
     "topK": 8
   },
@@ -603,14 +510,14 @@ The fields:
 
 The body is `{ "template": "employment" | "nda", "instruction"?: string, "reference"?: boolean }`. An invalid body answers 400 with `{ "error": "…" }`. A query sent while another is running answers 409, because the flow uses every CPU core. Otherwise the answer is `application/x-ndjson`, one JSON event per line:
 
-- `{ "type": "start", "flow": "main" | "reference", "steps": [...], "configuration": {...} }` when a flow begins, with its configuration and the steps it will run in order, e.g. `["search", "rerank", "generation"]` with `RETRIEVER=bge`. The UI shows the next of these as running.
-- `{ "type": "step", "flow", "step": "translation" | "search" | "rerank" | "generation", "timings", … }` when a step finishes: the translation's `tags`, the search's `candidates` and `fallback`, the rerank's `approved` and `relevant`, and each step's part of the result's `timings` (`translationMs`, `searchMs` and `embeddingMs`, `judgingMs`, `generationMs`). A flow without a step, e.g. the reference RAG without translation, sends no event for it.
+- `{ "type": "start", "flow": "main" | "reference", "steps": [...], "configuration": {...} }` when a flow begins, with its configuration and the steps it will run in order, e.g. `["search", "rerank", "generation"]` for the reference RAG. The UI shows the next of these as running.
+- `{ "type": "step", "flow", "step": "translation" | "search" | "rerank" | "generation", "timings", … }` when a step finishes: the translation's `tags`, the search's `candidates` and `fallback`, the rerank's `approved` and `relevant`, and each step's part of the result's `timings` (`translationMs`, `searchMs`, `judgingMs`, `generationMs`). A flow without a step, e.g. the reference RAG without translation, sends no event for it.
 - `{ "type": "result", "flow", "result" }` with the flow's whole result: tags, counts, approved chunks, draft with post-check, timings and tokens.
-- `{ "type": "skipped", "flow", "reason" }` for a flow that cannot be built, e.g. the reference RAG before `npm run index:embed`. The stream goes on, and the panel says why the flow was not run.
+- `{ "type": "skipped", "flow", "reason" }` for a flow that cannot be built. The stream goes on, and the panel says why the flow was not run.
 - `{ "type": "error", "flow", "message" }` when a flow fails while running, which ends the stream.
 - `{ "type": "done" }` after the last flow.
 
-The server builds the main flow at startup on the existing database, sharing the server's tag index, and loads the local models (the reranker, and the embedder when there are embeddings) before it listens, so the first query's timings do not include a model load. It builds the reference RAG the first time a query asks for it, and the two flows share one load of the embedder and vectors. Without a database, or with migrations pending, the server still starts, without this route, and logs a warning naming the command to run; it never creates or migrates the database. If the main flow cannot be built, e.g. with `RETRIEVER=bge` before `npm run index:embed`, the server exits with the reason. If the client goes away, e.g. a closed tab, the query stops before its next step, and the server takes new queries once the current step is done.
+The server builds both flows at startup on the existing database, sharing the server's tag index, before it listens. Without a database, or with migrations pending, the server still starts, without this route, and logs a warning naming the command to run; it never creates or migrates the database. If a flow cannot be built, the server exits with the reason; a removed setting stops it at startup, naming the setting (see [Retrieval](#retrieval)). If the client goes away, e.g. a closed tab, the query stops before its next step, and the server takes new queries once the current step is done.
 
 ## LLM configuration
 

@@ -7,17 +7,17 @@ import { parseArgs } from 'node:util';
 import { withDatabase } from '../db/with-database.js';
 import { parsePositiveInteger } from '../env.js';
 import { describeError } from '../errors.js';
+import { rejectRemovedSettings } from '../removed-settings.js';
 import { createConsoleLogger } from '../llm/console-logger.js';
 import { localDate, writeMarkdownReport } from '../reports.js';
 import { REPO_ROOT } from '../repo-root.js';
 import { REPORTS_DIR, VOCABULARY_PATH } from '../tagging/paths.js';
-import { createLabelDenseSearch, formatCandidates, labelCandidates } from './label.js';
+import { createLabelReferenceSearch, formatCandidates, labelCandidates } from './label.js';
 import { readEvalQueries, resolveEvalQueries, type ResolvedQuery } from './queries.js';
 import { formatAsMarkdown, formatForTerminal, formatScore } from './report.js';
 import { runEvaluation, type QueryOutcome } from './run.js';
 import { createEvalSetup, createSearchSetup } from './setup.js';
 import { RERANKERS } from '../rerank/factory.js';
-import { loadRetrievalConfig } from '../retrieval/config.js';
 import { compareRerankers } from './compare.js';
 import { parseRunArgs, type RunArgs } from './compare-args.js';
 import { appendToReport, comparisonTable } from './compare-report.js';
@@ -29,7 +29,6 @@ import { createBenchSetup } from './bench-compare-setup.js';
 import { chooseSetting, sweepCandidates } from './sweep.js';
 import { appendSweepToReport, sweepTable } from './sweep-report.js';
 import { createSweepSetup, SWEEP_BASELINES } from './sweep-setup.js';
-import { formatSeconds } from '../models/bench-args.js';
 import { loadVocabulary } from '../tagging/vocabulary.js';
 import { formatUsage, meterSubqUsage } from '../systemone/paid-run.js';
 import {
@@ -45,7 +44,7 @@ import {
 const EVAL_QUERIES_PATH = join(REPO_ROOT, 'eval', 'queries.yaml');
 const DEFAULT_TEXT_CHARS = 300;
 const USAGE =
-  'Usage: eval <label <query id> [--chars <n>] | run [--reranker <names> [--retriever <names>] | ' +
+  'Usage: eval <label <query id> [--chars <n>] | run [--reranker <names> | ' +
   '--sweep] [--yes] | ' +
   'bench [--runs <n>] [--limit <n>] [--no-draft] [--yes]>';
 
@@ -55,6 +54,7 @@ const meter = meterSubqUsage(createConsoleLogger({ quiet: true }));
 const problemLogger = meter.logger;
 
 try {
+  rejectRemovedSettings(process.env);
   process.exitCode = await run(process.argv.slice(2));
 } catch (error) {
   console.error(describeError(error));
@@ -105,9 +105,9 @@ function runLabel(queryId: string, textChars: number): Promise<number> {
   if (!query) throw new Error(`No query "${queryId}" in ${EVAL_QUERIES_PATH}`);
   return withDatabase(async (db) => {
     const setup = createSearchSetup(db, process.env, problemLogger);
-    const dense = createLabelDenseSearch(db, process.env);
+    const reference = createLabelReferenceSearch(db, process.env);
     console.log(
-      formatCandidates(query, await labelCandidates(query, { ...setup, dense }, db), textChars),
+      formatCandidates(query, await labelCandidates(query, { ...setup, reference }, db), textChars),
     );
     return 0;
   });
@@ -137,20 +137,16 @@ function runEval(yes: boolean): Promise<number> {
 }
 
 /**
- * `run --reranker …`: the retrievers and rerankers compared on the evaluation set (E8-5), printed
- * and appended to `eval/report-<date>.md`.
+ * `run --reranker …`: the rerankers compared on the evaluation set (E8-5), printed and appended to
+ * `eval/report-<date>.md`.
  */
-function runComparison({ rerankers, retrievers }: RunArgs, yes: boolean): Promise<number> {
+function runComparison({ rerankers }: RunArgs, yes: boolean): Promise<number> {
   const queries = readEvalQueries(EVAL_QUERIES_PATH);
   return withDatabase(async (db) => {
     const resolved = resolveEvalQueries(queries, db);
-    const compared = retrievers ?? [loadRetrievalConfig(process.env).retriever];
-    const work = compareWork(process.env, rerankers, compared, LATENCY_QUERIES);
+    const work = compareWork(process.env, rerankers, LATENCY_QUERIES);
     if (!(await confirmSubq(db, work, resolved, yes))) return 1;
-    const setup = createCompareSetup(db, process.env, problemLogger, {
-      rerankers,
-      retrievers: compared,
-    });
+    const setup = createCompareSetup(db, process.env, problemLogger, rerankers);
     const rows = await compareRerankers(resolved, {
       ...setup,
       onQuery: (query, index, total) => console.log(`[${index + 1}/${total}] ${query.id}`),
@@ -175,15 +171,14 @@ function runBench({ runs, limit, draft }: BenchArgs, yes: boolean): Promise<numb
     const resolved = resolveEvalQueries(queries, db).slice(0, limit);
     const work = benchWork(process.env, runs);
     if (!(await confirmSubq(db, work, resolved, yes))) return 1;
-    const { flows, warmUp } = createBenchSetup(db, process.env, problemLogger);
-    await warmUp();
+    const flows = createBenchSetup(db, process.env, problemLogger);
     const summaries = await benchCompare(resolved, flows, {
       runs,
       draft,
       onResult: ({ flow, query, run, index, result }) =>
         console.log(
           `[run ${run + 1}/${runs}] [${index + 1}/${resolved.length}] ${query.id} ${flow}: ` +
-            `${formatSeconds(result.timings.totalMs, 1)}, ${result.approved.length} chunks`,
+            `${(result.timings.totalMs / 1000).toFixed(1)} s, ${result.approved.length} chunks`,
         ),
       onFailure: ({ flow, query, run, error }) =>
         console.error(`[run ${run + 1}/${runs}] ${query.id} ${flow} failed: ${error}`),
@@ -208,7 +203,6 @@ function runSweep(yes: boolean): Promise<number> {
     if (!(await confirmSubq(db, work, resolved, yes))) return 1;
     const setup = createSweepSetup(db, process.env, problemLogger);
     let failures = 0;
-    await setup.warmUp();
     const rows = await sweepCandidates(resolved, {
       ...setup,
       onQuery: (query, index, total) => console.log(`[${index + 1}/${total}] ${query.id}`),

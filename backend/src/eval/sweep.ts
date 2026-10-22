@@ -1,8 +1,7 @@
 // `eval:run -- --sweep` (E7-4): how many candidates to rerank and how many to keep. For each count
-// the retriever configured for it gives its own list (a hybrid list of 10 is not the first 10 of a
-// list of 50: fusion and named provisions depend on the count). Every query's lists, over all
-// counts and retrievers, are reranked once together; a cross-encoder (or a judge) scores each chunk
-// on its own, so each list then keeps its chunks in that score order. Precision, recall and F1 of
+// the retriever configured for it gives its own list. Every query's lists, over all counts and
+// retrievers, are reranked once together; the judge scores each chunk on its own, so each list then
+// keeps its chunks in that score order. Precision, recall and F1 of
 // the kept chunks are measured against the central chunks and against every graded chunk.
 
 import { describeError } from '../errors.js';

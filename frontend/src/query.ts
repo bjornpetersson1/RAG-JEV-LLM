@@ -37,7 +37,7 @@ export interface Chunk {
 }
 
 /** Where a candidate came from. */
-export type Origin = 'tag' | 'fts' | 'dense' | 'lexical' | 'named';
+export type Origin = 'tag' | 'fts' | 'lexical';
 
 /** What became of a candidate (see the backend's `SourceStatus`). */
 export type SourceStatus = 'cited' | 'sent' | 'left-out' | 'turned-down';
@@ -112,8 +112,6 @@ export type QueryStepName = QueryStep['step'];
 /** Each step's time in ms; a step that did not run is absent. */
 export interface StepTimings {
   translationMs?: number;
-  /** Part of `searchMs`. */
-  embeddingMs?: number;
   searchMs: number;
   judgingMs?: number;
   /** Time to sources: search plus rerank, without the translation (E7-8). */
@@ -154,7 +152,7 @@ export type QueryEvent =
   | ({ type: 'step'; flow: FlowName } & QueryStep)
   | { type: 'result'; flow: FlowName; result: QueryResult }
   | { type: 'error'; flow: FlowName; message: string }
-  /** A flow the backend could not build, e.g. the reference RAG before `npm run index:embed`. */
+  /** A flow the backend could not build. */
   | { type: 'skipped'; flow: FlowName; reason: string }
   | { type: 'done' };
 

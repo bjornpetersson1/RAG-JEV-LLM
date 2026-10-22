@@ -73,8 +73,6 @@ export interface FlowMeasures {
   /** Time to sources: search plus rerank, without the translation (E7-8). */
   sources: Latency;
   search: Latency;
-  /** Absent when the instruction was never embedded (tag search). */
-  embedding?: Latency;
   /** Absent for a flow without a rerank step, like the two below. */
   rerank?: Latency;
   /** The candidates given to the rerank: the median per pair. */
@@ -214,7 +212,7 @@ function measure(
   const checks = shared.flatMap(({ draft }) => (draft?.check ? [draft.check] : []));
   const latencyIfAny = (times: readonly number[]) =>
     times.length > 0 ? latencyOf(times) : undefined;
-  const optional = (step: 'translationMs' | 'embeddingMs' | 'judgingMs') =>
+  const optional = (step: 'translationMs' | 'judgingMs') =>
     latencyIfAny(results.flatMap(({ timings }) => timings[step] ?? []));
   const drafts = shared.flatMap(({ timings, usage }) =>
     timings.generationMs !== undefined && usage.generation && usage.generation.outputTokens > 0
@@ -226,7 +224,6 @@ function measure(
     translation: optional('translationMs'),
     sources: latencyOf(results.map(({ timings }) => timings.sourcesMs)),
     search: latencyOf(results.map(({ timings }) => timings.searchMs)),
-    embedding: optional('embeddingMs'),
     rerank: optional('judgingMs'),
     ...(judged.length > 0 && {
       // The rerank is given the candidates that loaded, which are the sources.

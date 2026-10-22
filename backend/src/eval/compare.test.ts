@@ -34,7 +34,7 @@ const RETRIEVED: Record<string, string[]> = {
 };
 
 const retriever: ComparedRetriever = {
-  name: 'bge',
+  name: 'fts',
   usesTags: false,
   retrieve: async (query) => ({ ids: RETRIEVED[query.instruction], elapsedMs: 10 }),
 };
@@ -44,7 +44,6 @@ function fakeReranker(cacheHits: number, elapsedMs: number): Reranker {
   return {
     name: 'fake',
     model: 'fake-model',
-    dtype: 'int8',
     rerank: vi.fn(async (_query, chunks, topK) =>
       fakeRerankResult(
         chunks,
@@ -78,7 +77,7 @@ describe('compareRerankers', () => {
 
     // q1: 1 and 2 are 7th and 8th; q2: 5 is first.
     expect(before).toMatchObject({
-      retriever: 'bge',
+      retriever: 'fts',
       reranker: 'none',
       candidates: 5,
       before: {
@@ -91,7 +90,6 @@ describe('compareRerankers', () => {
     expect(after).toMatchObject({
       reranker: 'fake',
       model: 'fake-model',
-      dtype: 'int8',
       after: {
         all: {
           '5': 1,
@@ -157,16 +155,16 @@ describe('compareRerankers', () => {
 
   it('lists a reranker that cannot be built, or fails on every query, as skipped', async () => {
     const failing: Reranker = {
-      name: 'qwen3',
-      model: 'q',
-      rerank: () => Promise.reject(new Error('RERANKER=qwen3 is not implemented yet')),
+      name: 'broken',
+      model: 'b',
+      rerank: () => Promise.reject(new Error('model unavailable')),
     };
 
     const rows = await compareRerankers(
       QUERIES,
       deps([
         { name: 'jev', skipped: 'JEV_API_KEY is required because RERANKER is jev' },
-        { name: 'qwen3', cached: failing, uncached: () => failing },
+        { name: 'broken', cached: failing, uncached: () => failing },
       ]),
     );
 
@@ -177,12 +175,12 @@ describe('compareRerankers', () => {
         queries: 0,
         notes: ['skipped: JEV_API_KEY is required because RERANKER is jev'],
       },
-      { reranker: 'qwen3', queries: 0, notes: ['skipped: RERANKER=qwen3 is not implemented yet'] },
+      { reranker: 'broken', queries: 0, notes: ['skipped: model unavailable'] },
     ]);
     expect(rows.some(({ failed }) => failed)).toBe(false);
   });
 
-  it('averages before and after over the same queries, and loads the models first', async () => {
+  it('averages before and after over the same queries', async () => {
     const order: string[] = [];
     const reranker: Reranker = {
       name: 'fake',
@@ -197,13 +195,9 @@ describe('compareRerankers', () => {
 
     const [, row] = await compareRerankers(QUERIES, {
       ...deps([{ name: 'fake', cached: reranker, uncached: () => reranker }]),
-      warmUp: async () => {
-        order.push('warm-up');
-      },
       onFailure: (step, query, error) => failures.push(`${query.id} ${step}: ${error}`),
     });
 
-    expect(order[0]).toBe('warm-up');
     expect(failures).toEqual(['q2 rerank fake: timeout']);
     // Only q1 was reranked, so "before" covers q1 alone: 1 and 2 are 7th and 8th.
     expect(row).toMatchObject({ queries: 1, before: { all: { '5': 0, '8': 1 } }, failed: true });
@@ -276,7 +270,7 @@ describe('createCompareSetup', () => {
     database = undefined;
   });
 
-  it('skips jev without a key and qwen3, and still compares llm, without crashing', async () => {
+  it('skips jev and subq without a key, and still compares llm, without crashing', async () => {
     database = createEvalDatabase();
     const env = {
       DATABASE_PATH: database.path,
@@ -302,10 +296,7 @@ describe('createCompareSetup', () => {
         centralIds: new Set(['11']),
       },
     ];
-    const setup = createCompareSetup(database.db, env, SILENT_LOGGER, {
-      retrievers: ['tags'],
-      rerankers: ['jev', 'qwen3', 'llm'],
-    });
+    const setup = createCompareSetup(database.db, env, SILENT_LOGGER, ['jev', 'subq', 'llm']);
 
     const rows = await compareRerankers(queries, setup);
 
@@ -314,7 +305,7 @@ describe('createCompareSetup', () => {
     ).toEqual([
       ['tags', 'none', ''],
       ['tags', 'jev', 'skipped: JEV_API_KEY is required because RERANKER is jev'],
-      ['tags', 'qwen3', expect.stringContaining('skipped: RERANKER=qwen3 is not implemented yet')],
+      ['tags', 'subq', 'skipped: SUBQ_API_KEY is required because RERANKER is subq'],
       ['tags', 'llm', expect.any(String)],
       ['fts', 'none', ''],
     ]);
@@ -330,14 +321,14 @@ describe('createCompareSetup', () => {
       retrievers: [tagRetriever, retriever],
     });
 
-    const [tagsBefore, tagsAfter, bgeBefore] = rows;
+    const [tagsBefore, tagsAfter, ftsBefore] = rows;
     expect(tagsBefore).toMatchObject({
       translator: 'llm-model',
       translationMs: expect.any(Object),
     });
     expect(tagsAfter.translator).toBe('llm-model');
     expect(tagsAfter.translationMs?.median).toBeGreaterThanOrEqual(0);
-    expect(bgeBefore).toMatchObject({ retriever: 'bge', translator: '–' });
-    expect(bgeBefore.translationMs).toBeUndefined();
+    expect(ftsBefore).toMatchObject({ retriever: 'fts', translator: '–' });
+    expect(ftsBefore.translationMs).toBeUndefined();
   });
 });

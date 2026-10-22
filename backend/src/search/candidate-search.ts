@@ -1,4 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
+import { preparedOnce } from '../db/database.js';
 import type { SearchConfig } from './config.js';
 import { buildFtsQuery } from './fts-query.js';
 import type { IndexLogger } from './load-index.js';
@@ -14,10 +15,9 @@ export interface Candidate {
   chunkId: number;
   /**
    * Which search found the chunk: tag search or its full-text fallback (a chunk both find counts as
-   * `tag`), or, for hybrid retrieval (E8-4), the ranking that contributed most to its fused score,
-   * or `named` for a provision the instruction names (e.g. "7 § LAS").
+   * `tag`), or the reference RAG's BM25 search (`lexical`).
    */
-  origin: 'tag' | 'fts' | 'dense' | 'lexical' | 'named';
+  origin: 'tag' | 'fts' | 'lexical';
 }
 
 export interface CandidateSearchInput {
@@ -62,10 +62,6 @@ export function createCandidateSearch({
 }: CandidateSearchDeps): CandidateSearch {
   const { minTagCandidates, maxCandidates } = config;
   const statements = {
-    // `maxCandidates` rows always fill the free places, even when every tag hit is among them.
-    ftsSearch: db.prepare(
-      'SELECT rowid AS chunkId FROM chunks_fts WHERE chunks_fts MATCH ? ORDER BY rank LIMIT ?',
-    ),
     labels: db.prepare('SELECT label FROM tags WHERE slug IN (SELECT value FROM json_each(?))'),
   };
 
@@ -86,8 +82,8 @@ export function createCandidateSearch({
       const ftsQuery = needsFullText ? ftsQueryFor(instruction, tags) : null;
       if (ftsQuery !== null) {
         const found = new Set(candidates.map((candidate) => candidate.chunkId));
-        const rows = statements.ftsSearch.all(ftsQuery, maxCandidates) as { chunkId: number }[];
-        for (const { chunkId } of rows) {
+        // `maxCandidates` rows always fill the free places, even when every tag hit is among them.
+        for (const chunkId of bm25Ranking(db, ftsQuery, maxCandidates)) {
           if (candidates.length >= maxCandidates) break;
           if (!found.has(chunkId)) candidates.push({ chunkId, origin: 'fts' });
         }
@@ -103,3 +99,18 @@ export function createCandidateSearch({
     },
   };
 }
+
+/**
+ * The `limit` chunk ids FTS5 ranks best (BM25) for `ftsQuery`, best first: the full-text fallback's
+ * ranking, and the reference RAG's (E10-1).
+ */
+export function bm25Ranking(db: DatabaseSync, ftsQuery: string, limit: number): number[] {
+  const rows = ftsRanking(db).all(ftsQuery, limit) as { chunkId: number }[];
+  return rows.map(({ chunkId }) => chunkId);
+}
+
+const ftsRanking = preparedOnce((db) =>
+  db.prepare(
+    'SELECT rowid AS chunkId FROM chunks_fts WHERE chunks_fts MATCH ? ORDER BY rank LIMIT ?',
+  ),
+);

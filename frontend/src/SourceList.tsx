@@ -6,9 +6,7 @@ import type { FlowName, Origin, QueryResult, QuerySource, SourceStatus } from '.
 const ORIGINS: Record<Origin, string> = {
   tag: 'tagg',
   fts: 'fritext',
-  dense: 'vektor',
   lexical: 'BM25',
-  named: 'namngiven paragraf',
 };
 
 const NOT_SENT: Partial<Record<SourceStatus, string>> = {
@@ -125,7 +123,7 @@ function SourceEntry({ source, domId, open, highlighted, onToggle }: SourceEntry
               · poäng {score.toFixed(2)} ({reranker})
             </span>
           )}
-          <span className="origin"> · {ORIGINS[origin]}</span>
+          <span className="origin"> · {ORIGINS[origin] ?? origin}</span>
           {NOT_SENT[status] && <span className="note"> · {NOT_SENT[status]}</span>}
         </summary>
         <p className="chunk-text">{chunk.text}</p>

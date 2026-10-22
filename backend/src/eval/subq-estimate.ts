@@ -7,8 +7,6 @@ import type { Env } from '../env.js';
 import type { Tag } from '../llm/types.js';
 import { loadQueryTranslatorConfig } from '../query/config.js';
 import { loadRerankerConfig } from '../rerank/factory.js';
-import { loadRetrievalConfig, type RetrieverName } from '../retrieval/config.js';
-import { retrieverUsesTags } from '../retrieval/retriever.js';
 import { loadSearchConfig } from '../search/config.js';
 import { hasSystemOneKey } from '../systemone/config.js';
 import { relevanceQuestion } from '../llm/judge-question.js';
@@ -25,7 +23,6 @@ import {
   type PaidCalls,
 } from '../systemone/paid-run.js';
 import { SWEEP_CANDIDATES } from './sweep.js';
-import { sweepRerankerName, SWEPT_RETRIEVERS } from './sweep-setup.js';
 
 /** A command's SubQ work, before the query texts and chunk sizes are known. */
 export interface SubqWork {
@@ -51,24 +48,26 @@ export function evalWork(env: Env): SubqWork {
   };
 }
 
+/** The comparison's candidate lists per query: tag search and the full-text baseline. */
+const COMPARED_LISTS = 2;
+
 /**
- * `eval:run -- --reranker …`: one translation per query when a retriever uses tags; with `subq`
- * among the rerankers, every retriever's candidates judged, then the first `latencyQueries` lists
- * per retriever again with the cache off.
+ * `eval:run -- --reranker …`: one translation per query; with `subq` among the rerankers, the tag
+ * and full-text lists judged (up to `MAX_CANDIDATES` each), then the first `latencyQueries` lists
+ * again with the cache off.
  */
 export function compareWork(
   env: Env,
   rerankers: readonly string[],
-  retrievers: readonly RetrieverName[],
   latencyQueries: number,
 ): SubqWork {
   // Without a key the comparison skips the subq reranker, so it calls nothing.
   const perQuery =
     rerankers.includes('subq') && hasSystemOneKey(env, 'subq')
-      ? retrievers.reduce((sum, retriever) => sum + candidatesOf(env, retriever), 0)
+      ? COMPARED_LISTS * loadSearchConfig(env).maxCandidates
       : 0;
   return {
-    translationsPerQuery: subqTranslates(env) && retrievers.some(retrieverUsesTags) ? 1 : 0,
+    translationsPerQuery: subqTranslates(env) ? 1 : 0,
     judgementsPerQuery: perQuery,
     extraJudgements: perQuery * latencyQueries,
   };
@@ -78,24 +77,20 @@ export function compareWork(
 export function sweepWork(env: Env): SubqWork {
   return {
     translationsPerQuery: subqTranslates(env) ? 1 : 0,
-    judgementsPerQuery:
-      sweepRerankerName(env) === 'subq'
-        ? SWEPT_RETRIEVERS.length * Math.max(...SWEEP_CANDIDATES)
-        : 0,
+    judgementsPerQuery: loadRerankerConfig(env).name === 'subq' ? Math.max(...SWEEP_CANDIDATES) : 0,
     extraJudgements: 0,
   };
 }
 
 /**
- * `bench:compare`: per run and query, the main flow translates (unless `RETRIEVER=bge`) and judges
- * its candidates with `RERANKER`. The reference RAG always judges with the LLM (`REFERENCE_RERANKER`).
+ * `bench:compare`: per run and query, the main flow translates and judges its candidates with
+ * `RERANKER`. The reference RAG always judges with the LLM (`REFERENCE_RERANKER`).
  */
 export function benchWork(env: Env, runs: number): SubqWork {
-  const { retriever } = loadRetrievalConfig(env);
   return {
-    translationsPerQuery: subqTranslates(env) && retrieverUsesTags(retriever) ? runs : 0,
+    translationsPerQuery: subqTranslates(env) ? runs : 0,
     judgementsPerQuery:
-      loadRerankerConfig(env).name === 'subq' ? runs * candidatesOf(env, retriever) : 0,
+      loadRerankerConfig(env).name === 'subq' ? runs * loadSearchConfig(env).maxCandidates : 0,
     extraJudgements: 0,
   };
 }
@@ -153,13 +148,6 @@ export function maxJudgedChars(db: DatabaseSync): number {
 
 function subqTranslates(env: Env): boolean {
   return loadQueryTranslatorConfig(env).impl === 'subq';
-}
-
-/** How many candidates `retriever` passes on per query. */
-function candidatesOf(env: Env, retriever: RetrieverName): number {
-  return retriever === 'tags'
-    ? loadSearchConfig(env).maxCandidates
-    : loadRetrievalConfig(env).candidates;
 }
 
 /**

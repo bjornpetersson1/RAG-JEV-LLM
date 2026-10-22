@@ -1,8 +1,8 @@
 // What a flow runs with (E7-3), for the timing panel, the run log and the benchmark's table: each
-// step's implementation as a short label, e.g. `minilm cross-encoder/mmarco-mMiniLMv2-L12-H384-v1 int8`.
+// step's implementation as a short label, e.g. `llm claude-haiku-5-5`.
 
 export interface FlowConfiguration {
-  /** E.g. `tags`, `both`, or `dense Xenova/bge-m3 int8` for the reference RAG. */
+  /** E.g. `tags`, or `bm25` for the reference RAG. */
   retriever: string;
   /** Absent without a rerank step. */
   reranker?: string;
@@ -28,12 +28,7 @@ export function formatConfiguration(configuration: FlowConfiguration): string {
   ].join(' · ');
 }
 
-/** A reranker as `<RERANKER value> <model> <precision>`, e.g. `llm claude-haiku-5-5`. */
-export function rerankerLabel(reranker: { name: string; model: string; dtype?: string }): string {
-  return `${reranker.name} ${modelLabel(reranker)}`;
-}
-
-/** A local or remote model as `<model> <precision>`, the precision left out when there is none. */
-export function modelLabel({ model, dtype }: { model: string; dtype?: string }): string {
-  return dtype ? `${model} ${dtype}` : model;
+/** A reranker as `<RERANKER value> <model>`, e.g. `llm claude-haiku-5-5`. */
+export function rerankerLabel({ name, model }: { name: string; model: string }): string {
+  return `${name} ${model}`;
 }

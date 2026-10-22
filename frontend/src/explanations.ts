@@ -7,7 +7,6 @@ import type { AppConfig } from './config';
 export type Measure =
   | 'translation'
   | 'search'
-  | 'embedding'
   | 'rerank'
   | 'rerankDetail'
   | 'sources'
@@ -47,24 +46,17 @@ export const EXPLANATIONS: Record<Measure, Explanation> = {
     name: 'Sökning',
     text:
       'Tiden för att hitta kandidater, alltså de lagparagrafer och domskäl som kan vara relevanta, ' +
-      'och läsa in dem. Med taggar slås de upp i ett register; med vektorsökning letar flödet efter ' +
-      'texter som liknar instruktionen. Vilken sökning ett flöde använde står i dess konfiguration. ' +
+      'och läsa in dem. Med taggar slås de upp i ett register; med ordsökning (BM25) letar flödet ' +
+      'efter texter med instruktionens ord. Vilken sökning ett flöde använde står i dess ' +
+      'konfiguration. ' +
       'Sökningen är oftast en liten del av den totala tiden.',
-  },
-  embedding: {
-    name: 'inbäddning',
-    text:
-      'En del av sökningen: tiden för att räkna om instruktionen till en sifferrepresentation ' +
-      '(inbäddning) som kan jämföras med texterna. Bara ett flöde som letar efter liknande texter har ' +
-      'steget: referens-RAG:en, och huvudflödet om det är inställt på vektorsökning.',
   },
   rerank: {
     name: 'Rerank',
     text:
-      'Tiden för att bedöma vilka kandidater som är relevanta för instruktionen. Med en AI-domare ' +
-      '(standard) läses varje kandidat och får ett ja eller nej; med en lokal rankningsmodell får ' +
-      'varje kandidat en poäng och de bästa går vidare. Vad flödet använde står i konfigurationen ' +
-      '(reranker). Med en AI-domare tar steget oftast längst tid innan utkastet börjar skrivas.',
+      'Tiden för att bedöma vilka kandidater som är relevanta för instruktionen. En domare läser ' +
+      'varje kandidat och ger den ett ja eller nej. Vilken domare flödet använde står i ' +
+      'konfigurationen (reranker). Steget tar oftast längst tid innan utkastet börjar skrivas.',
   },
   rerankDetail: {
     name: 'tid per bedömd kandidat och cacheträffar',
@@ -132,16 +124,14 @@ export const EXPLANATIONS: Record<Measure, Explanation> = {
   score: {
     name: 'poäng',
     text:
-      'Domarens eller rankarens bedömning av hur relevant källan är, från 0 till 1, med modellens ' +
-      'namn inom parentes. Högre är mer relevant. En AI-domare godkänner källor över sin tröskel; ' +
-      'en rankningsmodell har ingen tröskel, utan de högst rankade går vidare.',
+      'Domarens bedömning av hur relevant källan är, från 0 till 1, med modellens namn inom ' +
+      'parentes. Högre är mer relevant. Domaren godkänner källor över sin tröskel.',
   },
   origin: {
     name: 'ursprung',
     text:
       'Vilken sökning som hittade källan: tagg (ämnestaggar), fritext (ordsökning när taggarna gav ' +
-      'för få träffar), vektor (texter som liknar instruktionen), BM25 (ordsökning som väger ' +
-      'ovanliga ord tyngre) eller namngiven paragraf (en paragraf som instruktionen nämner).',
+      'för få träffar) eller BM25 (referens-RAG:ens ordsökning, som väger ovanliga ord tyngre).',
   },
   cited: {
     name: 'Citerade källor',
@@ -192,8 +182,6 @@ const JUDGE_LABELS = new Map([
   ['llm', 'AI-domaren (LLM)'],
   ['subq', 'en liten domarmodell (SubQ)'],
   ['jev', 'en liten domarmodell (JEV)'],
-  ['minilm', 'en liten lokal modell (mMiniLM)'],
-  ['bge', 'en liten lokal modell (BGE-reranker)'],
 ]);
 
 /**
@@ -205,7 +193,7 @@ export function introduction(config?: AppConfig): string {
   return [
     'Här jämförs två sätt att hitta källor till ett avtalsutkast. Huvudflödet översätter i ' +
       'standardinställningen din instruktion till juridiska ämnestaggar och söker på dem; ' +
-      'referens-RAG:en letar i stället efter texter som liknar instruktionen.',
+      'referens-RAG:en söker i stället direkt på instruktionens ord (BM25).',
     judgesSentence(config),
     'Under tabellen står vad varje flöde körde med.',
   ].join(' ');
@@ -256,8 +244,8 @@ export const SECTION_LEADS = {
 /**
  * Why the UI's comparison is a demo, under the comparison: saved judge answers only with the judge
  * cache on, and the reference RAG reusing the main flow's judgements only when they share a judge.
- * With different judges it claims only reuse from earlier runs: a local cross-encoder saves
- * nothing, but the reference RAG's LLM judge always does.
+ * With different judges it claims only reuse from earlier runs, which the reference RAG's LLM judge
+ * always saves.
  */
 export function demoNotice(config?: AppConfig): string {
   return [

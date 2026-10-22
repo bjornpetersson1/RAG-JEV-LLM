@@ -6,10 +6,9 @@ import type { ComparisonRow } from './compare.js';
 import { appendToReport, COMPARISON_HEADING, comparisonRows } from './compare-report.js';
 
 const ROW: ComparisonRow = {
-  retriever: 'bge',
-  reranker: 'bge',
-  model: 'onnx-community/bge-reranker-v2-m3-ONNX',
-  dtype: 'int8',
+  retriever: 'tags',
+  reranker: 'llm',
+  model: 'claude-haiku-5-5',
   translator: '–',
   candidates: 40,
   before: {
@@ -44,10 +43,10 @@ const ROW: ComparisonRow = {
 describe('comparisonRows', () => {
   it('gives one table row per grade with every column, precision before and after', () => {
     expect(comparisonRows([ROW], '2026-10-12')).toEqual([
-      '| 2026-10-12 | bge | bge | onnx-community/bge-reranker-v2-m3-ONNX | int8 | – | 40.0 | central | ' +
+      '| 2026-10-12 | tags | llm | claude-haiku-5-5 | – | 40.0 | central | ' +
         '0.250 | 0.375 | 0.500 | 0.750 | 0.200 | 0.100 | 0.500 | 0.625 | 0.750 | 0.750 | 0.400 | ' +
         '0.300 | 30123 / 41000 | 3200 / 4100 | – | 20 |  |',
-      '| 2026-10-12 | bge | bge | onnx-community/bge-reranker-v2-m3-ONNX | int8 | – | 40.0 | all | ' +
+      '| 2026-10-12 | tags | llm | claude-haiku-5-5 | – | 40.0 | all | ' +
         '0.300 | 0.400 | 0.500 | 0.800 | 0.300 | 0.200 | 0.600 | 0.700 | 0.800 | 0.800 | 0.600 | ' +
         '0.500 | 30123 / 41000 | 3200 / 4100 | – | 20 |  |',
     ]);
@@ -66,7 +65,7 @@ describe('comparisonRows', () => {
       'd',
     );
 
-    expect(row).toContain('| int8 | subq subq-snap-preview | 40.0 |');
+    expect(row).toContain('| claude-haiku-5-5 | subq subq-snap-preview | 40.0 |');
     expect(row).toContain('| 3200 / 4100 | 812 / 1500 | 20 |');
   });
 
@@ -94,7 +93,7 @@ describe('appendToReport', () => {
     writeFileSync(path, '# Evaluation\n\nE5-3 results.\n');
 
     appendToReport(path, [ROW], '2026-10-12');
-    appendToReport(path, [{ ...ROW, dtype: 'fp32' }], '2026-10-13');
+    appendToReport(path, [{ ...ROW, model: 'claude-sonnet-5-5' }], '2026-10-13');
 
     const text = readFileSync(path, 'utf8');
     expect(text.startsWith('# Evaluation\n\nE5-3 results.\n')).toBe(true);
@@ -102,7 +101,7 @@ describe('appendToReport', () => {
     // One line per grade per run.
     const rows = text.split('\n').filter((line) => line.startsWith('| 2026-10-1'));
     expect(rows).toHaveLength(4);
-    expect(rows[3]).toContain('| fp32 |');
+    expect(rows[3]).toContain('| claude-sonnet-5-5 |');
     expect(text.endsWith(`${rows[3]}\n`)).toBe(true);
   });
 

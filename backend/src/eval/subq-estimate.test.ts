@@ -35,27 +35,28 @@ describe('the SubQ work per command', () => {
     expect(evalWork({ ...SUBQ, QUERY_TRANSLATOR_IMPL: 'subq' }).translationsPerQuery).toBe(1);
   });
 
-  it('the comparison judges every retriever list with subq, then a cache-off latency pass', () => {
-    expect(compareWork({ ...SUBQ }, ['subq', 'minilm'], ['tags', 'bge'], 5)).toEqual({
+  it('the comparison judges the tag and full-text lists with subq, then a cache-off latency pass', () => {
+    expect(compareWork({ ...SUBQ }, ['subq', 'llm'], 5)).toEqual({
       translationsPerQuery: 0,
-      // MAX_CANDIDATES 30 for tags, RETRIEVE_CANDIDATES 20 for bge.
-      judgementsPerQuery: 50,
-      extraJudgements: 250,
+      // MAX_CANDIDATES 30 for each of the two lists.
+      judgementsPerQuery: 60,
+      extraJudgements: 300,
     });
-    expect(
-      compareWork({ ...SUBQ, QUERY_TRANSLATOR_IMPL: 'subq' }, ['minilm'], ['bge'], 5),
-    ).toMatchObject({ translationsPerQuery: 0, judgementsPerQuery: 0 });
+    expect(compareWork({ ...SUBQ, QUERY_TRANSLATOR_IMPL: 'subq' }, ['llm'], 5)).toMatchObject({
+      translationsPerQuery: 1,
+      judgementsPerQuery: 0,
+    });
   });
 
-  it('the sweep judges both swept retrievers at 50 candidates with RERANKER=subq', () => {
-    expect(sweepWork({ ...SUBQ, RERANKER: 'subq' }).judgementsPerQuery).toBe(100);
-    expect(callsSubq(sweepWork({ RERANKER: 'minilm' }))).toBe(false);
-    // A blank RERANKER sweeps with minilm, whatever the default reranker is.
+  it('the sweep judges the tag search at 50 candidates with RERANKER=subq', () => {
+    expect(sweepWork({ ...SUBQ, RERANKER: 'subq' }).judgementsPerQuery).toBe(50);
+    expect(callsSubq(sweepWork({ RERANKER: 'llm' }))).toBe(false);
+    // A blank RERANKER sweeps with the default LLM judge.
     expect(callsSubq(sweepWork({ ...SUBQ }))).toBe(false);
   });
 
   it('the comparison calls no SubQ without a key: it skips the subq reranker', () => {
-    expect(callsSubq(compareWork({}, ['subq', 'llm'], ['tags'], 5))).toBe(false);
+    expect(callsSubq(compareWork({}, ['subq', 'llm'], 5))).toBe(false);
   });
 
   it('bench:compare judges and translates in the main flow per run; the reference RAG uses the LLM', () => {
@@ -68,8 +69,8 @@ describe('the SubQ work per command', () => {
   });
 
   it('a configuration without SubQ calls it nowhere, even with a key', () => {
-    const env = { ...SUBQ, RERANKER: 'minilm', QUERY_TRANSLATOR_IMPL: 'llm' };
-    expect(callsSubq(compareWork(env, ['minilm', 'llm'], ['tags'], 5))).toBe(false);
+    const env = { ...SUBQ, RERANKER: 'llm', QUERY_TRANSLATOR_IMPL: 'llm' };
+    expect(callsSubq(compareWork(env, ['jev', 'llm'], 5))).toBe(false);
     expect(callsSubq(sweepWork(env))).toBe(false);
     expect(callsSubq(benchWork(env, 5))).toBe(false);
   });

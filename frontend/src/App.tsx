@@ -64,7 +64,7 @@ export function App() {
       .then((result) => {
         if (!cancelled) setStatus(result);
       });
-    // The backend warms up its models before it listens, so a page opened meanwhile asks again.
+    // The backend may still be starting, so a page opened meanwhile asks again.
     const loadConfig = () =>
       fetchConfig().then(
         (result) => {
@@ -160,10 +160,7 @@ export function App() {
   );
 }
 
-/**
- * Between the main flow's result and the reference RAG's start, the server may still be loading the
- * embedder and vectors for it.
- */
+/** Between the main flow's result and the reference RAG's start. */
 function preparingReference({ flows, skipped, reference, running }: Run): boolean {
   return (
     running &&

@@ -2,8 +2,6 @@ import type { DatabaseSync } from 'node:sqlite';
 import type { Env } from '../env.js';
 import type { LlmLogger, LlmUsage } from '../llm/client.js';
 import type { LlmConfig } from '../llm/config.js';
-import type { ModelDtype } from '../models/config.js';
-import type { CrossEncoderModel } from '../models/catalog.js';
 import type { Chunk, JudgeScore } from '../llm/types.js';
 
 /** A chunk with its relevance score; the same shape whichever reranker produced it. */
@@ -34,8 +32,8 @@ export interface RerankStats {
 
 export interface RerankResult {
   /**
-   * Whether a threshold decided relevance (a judge, or a cross-encoder given one), so the UI can
-   * say "judged relevant"; without one every scored chunk counts and only `topK` cuts.
+   * Whether a threshold decided relevance, so the UI can say "judged relevant"; without one every
+   * scored chunk counts and only `topK` cuts.
    */
   judged: boolean;
   /** The relevant chunks, best first, at most `topK`. */
@@ -50,8 +48,6 @@ export interface Reranker {
   /** The `RERANKER` value, e.g. `llm`. */
   readonly name: string;
   readonly model: string;
-  /** The precision a local model runs in, e.g. `int8`; absent for a remote reranker. */
-  readonly dtype?: ModelDtype;
   rerank(query: string, chunks: readonly Chunk[], topK: number): Promise<RerankResult>;
 }
 
@@ -65,18 +61,10 @@ export interface RerankerDependencies {
   fetch?: typeof fetch;
 }
 
-/** A local cross-encoder reranker: its name (its `RERANKER` value) and the model it runs. */
-export interface CrossEncoderSpec {
-  name: string;
-  model: CrossEncoderModel;
-}
-
 /** One `RERANKER` value: adding a reranker is a new file with one of these plus a registry entry. */
 export interface RerankerEntry {
   /** Whether it calls a remote model (an LLM, JEV or SubQ): its time then counts as LLM time. */
   remote: boolean;
-  /** For a local cross-encoder: its name and model, so `bench:rerank` can build it directly. */
-  crossEncoder?: CrossEncoderSpec;
   /** Reads the reranker's own settings from `env` and throws on an invalid or missing one. */
   validate(env: Env): void;
   create(env: Env, deps: RerankerDependencies): Reranker;

@@ -4,7 +4,7 @@
 - **Labels:** none
 - **Phase:** E10 Remove local models
 - **Depends on:** none
-- **Status:** Approved
+- **Status:** Implemented — all acceptance criteria verified (lint, format:check, typecheck, 883 backend and 117 frontend tests and build exit 0; `npm run dev`, `eval:run` and `bench:compare -- --runs 1 --limit 2 --no-draft` on the subscription, 2026-10-22, no model on disk)
 
 ## Summary
 
@@ -57,17 +57,17 @@ Remove the three local models and everything that only exists to run them: the b
 
 ## Tasks
 
-- [ ] Delete `backend/src/embedding/`, `backend/src/models/`, the cross-encoder rerankers, the qwen3 placeholder and `rerank/bench.ts`, with their tests.
-- [ ] In `backend/src/retrieval/`: keep tag retrieval and the BM25 helpers the reference RAG needs; remove the dense ranking, fusion, embedding store, `index-embeddings.ts` and the `embed` CLI command.
-- [ ] Remove `RETRIEVER=bge|both` and the other settings in criterion 2 from config; reject each with a named message.
-- [ ] Remove the model warm-up from the server and API setup.
-- [ ] Reference RAG: replace dense search with BM25 search; update its configuration label and `createReferenceFlow`'s signature.
-- [ ] Eval: drop `--retriever` and the local rerankers from `eval:run --reranker`; the sweep sweeps `MAX_CANDIDATES` for tag search only, with the configured `RERANKER`; drop the local variants from `bench:compare`.
-- [ ] Remove `embedMs` / `embeddingMs` from the flows, the timing output and the UI's timing panel.
-- [ ] UI: drop the texts and labels about the local models and vector search; describe the reference RAG's BM25 search in Swedish.
-- [ ] Migration `0009` drops `chunk_embeddings`.
-- [ ] Remove the npm scripts `index:embed`, `models:bench`, `bench:rerank` and the `@huggingface/transformers` dependency.
-- [ ] Update README, `.env.example`, `CLAUDE.md` and the requirements' E5-4 text.
+- [x] Delete `backend/src/embedding/`, `backend/src/models/`, the cross-encoder rerankers, the qwen3 placeholder and `rerank/bench.ts`, with their tests.
+- [x] In `backend/src/retrieval/`: keep tag retrieval (the BM25 helpers move to `reference/lexical-search.ts`); remove the dense ranking, fusion, embedding store, `index-embeddings.ts` and the `embed` CLI command.
+- [x] Remove `RETRIEVER=bge|both` and the other settings in criterion 2 from config; reject each with a named message.
+- [x] Remove the model warm-up from the server and API setup.
+- [x] Reference RAG: replace dense search with BM25 search; update its configuration label and `createReferenceFlow`'s signature.
+- [x] Eval: drop `--retriever` and the local rerankers from `eval:run --reranker`; the sweep sweeps `MAX_CANDIDATES` for tag search only, with the configured `RERANKER`; drop the local variants from `bench:compare`.
+- [x] Remove `embedMs` / `embeddingMs` from the flows, the timing output and the UI's timing panel.
+- [x] UI: drop the texts and labels about the local models and vector search; describe the reference RAG's BM25 search in Swedish.
+- [x] Migration `0009` drops `chunk_embeddings`.
+- [x] Remove the npm scripts `index:embed`, `models:bench`, `bench:rerank` and the `@huggingface/transformers` dependency.
+- [x] Update README, `.env.example`, `CLAUDE.md` and the requirements' E5-4 text.
 
 ## Decisions
 
@@ -82,6 +82,19 @@ Remove the three local models and everything that only exists to run them: the b
 - **`npm run retrieve` stays** (default): it runs the configured tag retrieval and judge, which are in scope to keep.
 - **The model files were deleted from the owner's machine** (owner's request, 2026-10-21): `data/models.nosync` (6.4 GB, git-ignored), before this spec. `@huggingface/transformers` and its ONNX runtime leave `node_modules` when the dependency is removed.
 - **Branch name shortened** to `feature/E10-1-remove-the-local-models`; the spec file uses the same slug.
+- **One module rejects the removed settings, at each entry point** (implementation, after clean code): `backend/src/removed-settings.ts`. The server's startup validation and the CLIs that build a flow (`query`, `retrieve`, `eval:*` and `bench:compare`) call it first, so all fail the same way; the config loaders stay free of a global check. `JUDGE_IMPL` and `REFERENCE_TOP_K` keep their own older checks, outside this issue's diff.
+- **Both flows are built at server start** (implementation): without an embedder or vectors to load, the reference RAG can no longer fail late, so the lazy build and the warm-up go. The route keeps its `skipped` event for a flow that cannot be built.
+- **Report tables** (implementation): the comparison drops its `dtype` column and `bench:compare` its `embedding` column. The benchmark table gets a new heading ("Main flow vs BM25 reference RAG: the same judge"), as E7-9 did, so new rows never land under an older header; the comparison table keeps its heading, and today's reports have no rows under it yet.
+- **`eval:label` lists the reference RAG's BM25 candidates** (implementation), marked `reference` instead of `dense`, so E7-10's purpose (label what the reference RAG finds) still holds.
+- **Code that only served the local models goes too** (implementation): the candidate origins `dense` and `named` (and the hybrid retriever's "named provision first" rule), `spellOutLawAbbreviations` (the embedder's query rewrite), `Reranker.dtype` and `modelLabel`, the `embed:smoke` script, the `sharp` override (only transformers.js pulled `sharp` in), and `SearchSetup.candidateSearch`.
+- **The sweep's and comparison's harnesses stay generic** (implementation): `SweptRetriever.usesTags`, `ComparedRetriever` and the reranker registry's `remote` flag are kept; tests use fakes that are not remote.
+- **Verification run not kept** (verification): the 2-query `bench:compare` that proved criterion 3 appended to `eval/report-2026-10-22.md`; that file was deleted, since a 2-query run is not a benchmark result.
+- **Stale dev servers stopped** (owner, 2026-10-22): old `npm run dev` processes from 11–16 Oct restarted on the old code during this work and downloaded bge-m3 again; they were stopped and `data/models.nosync` deleted again.
+- **Code review: the sweep's LLM default stays** (owner's decision above). Review noted that an unset `RERANKER` now sweeps with the uncached LLM judge instead of minilm. That is the owner's choice; like `eval:run` and `bench:compare`, the sweep asks first only for SubQ, and the README says to run it on the subscription.
+- **Code review: `RerankResult.judged` stays** although every remaining reranker sets it: the UI's ranking branch and the result shape are outside this issue's diff, and removing them is a separate cleanup.
+- **Code review: the comparison's SubQ estimate counts both lists** (tag search and the full-text baseline, up to `MAX_CANDIDATES` each), which the earlier estimate left out.
+- **Code review: one BM25 statement** (`bm25Ranking` in `search/candidate-search.ts`) serves the full-text fallback and the reference RAG.
+- **Historical numbers in the README stay** (implementation), reworded to say the local ranker or vector search was removed, so the README names the removed models only in its "Removed local models" note.
 
 ## Open Questions
 
