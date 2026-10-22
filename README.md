@@ -4,7 +4,7 @@ Legal RAG proof of concept: tag search, followed by a judge (an LLM judge by def
 
 ## Prerequisites
 
-- Node.js 24 LTS (see `.nvmrc`); npm ships with it.
+- Node.js 22.13 or later (see `.nvmrc`); npm ships with it. On Node 22, `node:sqlite` prints an `ExperimentalWarning` at start; it is harmless.
 
 ## Getting started
 
