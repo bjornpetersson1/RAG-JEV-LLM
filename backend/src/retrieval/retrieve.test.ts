@@ -8,16 +8,14 @@ const CHUNKS = {
   '21': { id: '21', text: 'Konkurrensklausulen är oskälig.', source: 'AD 2015 nr 8' },
 };
 
-function fakeRetriever(usesTags: boolean): Retriever {
+function fakeRetriever(): Retriever {
   return {
-    name: usesTags ? 'both' : 'bge',
-    usesTags,
+    name: 'tags',
     retrieve: vi.fn(async () => ({
       candidates: [
-        { chunkId: 21, origin: 'dense' as const },
-        { chunkId: 11, origin: 'lexical' as const },
+        { chunkId: 21, origin: 'tag' as const },
+        { chunkId: 11, origin: 'fts' as const },
       ],
-      embedMs: 3,
       searchMs: 2,
     })),
   };
@@ -32,34 +30,26 @@ const reranker = {
 
 describe('retrieve', () => {
   it('retrieves, reranks and keeps the retrieval rank and origin of each kept chunk', async () => {
-    const translate = vi.fn(async () => ['uppsagning']);
-
     const result = await retrieve('7 § LAS', 1, {
-      retriever: fakeRetriever(false),
-      translate,
+      retriever: fakeRetriever(),
+      translate: async () => ['uppsagning'],
       loadChunks: (ids) => ids.map((id) => CHUNKS[id as keyof typeof CHUNKS]),
       reranker,
     });
 
-    expect(translate).not.toHaveBeenCalled();
     expect(result.chunks).toHaveLength(1);
     expect(result.chunks[0]).toMatchObject({
       chunk: { id: '11' },
       score: 0.9,
       retrievalRank: 2,
-      origin: 'lexical',
+      origin: 'fts',
     });
-    expect(result.timings).toMatchObject({
-      translationMs: 0,
-      embedMs: 3,
-      retrievalMs: 2,
-      rerankMs: 7,
-    });
+    expect(result.timings).toMatchObject({ retrievalMs: 2, rerankMs: 7 });
   });
 
-  it('translates the question when the retriever uses tags', async () => {
+  it('searches with the tags of the translated question', async () => {
     const translate = vi.fn(async () => ['uppsagning']);
-    const retriever = fakeRetriever(true);
+    const retriever = fakeRetriever();
 
     await retrieve('Uppsägning', 2, {
       retriever,
@@ -73,29 +63,29 @@ describe('retrieve', () => {
 
   it('prints source, rerank score and retrieval rank per chunk, and the time per step', () => {
     const text = formatRetrieveResult({
-      retriever: 'bge',
-      reranker: 'bge (onnx-community/bge-reranker-v2-m3-ONNX)',
+      retriever: 'tags',
+      reranker: 'llm (claude-haiku-5-5)',
       candidates: 40,
       chunks: [
         {
           chunk: CHUNKS['11'],
           score: 0.9123,
-          reranker: 'bge',
+          reranker: 'llm',
           model: 'm',
           retrievalRank: 3,
-          origin: 'lexical',
+          origin: 'fts',
         },
       ],
-      timings: { translationMs: 0, embedMs: 120, retrievalMs: 15, rerankMs: 30000, totalMs: 30140 },
+      timings: { translationMs: 900, retrievalMs: 15, rerankMs: 30000, totalMs: 31000 },
     });
 
     expect(text).toBe(
       [
-        'Retriever: bge (40 candidates) · reranker: bge (onnx-community/bge-reranker-v2-m3-ONNX)',
+        'Retriever: tags (40 candidates) · reranker: llm (claude-haiku-5-5)',
         '',
-        ' 1. SFS 1982:80 7 § · rerank 0.912 · retrieval rank 3 (lexical)',
+        ' 1. SFS 1982:80 7 § · rerank 0.912 · retrieval rank 3 (fts)',
         '',
-        'Time (ms): translation 0 · embed query 120 · retrieval 15 · rerank 30000 · total 30140',
+        'Time (ms): translation 900 · retrieval 15 · rerank 30000 · total 31000',
       ].join('\n'),
     );
   });

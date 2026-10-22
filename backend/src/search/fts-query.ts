@@ -66,7 +66,7 @@ export function buildFtsQuery(instruction: string, tagLabels: readonly string[])
 }
 
 /**
- * An FTS5 query for the lexical half of hybrid retrieval (E8-4): like {@link buildFtsQuery}, but
+ * An FTS5 query for the reference RAG's BM25 search (E8-4, E10-1): like {@link buildFtsQuery}, but
  * every number is kept whatever its length, so section numbers ("7", "33") and the parts of an SFS
  * number ("1982", "80") match the chunks' `source_ref`. Null when no term is left.
  */

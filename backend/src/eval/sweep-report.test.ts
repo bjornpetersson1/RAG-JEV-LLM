@@ -22,10 +22,10 @@ describe('sweepRows', () => {
     const chosen = row(20, 5);
 
     expect(
-      sweepRows([baseline, chosen], [{ retriever: 'tags', baseline, chosen }], 'minilm', 'd'),
+      sweepRows([baseline, chosen], [{ retriever: 'tags', baseline, chosen }], 'llm', 'd'),
     ).toEqual([
-      '| d | tags | minilm | 30 | 8 | 0.500 | 0.400 | 0.444 | 0.750 | 0.300 | 0.429 | 2700 / 3100 | 20 | baseline |',
-      '| d | tags | minilm | 20 | 5 | 0.500 | 0.400 | 0.444 | 0.750 | 0.300 | 0.429 | 2700 / 3100 | 20 | chosen |',
+      '| d | tags | llm | 30 | 8 | 0.500 | 0.400 | 0.444 | 0.750 | 0.300 | 0.429 | 2700 / 3100 | 20 | baseline |',
+      '| d | tags | llm | 20 | 5 | 0.500 | 0.400 | 0.444 | 0.750 | 0.300 | 0.429 | 2700 / 3100 | 20 | chosen |',
     ]);
   });
 });

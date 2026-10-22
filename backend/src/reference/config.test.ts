@@ -14,7 +14,7 @@ describe('loadReferenceConfig', () => {
   });
 
   it('validates the LLM judge’s settings also when RERANKER is another reranker', () => {
-    expect(() => loadReferenceConfig({ RERANKER: 'minilm', JUDGE_THRESHOLD: '2' })).toThrow(
+    expect(() => loadReferenceConfig({ RERANKER: 'subq', JUDGE_THRESHOLD: '2' })).toThrow(
       'JUDGE_THRESHOLD',
     );
   });

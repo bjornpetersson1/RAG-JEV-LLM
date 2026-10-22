@@ -47,13 +47,13 @@ export interface QueryFlowDependencies extends GenerationDependencies {
   flow?: QueryFlowName;
   /** What the steps are, for the timing panel and the run log (E7-3). */
   configuration?: FlowConfiguration;
-  /** Absent when the retriever uses no tags (`RETRIEVER=bge`, the reference RAG). */
+  /** Absent when the flow searches without tags (the reference RAG). */
   translate?(query: QueryInput): Promise<QueryTags>;
-  /** The candidates, best first, and the time spent embedding the instruction, if it was. */
+  /** The candidates, best first. */
   search(
     instruction: string,
     tags: readonly string[],
-  ): Promise<{ candidates: readonly Candidate[]; embedMs?: number }>;
+  ): Promise<{ candidates: readonly Candidate[] }>;
   loadChunks(ids: readonly string[]): Chunk[];
   /**
    * The reranker with `RERANK_TOP_K`: the relevant chunks, best first. Absent, every candidate goes
@@ -65,9 +65,7 @@ export interface QueryFlowDependencies extends GenerationDependencies {
 /** Each step's time in ms; a step that did not run is absent. */
 export interface StepTimings {
   translationMs?: number;
-  /** Embedding the instruction, part of `searchMs`. */
-  embeddingMs?: number;
-  /** Candidate search, embedding the instruction included, and loading the candidates' text. */
+  /** Candidate search and loading the candidates' text. */
   searchMs: number;
   judgingMs?: number;
   /**
@@ -200,7 +198,7 @@ export async function runQuery(
   signal?.throwIfAborted();
 
   const searchStarted = performance.now();
-  const { candidates, embedMs } = await deps.search(question, tags);
+  const { candidates } = await deps.search(question, tags);
   const chunks = deps.loadChunks(candidates.map((candidate) => String(candidate.chunkId)));
   const searchMs = elapsedMs(searchStarted);
   const fallback = candidates.filter(({ origin }) => origin === 'fts').length;
@@ -210,7 +208,6 @@ export async function runQuery(
     fallback,
     timings: {
       searchMs,
-      ...(embedMs !== undefined && { embeddingMs: embedMs }),
       // Without a rerank step the sources are known now.
       ...(!deps.rerank && { sourcesMs: searchMs }),
     },

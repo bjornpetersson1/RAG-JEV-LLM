@@ -24,7 +24,7 @@ export function referenceJudgeEnv(env: Env): Env {
 export function loadReferenceConfig(env: Env): ReferenceConfig {
   if (env.REFERENCE_TOP_K?.trim()) {
     throw new Error(
-      'REFERENCE_TOP_K was removed: the reference RAG judges its MAX_CANDIDATES nearest chunks and ' +
+      'REFERENCE_TOP_K was removed: the reference RAG judges its MAX_CANDIDATES best chunks and ' +
         'keeps RERANK_TOP_K; remove REFERENCE_TOP_K from .env',
     );
   }

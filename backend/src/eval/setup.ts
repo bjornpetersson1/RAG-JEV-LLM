@@ -3,16 +3,16 @@
 
 import type { DatabaseSync } from 'node:sqlite';
 import type { Env } from '../env.js';
-import { hasJevKey } from '../jev/config.js';
 import type { LlmLogger } from '../llm/client.js';
 import { loadLlmConfig, roleLabel, type LlmConfig } from '../llm/config.js';
 import { createQueryServices } from '../query/services.js';
 import { translateToSlugs } from '../query/translate-query.js';
-import type { CandidateSearch } from '../search/candidate-search.js';
 import { createReranker, loadRerankerConfig } from '../rerank/factory.js';
 import type { Reranker } from '../rerank/types.js';
+import { hasSystemOneKey, type SystemOneProvider } from '../systemone/config.js';
 import {
   byJudgeMode,
+  type DocumentType,
   type EvalDependencies,
   type JudgeMode,
   type SearchDependencies,
@@ -21,8 +21,6 @@ import {
 export interface SearchSetup extends SearchDependencies {
   /** What the run used, for the report, e.g. `{ 'query translator': 'claude-code claude-haiku-5-5' }`. */
   settings: Record<string, string>;
-  /** For the hybrid retrievers of the comparison (E8-5), which fuse in the tag ranking. */
-  candidateSearch: CandidateSearch;
 }
 
 export type EvalSetup = SearchSetup & Omit<EvalDependencies, 'onQuery'>;
@@ -51,7 +49,6 @@ export function createSearchSetup(
       return candidates.map((candidate) => String(candidate.chunkId));
     },
     loadChunks,
-    candidateSearch,
   };
 }
 
@@ -61,17 +58,28 @@ export function createSearchSetup(
  */
 export function createEvalSetup(db: DatabaseSync, env: Env, logger: LlmLogger): EvalSetup {
   const llmConfig = loadLlmConfig(env);
-  const build = (name: 'jev' | 'llm') =>
+  const build = (name: SystemOneProvider | 'llm') =>
     createEvalReranker(name, 'on', { env, db, llmConfig, logger });
   const llm = build('llm');
-  // Without a JEV key, tags+jev is judged by the LLM, as in the first evaluation, and the report
-  // says so.
+  // Without its key, a System One mode is judged by the LLM, as in the first evaluation, and the
+  // report says so.
+  const systemOne = (provider: SystemOneProvider) =>
+    hasSystemOneKey(env, provider) ? build(provider) : llm;
   const rerankers: Record<JudgeMode, Reranker> = {
-    'tags+jev': hasJevKey(env) ? build('jev') : llm,
+    'tags+jev': systemOne('jev'),
+    'tags+subq': systemOne('subq'),
     'tags+llm': llm,
   };
+  const selectTypes = db.prepare(
+    `SELECT c.id, d.type FROM chunks c JOIN documents d ON d.id = c.document_id
+     WHERE c.id IN (SELECT value FROM json_each(?))`,
+  );
   return {
     ...createSearchSetup(db, env, logger, llmConfig),
+    documentTypes(ids) {
+      const rows = selectTypes.all(JSON.stringify(ids)) as { id: number | string; type: string }[];
+      return new Map(rows.map((row) => [String(row.id), row.type as DocumentType]));
+    },
     judge(mode, instruction, chunks) {
       return rerankers[mode].rerank(instruction, chunks, chunks.length);
     },

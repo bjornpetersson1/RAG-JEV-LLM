@@ -7,7 +7,6 @@ import { openDatabase } from './database.js';
 import { migrate, migrationLabel, pendingMigrations, readMigrations } from './migrations.js';
 
 const SCHEMA_TABLES = [
-  'chunk_embeddings',
   'chunk_tags',
   'chunks',
   // The full-text index (E4-3) and the shadow tables FTS5 keeps for it.
@@ -69,6 +68,8 @@ describe('migrate', () => {
       '5_chunks_fts',
       '6_judge_cache',
       '7_chunk_embeddings',
+      '8_judge_cache_subq',
+      '9_drop_chunk_embeddings',
     ]);
     expect(tableNames(db)).toEqual(SCHEMA_TABLES);
     expect(recordedVersions(db)).toEqual([
@@ -97,6 +98,16 @@ describe('migrate', () => {
       {
         version: 7,
         name: 'chunk_embeddings',
+        applied_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+      },
+      {
+        version: 8,
+        name: 'judge_cache_subq',
+        applied_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+      },
+      {
+        version: 9,
+        name: 'drop_chunk_embeddings',
         applied_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
       },
     ]);

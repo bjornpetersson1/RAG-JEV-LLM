@@ -2,15 +2,15 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { afterEach, describe, expect, it } from 'vitest';
 import { App } from './App';
 import type { FlowState } from './FlowProgress';
-import { DEMO_NOTICE } from './explanations';
+import { demoNotice } from './explanations';
 import { formatMs, TimingPanel } from './TimingPanel';
-import { controlledStream, queryResult, stubFetch } from './test-helpers';
+import { controlledStream, queryResult, stubFetch, SUBQ_CONFIG } from './test-helpers';
 
 const CONFIGURATION = {
   retriever: 'tags',
   tagIndex: 'roaring',
   translator: 'claude-code claude-haiku-5-5',
-  reranker: 'minilm cross-encoder/mmarco-mMiniLMv2-L12-H384-v1 int8',
+  reranker: 'subq subq-snap-preview',
   generator: 'claude-code claude-sonnet-5-5',
   topK: 8,
 };
@@ -35,14 +35,13 @@ describe('TimingPanel', () => {
           step: 'search',
           candidates: 40,
           fallback: 0,
-          timings: { searchMs: 420, embeddingMs: 400 },
+          timings: { searchMs: 420 },
         },
       },
       result: queryResult({
         candidates: 40,
         judging: { cacheHits: 0, judgeCalls: 40, relevant: 8, unknown: 0 },
         timings: {
-          embeddingMs: 400,
           searchMs: 420,
           judgingMs: 4000,
           sourcesMs: 4420,
@@ -54,7 +53,6 @@ describe('TimingPanel', () => {
 
     expect(row('Översättning')).toEqual(['–']);
     expect(row('Sökning')).toEqual(['420 ms']);
-    expect(row('varav inbäddning')).toEqual(['400 ms']);
     expect(row('Rerank')).toEqual(['4,0 s (100 ms per bedömd kandidat)']);
     expect(row('Generering')).toEqual(['–']);
     expect(row('Totalt')).toEqual(['4,5 s']);
@@ -62,7 +60,7 @@ describe('TimingPanel', () => {
     expect(
       screen.getByText(
         'Huvudflödet: hämtning tags · taggindex roaring · översättare claude-code claude-haiku-5-5 · ' +
-          'reranker minilm cross-encoder/mmarco-mMiniLMv2-L12-H384-v1 int8 · högst 8 källor · ' +
+          'reranker subq subq-snap-preview · högst 8 källor · ' +
           'generator claude-code claude-sonnet-5-5',
       ),
     ).toBeDefined();
@@ -85,13 +83,13 @@ describe('TimingPanel', () => {
       <TimingPanel
         flows={{ main }}
         reference
-        skipped="run `npm run index:embed`"
+        skipped="the reference RAG cannot be built"
         running={false}
       />,
     );
 
     expect(
-      screen.getByText('Referens-RAG:en kördes inte: run `npm run index:embed`'),
+      screen.getByText('Referens-RAG:en kördes inte: the reference RAG cannot be built'),
     ).toBeDefined();
   });
 
@@ -118,7 +116,6 @@ describe('TimingPanel', () => {
       result: queryResult({
         flow: 'reference',
         timings: {
-          embeddingMs: 300,
           searchMs: 320,
           judgingMs: 2500,
           sourcesMs: 2820,
@@ -155,7 +152,7 @@ describe('TimingPanel', () => {
     expect(
       screen.getByText('Totalt var huvudflödet 10,0 s snabbare än referens-RAG:en.'),
     ).toBeDefined();
-    expect(screen.getByText(DEMO_NOTICE)).toBeDefined();
+    expect(screen.getByText(demoNotice())).toBeDefined();
     const bars = [...document.querySelectorAll<HTMLElement>('tr.total .bar')].map(
       (bar) => bar.style.width,
     );
@@ -186,7 +183,7 @@ describe('an opened info text', () => {
 describe('the comparison', () => {
   afterEach(cleanup);
 
-  it('says the main flow knew its sources first when it did, also with the translation', () => {
+  it('says the main flow knew its sources first when it did, also with the translation, with the configured demo notice', () => {
     const main: FlowState = {
       planned: ['translation', 'search', 'rerank', 'generation'],
       steps: {},
@@ -208,7 +205,9 @@ describe('the comparison', () => {
         timings: { searchMs: 300, judgingMs: 2000, sourcesMs: 2300, totalMs: 7000 },
       }),
     };
-    render(<TimingPanel flows={{ main, reference }} reference running={false} />);
+    render(
+      <TimingPanel flows={{ main, reference }} reference running={false} config={SUBQ_CONFIG} />,
+    );
 
     expect(
       screen.getByText(
@@ -220,7 +219,8 @@ describe('the comparison', () => {
         /Räknat med översättningen visste huvudflödet först vilka källor utkastet skulle bygga på\.$/,
       ),
     ).toBeDefined();
-    expect(screen.getByText(DEMO_NOTICE)).toBeDefined();
+    // The configured judges differ, so the notice says nothing about reused judgements.
+    expect(screen.getByText(demoNotice(SUBQ_CONFIG))).toBeDefined();
   });
 });
 

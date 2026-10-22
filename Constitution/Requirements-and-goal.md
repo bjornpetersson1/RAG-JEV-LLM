@@ -167,7 +167,7 @@ E4-2 (bloom filter) can be done at any time after E4-1, but not before phase 4 i
 
 Each query is run five times and the median is reported.
 
-- [ ] **E5-4 Reference RAG**: a simple RAG with embeddings and top-k that uses the same chunks and the same generator. Since E7-9 it is the "100 % LLM" counterpart of the main flow: vector search instead of tags, then the same LLM judge and generator, so the comparison measures how the candidates are found.
+- [ ] **E5-4 Reference RAG**: a simple RAG with top-k retrieval that uses the same chunks and the same generator. Since E7-9 it is the "100 % LLM" counterpart of the main flow: search without tags, then the same LLM judge and generator, so the comparison measures how the candidates are found. Since E10-1 it searches with FTS5 BM25 instead of local embeddings; an embedding API was dropped so as not to add another hosted service (#111, not planned).
   - Done when: it can be run on the evaluation queries and gives the same measures as the main flow.
 
 ## Demo

@@ -138,6 +138,39 @@ describe('judgeAll', () => {
       expect(calls).toEqual(['c1', 'c2', 'c1', 'c2', 'c1', 'c2', 'c3', 'c1']);
     });
 
+    it('keeps SubQ scores apart from JEV and LLM scores, even under the same model name', async () => {
+      const subq = countingJudge(() => ({ judgedBy: 'subq' }));
+      const jev = countingJudge(() => ({ judgedBy: 'jev' }));
+      const llm = countingJudge();
+      const model = 'same-model';
+
+      await judgeAll(
+        'NDA',
+        chunksNumbered(2),
+        deps({ judge: subq.judge, primary: { impl: 'subq', model } }),
+      );
+      const again = await judgeAll(
+        'NDA',
+        chunksNumbered(2),
+        deps({ judge: subq.judge, primary: { impl: 'subq', model } }),
+      );
+      await judgeAll(
+        'NDA',
+        chunksNumbered(2),
+        deps({ judge: jev.judge, primary: { impl: 'jev', model } }),
+      );
+      await judgeAll(
+        'NDA',
+        chunksNumbered(2),
+        deps({ judge: llm.judge, primary: { impl: 'llm', model } }),
+      );
+
+      expect(again.cacheHits).toBe(2);
+      expect(subq.calls).toHaveLength(2);
+      expect(jev.calls).toHaveLength(2);
+      expect(llm.calls).toHaveLength(2);
+    });
+
     it('does not cache an LLM fallback answer when JEV is the primary judge', async () => {
       const { judge, calls } = countingJudge(() => ({ judgedBy: 'llm' }));
       const primary: PrimaryJudge = { impl: 'jev', model: 'jev-latest' };

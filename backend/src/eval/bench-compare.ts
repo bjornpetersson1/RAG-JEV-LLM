@@ -3,6 +3,7 @@
 // time, precision and recall of the chunks sent to the generator, and source accuracy. The flows
 // are passed in, so the same code runs against the database and models or against fakes in tests.
 
+import { randomUUID } from 'node:crypto';
 import { describeError } from '../errors.js';
 import { sourceAccuracy } from '../generation/post-check.js';
 import type { QueryFlowName, QueryResult } from '../generation/query-flow.js';
@@ -15,9 +16,18 @@ export interface BenchFlow {
   name: QueryFlowName;
   /** The configuration the flow runs with, for the table. */
   configuration: string;
-  /** Whether its rerank is remote (an LLM or JEV), whose time counts as LLM time. */
+  /** Whether its rerank is remote (an LLM, JEV or SubQ), whose time counts as LLM time. */
   remoteRerank: boolean;
-  run(query: ResolvedQuery, options: { draft: boolean }): Promise<QueryResult>;
+  run(query: ResolvedQuery, options: BenchRunOptions): Promise<QueryResult>;
+}
+
+export interface BenchRunOptions {
+  draft: boolean;
+  /** Shared by every flow's run of the same query and run, for the run log (E7-12). */
+  runId: string;
+  /** From 0. */
+  run: number;
+  runs: number;
 }
 
 export interface BenchOptions {
@@ -63,8 +73,6 @@ export interface FlowMeasures {
   /** Time to sources: search plus rerank, without the translation (E7-8). */
   sources: Latency;
   search: Latency;
-  /** Absent when the instruction was never embedded (tag search). */
-  embedding?: Latency;
   /** Absent for a flow without a rerank step, like the two below. */
   rerank?: Latency;
   /** The candidates given to the rerank: the median per pair. */
@@ -113,9 +121,10 @@ export async function benchCompare(
     for (const [index, query] of queries.entries()) {
       const order = flows.map((flow, i) => ({ flow, tally: tallies[i] }));
       if ((run + index) % 2 === 1) order.reverse();
+      const runOptions = { draft: options.draft, runId: randomUUID(), run, runs: options.runs };
       for (const { flow, tally } of order) {
         try {
-          const result = await flow.run(query, { draft: options.draft });
+          const result = await flow.run(query, runOptions);
           const relevance = precisionRecall(sentIds(result), query.relevantIds);
           tally.samples.push({ run, queryId: query.id, result, relevance });
           options.onResult?.({ flow: flow.name, query, run, index, result });
@@ -203,7 +212,7 @@ function measure(
   const checks = shared.flatMap(({ draft }) => (draft?.check ? [draft.check] : []));
   const latencyIfAny = (times: readonly number[]) =>
     times.length > 0 ? latencyOf(times) : undefined;
-  const optional = (step: 'translationMs' | 'embeddingMs' | 'judgingMs') =>
+  const optional = (step: 'translationMs' | 'judgingMs') =>
     latencyIfAny(results.flatMap(({ timings }) => timings[step] ?? []));
   const drafts = shared.flatMap(({ timings, usage }) =>
     timings.generationMs !== undefined && usage.generation && usage.generation.outputTokens > 0
@@ -215,7 +224,6 @@ function measure(
     translation: optional('translationMs'),
     sources: latencyOf(results.map(({ timings }) => timings.sourcesMs)),
     search: latencyOf(results.map(({ timings }) => timings.searchMs)),
-    embedding: optional('embeddingMs'),
     rerank: optional('judgingMs'),
     ...(judged.length > 0 && {
       // The rerank is given the candidates that loaded, which are the sources.
@@ -234,7 +242,7 @@ function measure(
   };
 }
 
-/** The time spent waiting for an LLM or JEV. */
+/** The time spent waiting for an LLM, JEV or SubQ. */
 function llmMs({ timings }: QueryResult, remoteRerank: boolean): number {
   return (
     (timings.translationMs ?? 0) +

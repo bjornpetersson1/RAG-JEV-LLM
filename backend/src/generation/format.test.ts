@@ -202,13 +202,6 @@ describe('formatQueryResult', () => {
     expect(output).not.toContain('generation');
   });
 
-  it('shows the embedding time inside the search time when the retriever embeds', () => {
-    const embedded = result();
-    embedded.timings = { ...embedded.timings, embeddingMs: 400, searchMs: 415 };
-
-    expect(formatQueryResult(REQUEST, embedded)).toContain('search 415 (embedding 400)');
-  });
-
   it('prints the reference RAG without tags, with its judging and its own steps', () => {
     const reference: QueryResult = {
       ...result(DRAFT),
@@ -217,7 +210,6 @@ describe('formatQueryResult', () => {
       candidates: 30,
       judging: { relevant: 3, cacheHits: 0, judgeCalls: 30, unknown: 0 },
       timings: {
-        embeddingMs: 400,
         searchMs: 410,
         judgingMs: 2000,
         sourcesMs: 2410,
@@ -230,12 +222,12 @@ describe('formatQueryResult', () => {
     const output = formatQueryResult(REQUEST, reference);
 
     expect(output).toContain(
-      'Reference RAG: the 30 chunks most similar to the instruction (no tags)',
+      'Reference RAG: the 30 chunks BM25 ranks best for the instruction (no tags)',
     );
     expect(output).not.toContain('Tags:');
     expect(output).toContain('judge calls: 30');
     expect(output).toContain(
-      'Time (ms): search 410 (embedding 400) · judging 2000 · sources 2410 · generation 900 · total 3310',
+      'Time (ms): search 410 · judging 2000 · sources 2410 · generation 900 · total 3310',
     );
   });
 

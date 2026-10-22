@@ -10,7 +10,7 @@ export interface BenchArgs {
   draft: boolean;
 }
 
-const BENCH_USAGE = 'Usage: bench:compare [--runs <n>] [--limit <n>] [--no-draft]';
+const BENCH_USAGE = 'Usage: bench:compare [--runs <n>] [--limit <n>] [--no-draft] [--yes]';
 
 const DEFAULT_RUNS = 5;
 

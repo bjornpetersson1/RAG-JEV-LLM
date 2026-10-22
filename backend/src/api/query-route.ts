@@ -19,14 +19,8 @@ import {
 import { runAndLog, type RunLog } from '../generation/run-log.js';
 import { isTemplate, TEMPLATES, type Template } from '../tagging/vocabulary.js';
 
-/**
- * Each flow's steps, built when first asked for: the reference RAG needs `npm run index:embed`,
- * and building it throws when that has not been run.
- */
-export interface QueryFlows extends Record<QueryFlowName, () => QueryFlowDependencies> {
-  /** Loads the local models before the first query, so its timings do not include a load. */
-  warmUp?(): Promise<void>;
-}
+/** Each flow's steps; getting them throws when the flow cannot be built. */
+export type QueryFlows = Record<QueryFlowName, () => QueryFlowDependencies>;
 
 /** One line of the response stream. */
 export type QueryEvent =
@@ -39,7 +33,7 @@ export type QueryEvent =
   | ({ type: 'step'; flow: QueryFlowName } & QueryStep)
   | { type: 'result'; flow: QueryFlowName; result: QueryResult }
   | { type: 'error'; flow: QueryFlowName; message: string }
-  /** A flow that cannot be built, e.g. the reference RAG before `npm run index:embed`. */
+  /** A flow that cannot be built. */
   | { type: 'skipped'; flow: QueryFlowName; reason: string }
   | { type: 'done' };
 

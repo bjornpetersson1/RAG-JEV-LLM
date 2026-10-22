@@ -1,5 +1,5 @@
 // The imported laws' common names and abbreviations, shared by the post-check (E6-3) and the
-// embedder (E8-2).
+// reference RAG's BM25 query (E8-4, E10-1).
 
 /**
  * Names and abbreviations of the imported laws a text may cite, by SFS number. Only these are
@@ -24,25 +24,9 @@ export const LAW_ALIASES: Record<string, string> = {
   föräldraledighetslagen: '1995:584',
 };
 
-/** Each aliased law's title, as the chunks' heading paths give it. */
-const LAW_TITLES: Record<string, string> = {
-  '1982:80': 'Lag (1982:80) om anställningsskydd',
-  '1915:218': 'Lag (1915:218) om avtal och andra rättshandlingar på förmögenhetsrättens område',
-  '2018:558': 'Lag (2018:558) om företagshemligheter',
-  '1977:480': 'Semesterlag (1977:480)',
-  '2008:567': 'Diskrimineringslag (2008:567)',
-  '1982:673': 'Arbetstidslag (1982:673)',
-  '1976:580': 'Lag (1976:580) om medbestämmande i arbetslivet',
-  '1995:584': 'Föräldraledighetslag (1995:584)',
-};
-
-for (const sfs of new Set(Object.values(LAW_ALIASES))) {
-  if (!LAW_TITLES[sfs]) throw new Error(`LAW_TITLES has no title for SFS ${sfs} in LAW_ALIASES`);
-}
-
 // The abbreviations only (they start with a capital): the full names already say which law it is.
 // A genitive (`LAS:s`) is kept with the abbreviation. Case-sensitive, since lower-case `dl` or `las`
-// are ordinary words. One already followed by a parenthesis (e.g. its title) is left alone.
+// are ordinary words. One already followed by a parenthesis (e.g. the law's title) is left alone.
 const ABBREVIATION = new RegExp(
   `(?<!\\p{L})(${Object.keys(LAW_ALIASES)
     .filter((alias) => /^\p{Lu}/u.test(alias))
@@ -61,13 +45,4 @@ export function replaceLawAbbreviations(
   return text.replace(ABBREVIATION, (written, abbreviation: string) =>
     replace(written, LAW_ALIASES[abbreviation]),
   );
-}
-
-/**
- * `text` with each law abbreviation followed by the law's title, e.g. "7 § LAS" → "7 § LAS
- * (Lag (1982:80) om anställningsskydd)". An embedding model does not know the abbreviations, but
- * the chunks it is compared with carry the title in their heading path.
- */
-export function spellOutLawAbbreviations(text: string): string {
-  return replaceLawAbbreviations(text, (written, sfs) => `${written} (${LAW_TITLES[sfs]})`);
 }

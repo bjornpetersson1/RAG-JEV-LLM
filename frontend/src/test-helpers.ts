@@ -1,4 +1,5 @@
 import { vi } from 'vitest';
+import type { AppConfig } from './config';
 import type { Chunk, FlowName, QueryEvent, QueryResult, QueryStep } from './query';
 
 /** A streamed response whose JSON lines the test sends one at a time, and then ends. */
@@ -28,11 +29,25 @@ export function controlledStream() {
 
 export type ControlledStream = ReturnType<typeof controlledStream>;
 
-/** Stubs `fetch`: `/api/health` answers ok, `/api/query` with `query`. */
-export function stubFetch(query: () => Promise<Response>) {
-  const fetchMock = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>((url) =>
-    url === '/api/health' ? Promise.resolve(Response.json({ status: 'ok' })) : query(),
-  );
+/** The default `.env`: the LLM judge in both flows, the judge cache on. */
+export const SAME_JUDGE_CONFIG: AppConfig = {
+  judges: { main: { name: 'llm' }, reference: { name: 'llm' } },
+  judgeCache: true,
+};
+
+/** `RERANKER=subq`: SubQ judges the main flow's candidates, the LLM the reference RAG's. */
+export const SUBQ_CONFIG: AppConfig = {
+  judges: { main: { name: 'subq' }, reference: { name: 'llm' } },
+  judgeCache: true,
+};
+
+/** Stubs `fetch`: `/api/health` answers ok, `/api/config` with `config`, `/api/query` with `query`. */
+export function stubFetch(query: () => Promise<Response>, config: AppConfig = SAME_JUDGE_CONFIG) {
+  const fetchMock = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>((url) => {
+    if (url === '/api/health') return Promise.resolve(Response.json({ status: 'ok' }));
+    if (url === '/api/config') return Promise.resolve(Response.json(config));
+    return query();
+  });
   vi.stubGlobal('fetch', fetchMock);
   return fetchMock;
 }
@@ -56,7 +71,7 @@ export function queryResult(overrides: Partial<QueryResult> = {}): QueryResult {
     candidates: 30,
     fallback: 6,
     approved: [cited],
-    sources: [{ chunk: cited, status: 'cited', origin: 'tag', score: 0.9, reranker: 'bge' }],
+    sources: [{ chunk: cited, status: 'cited', origin: 'tag', score: 0.9, reranker: 'llm' }],
     draft: { text: '# Anställningsavtal\n\nText [K:11].', used: [cited], unused: [], leftOut: [] },
     timings: {
       translationMs: 800,

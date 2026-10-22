@@ -41,11 +41,11 @@ const CHECK: PostCheck = {
 const RESULT = queryResult({
   approved: [LAS_7, LAS_11, UNCITED, LEFT_OUT],
   sources: [
-    { chunk: LAS_7, status: 'cited', origin: 'tag', score: 0.91, reranker: 'bge' },
-    { chunk: LAS_11, status: 'cited', origin: 'fts', score: 0.72, reranker: 'bge' },
-    { chunk: UNCITED, status: 'sent', origin: 'tag', score: 0.55, reranker: 'bge' },
-    { chunk: LEFT_OUT, status: 'left-out', origin: 'named', score: 0.51, reranker: 'bge' },
-    { chunk: TURNED_DOWN, status: 'turned-down', origin: 'tag', score: 0.12, reranker: 'bge' },
+    { chunk: LAS_7, status: 'cited', origin: 'tag', score: 0.91, reranker: 'llm' },
+    { chunk: LAS_11, status: 'cited', origin: 'fts', score: 0.72, reranker: 'llm' },
+    { chunk: UNCITED, status: 'sent', origin: 'tag', score: 0.55, reranker: 'llm' },
+    { chunk: LEFT_OUT, status: 'left-out', origin: 'lexical', score: 0.51, reranker: 'llm' },
+    { chunk: TURNED_DOWN, status: 'turned-down', origin: 'tag', score: 0.12, reranker: 'llm' },
   ],
   draft: {
     text: TEXT,
@@ -113,9 +113,9 @@ describe('ResultView', () => {
     expect(screen.getByRole('heading', { name: 'Skickade men inte citerade (1)' })).toBeDefined();
     expect(screen.getByText('Inte skickade till generatorn (2)')).toBeDefined();
     expect(sourceEntry('2').textContent).toContain(
-      'SFS 1982:80 7 § · Dokument 2 · poäng 0.91 (bge) · tagg',
+      'SFS 1982:80 7 § · Dokument 2 · poäng 0.91 (llm) · tagg',
     );
-    expect(sourceEntry('1').textContent).toContain('poäng 0.72 (bge) · fritext');
+    expect(sourceEntry('1').textContent).toContain('poäng 0.72 (llm) · fritext');
     expect(sourceEntry('5').textContent).toContain('rymdes inte i kontexten');
     expect(sourceEntry('4').textContent).toContain('bortvald av rerankern');
     const original = within(sourceEntry('2')).getByRole('link', {

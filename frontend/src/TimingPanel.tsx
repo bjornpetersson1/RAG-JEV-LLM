@@ -1,5 +1,6 @@
 import type { FlowState } from './FlowProgress';
-import { DEMO_NOTICE, SECTION_LEADS, type Measure } from './explanations';
+import type { AppConfig } from './config';
+import { demoNotice, SECTION_LEADS, type Measure } from './explanations';
 import { ExplainedRow, Info } from './Info';
 import {
   FLOWS,
@@ -25,7 +26,6 @@ interface Row {
 const ROWS: Row[] = [
   { label: 'Översättning', step: 'translation', timing: 'translationMs', measure: 'translation' },
   { label: 'Sökning', step: 'search', timing: 'searchMs', measure: 'search' },
-  { label: 'varav inbäddning', step: 'search', timing: 'embeddingMs', measure: 'embedding' },
   {
     label: 'Rerank',
     step: 'rerank',
@@ -67,6 +67,8 @@ interface TimingPanelProps {
   skipped?: string;
   /** Whether the query is still running; after it, a step without a time did not run. */
   running: boolean;
+  /** The configured judges and judge cache, for the demo notice; absent for an earlier run. */
+  config?: AppConfig;
 }
 
 /** One flow's column: its state and the times it has so far. */
@@ -78,7 +80,7 @@ interface Column {
 }
 
 /** Time per step and in total for each flow, with bars on one shared scale (E7-3). */
-export function TimingPanel({ flows, reference, skipped, running }: TimingPanelProps) {
+export function TimingPanel({ flows, reference, skipped, running, config }: TimingPanelProps) {
   const columns: Column[] = FLOWS.flatMap(({ flow, title }) => {
     const state = flows[flow];
     return state ? [{ flow, title, state, timings: timingsOf(state) }] : [];
@@ -90,46 +92,48 @@ export function TimingPanel({ flows, reference, skipped, running }: TimingPanelP
   );
 
   return (
-    <section className="timing" aria-label="Tidspanel">
+    <section className="timing card" aria-label="Tidspanel">
       <h2>Tid per steg</h2>
       <p className="lead">{SECTION_LEADS.timing}</p>
-      <table>
-        <thead>
-          <tr>
-            <th scope="col">Steg</th>
-            {columns.map(({ flow, title }) => (
-              <th key={flow} scope="col">
-                {title}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {ROWS.map((row) => (
-            <ExplainedRow
-              key={row.label}
-              label={row.label}
-              measure={row.measure}
-              detail={row.detail}
-              columns={columns.length + 1}
-              className={row.className}
-            >
-              {columns.map(({ flow, state, timings }) => (
-                <td key={flow}>
-                  <TimingCell
-                    ms={timings[row.timing]}
-                    pending={running && isPending(state, row)}
-                    state={state}
-                    row={row}
-                    scale={scale}
-                  />
-                </td>
+      <div className="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Steg</th>
+              {columns.map(({ flow, title }) => (
+                <th key={flow} scope="col">
+                  {title}
+                </th>
               ))}
-            </ExplainedRow>
-          ))}
-        </tbody>
-      </table>
-      <Difference flows={flows} />
+            </tr>
+          </thead>
+          <tbody>
+            {ROWS.map((row) => (
+              <ExplainedRow
+                key={row.label}
+                label={row.label}
+                measure={row.measure}
+                detail={row.detail}
+                columns={columns.length + 1}
+                className={row.className}
+              >
+                {columns.map(({ flow, state, timings }) => (
+                  <td key={flow}>
+                    <TimingCell
+                      ms={timings[row.timing]}
+                      pending={running && isPending(state, row)}
+                      state={state}
+                      row={row}
+                      scale={scale}
+                    />
+                  </td>
+                ))}
+              </ExplainedRow>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <Difference flows={flows} config={config} />
       {!reference && <p>Referens-RAG:en kördes inte.</p>}
       {skipped && <p>Referens-RAG:en kördes inte: {skipped}</p>}
       {columns.map(
@@ -216,7 +220,13 @@ function timingsOf({ result, steps }: TimingFlow): Partial<StepTimings> {
  * own; then what the gap consists of and which flow knew its sources first; then the total, which
  * the drafts' length weighs on too. Always with the notice that the UI's numbers are a demo.
  */
-function Difference({ flows }: { flows: Partial<Record<FlowName, TimingFlow>> }) {
+function Difference({
+  flows,
+  config,
+}: {
+  flows: Partial<Record<FlowName, TimingFlow>>;
+  config?: AppConfig;
+}) {
   const main = flows.main?.result?.timings;
   const reference = flows.reference?.result?.timings;
   if (main?.sourcesMs === undefined || reference?.sourcesMs === undefined) return null;
@@ -251,7 +261,7 @@ function Difference({ flows }: { flows: Partial<Record<FlowName, TimingFlow>> })
           referens-RAG:en.
         </p>
       )}
-      <p className="demo">{DEMO_NOTICE}</p>
+      <p className="demo">{demoNotice(config)}</p>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 // Statute, provision and case references in Swedish legal text (E6-3), and whether a chunk's source
-// reference is what one cites. Shared by the post-check and hybrid retrieval (E8-4).
+// reference is what one cites, for the post-check.
 
 import { LAW_ALIASES } from './law-names.js';
 

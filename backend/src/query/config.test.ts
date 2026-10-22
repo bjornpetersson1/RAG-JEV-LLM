@@ -16,7 +16,7 @@ describe('loadQueryTranslatorConfig', () => {
     ).toEqual({
       impl: 'jev',
       threshold: 0.7,
-      jev: {
+      systemOne: {
         apiKey: 'key',
         baseUrl: 'https://api.typesafe.ai/v1',
         model: 'jev-latest',
@@ -30,11 +30,33 @@ describe('loadQueryTranslatorConfig', () => {
     });
   });
 
+  it('reads the SubQ translator with the SubQ settings', () => {
+    expect(
+      loadQueryTranslatorConfig({ QUERY_TRANSLATOR_IMPL: 'subq', SUBQ_API_KEY: 'key' }),
+    ).toEqual({
+      impl: 'subq',
+      threshold: 0.5,
+      systemOne: {
+        apiKey: 'key',
+        baseUrl: 'https://api.subq.ai/v1',
+        model: 'subq-snap-preview',
+        timeoutMs: 30000,
+      },
+    });
+  });
+
   it.each([
-    [{ QUERY_TRANSLATOR_IMPL: 'gpt' }, 'Invalid QUERY_TRANSLATOR_IMPL "gpt": expected llm or jev'],
+    [
+      { QUERY_TRANSLATOR_IMPL: 'gpt' },
+      'Invalid QUERY_TRANSLATOR_IMPL "gpt": expected llm or jev or subq',
+    ],
     [
       { QUERY_TRANSLATOR_IMPL: 'jev' },
       'JEV_API_KEY is required because QUERY_TRANSLATOR_IMPL is jev',
+    ],
+    [
+      { QUERY_TRANSLATOR_IMPL: 'subq', JEV_API_KEY: 'k' },
+      'SUBQ_API_KEY is required because QUERY_TRANSLATOR_IMPL is subq',
     ],
     [
       { QUERY_TRANSLATOR_THRESHOLD: '1.5' },

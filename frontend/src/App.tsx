@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
-import { INTRODUCTION } from './explanations';
+import { fetchConfig, type AppConfig } from './config';
+import { introduction } from './explanations';
+import { Motif } from './Motif';
 import { FlowProgress, type FlowState } from './FlowProgress';
 import { QueryForm } from './QueryForm';
 import { RunsPage } from './RunsPage';
@@ -15,6 +17,9 @@ import {
 } from './query';
 
 const UNREACHABLE = 'unreachable';
+
+/** How long to wait before asking for the configuration again, e.g. while the backend starts. */
+const CONFIG_RETRY_MS = 2000;
 
 /** The two views, by `#` address so a reload or a link keeps the view (E7-11). */
 const VIEWS = [
@@ -40,6 +45,8 @@ interface Run {
 
 export function App() {
   const [status, setStatus] = useState<string>();
+  // Absent while loading or when the backend cannot answer: the texts then claim nothing about it.
+  const [config, setConfig] = useState<AppConfig>();
   const [run, setRun] = useState<Run>();
   const [view, setView] = useState<View>(currentView);
 
@@ -51,13 +58,26 @@ export function App() {
 
   useEffect(() => {
     let cancelled = false;
+    let retry: ReturnType<typeof setTimeout> | undefined;
     fetchHealthStatus()
       .catch(() => UNREACHABLE)
       .then((result) => {
         if (!cancelled) setStatus(result);
       });
+    // The backend may still be starting, so a page opened meanwhile asks again.
+    const loadConfig = () =>
+      fetchConfig().then(
+        (result) => {
+          if (!cancelled) setConfig(result);
+        },
+        () => {
+          if (!cancelled) retry = setTimeout(loadConfig, CONFIG_RETRY_MS);
+        },
+      );
+    void loadConfig();
     return () => {
       cancelled = true;
+      clearTimeout(retry);
     };
   }, []);
 
@@ -82,8 +102,13 @@ export function App() {
 
   return (
     <main>
-      <h1>Legal RAG POC</h1>
-      <p className="health">Backend: {status ?? 'checking…'}</p>
+      <header className="masthead">
+        <Motif />
+        <div>
+          <h1>Legal RAG POC</h1>
+          <p className="health">Backend: {status ?? 'checking…'}</p>
+        </div>
+      </header>
       <nav className="views" aria-label="Vyer">
         {VIEWS.map(({ hash, title }) => (
           <a key={title} href={hash || '#'} aria-current={view === hash ? 'page' : undefined}>
@@ -94,7 +119,7 @@ export function App() {
       {/* The query view stays mounted, so a running query and its result survive a look at the runs. */}
       {view === '#korningar' && <RunsPage />}
       <div hidden={view === '#korningar'}>
-        <p className="introduction">{INTRODUCTION}</p>
+        <p className="introduction">{introduction(config)}</p>
         <QueryForm running={run?.running ?? false} onSubmit={submit} />
         {run?.error && (
           <p className="error" role="alert">
@@ -107,6 +132,7 @@ export function App() {
             reference={run.reference}
             skipped={run.skipped.reference}
             running={run.running}
+            config={config}
           />
         )}
         {run && preparingReference(run) && (
@@ -134,10 +160,7 @@ export function App() {
   );
 }
 
-/**
- * Between the main flow's result and the reference RAG's start, the server may still be loading the
- * embedder and vectors for it.
- */
+/** Between the main flow's result and the reference RAG's start. */
 function preparingReference({ flows, skipped, reference, running }: Run): boolean {
   return (
     running &&

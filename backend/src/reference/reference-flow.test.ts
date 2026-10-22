@@ -6,10 +6,8 @@ import { createFakeGenerator } from '../llm/fakes.js';
 import type { Chunk } from '../llm/types.js';
 import { fakeRerankResult } from '../rerank/test-helpers.js';
 import type { Reranker } from '../rerank/types.js';
-import { indexEmbeddings } from '../retrieval/index-embeddings.js';
-import { createFakeEmbedder, FAKE_IDENTITY } from '../retrieval/test-helpers.js';
-import { createDenseSearch } from './dense-search.js';
-import { createReferenceFlow } from './setup.js';
+import { createLexicalSearch } from './lexical-search.js';
+import { createReferenceFlow, REFERENCE_RETRIEVER } from './setup.js';
 
 const CHUNKS: Record<string, Chunk> = {
   '1': { id: '1', text: 'Ett', source: 'SFS 1982:80 1 §' },
@@ -18,21 +16,23 @@ const CHUNKS: Record<string, Chunk> = {
 };
 
 /**
- * The reference RAG's steps over three vectors (chunk 2 lies closest to every query, then 3, then
- * 1), judged from `scores`: relevant at 0.5 and above, at most `topK` kept.
+ * The reference RAG's steps over three candidates (chunk 2 first, then 3, then 1), judged from
+ * `scores`: relevant at 0.5 and above, at most `topK` kept.
  */
 function fakeReference(candidates: number, scores: Record<string, number>, topK = 8) {
   const generated: string[][] = [];
   const judged: string[][] = [];
-  const { embedder, embedded } = createFakeEmbedder(() => [1, 0]);
-  const vectorIndex = {
-    chunkIds: [1, 2, 3],
-    dimensions: 2,
-    vectors: Float32Array.from([0, 1, 1, 0, 0.8, 0.6]),
-  };
+  const searched: string[] = [];
   const deps: QueryFlowDependencies = {
     flow: 'reference',
-    search: createDenseSearch(embedder, vectorIndex, candidates),
+    search: async (instruction) => {
+      searched.push(instruction);
+      return {
+        candidates: [2, 3, 1]
+          .slice(0, candidates)
+          .map((chunkId) => ({ chunkId, origin: 'lexical' as const })),
+      };
+    },
     loadChunks: (ids) => ids.map((id) => CHUNKS[id]),
     rerank: async (_instruction, chunks) => {
       judged.push(chunks.map((c) => c.id));
@@ -47,12 +47,12 @@ function fakeReference(candidates: number, scores: Record<string, number>, topK 
     }),
     limits: { maxChunks: 20, maxContextChars: 60_000 },
   };
-  return { deps, generated, judged, embedded };
+  return { deps, generated, judged, searched };
 }
 
 describe('the reference RAG through runQuery', () => {
-  it('embeds the instruction, judges the dense candidates and drafts from the approved ones', async () => {
-    const { deps, generated, judged, embedded } = fakeReference(3, {
+  it('searches with the instruction, judges the candidates and drafts from the approved ones', async () => {
+    const { deps, generated, judged, searched } = fakeReference(3, {
       '1': 0.9,
       '2': 0.2,
       '3': 0.6,
@@ -60,7 +60,7 @@ describe('the reference RAG through runQuery', () => {
 
     const result = await runQuery({ instruction: 'Säljare', template: 'employment' }, deps);
 
-    expect(embedded).toEqual(['Säljare']);
+    expect(searched).toEqual(['Säljare']);
     expect(judged).toEqual([['2', '3', '1']]);
     expect(generated).toEqual([['1', '3']]);
     expect(result.flow).toBe('reference');
@@ -77,7 +77,6 @@ describe('the reference RAG through runQuery', () => {
     expect(result.timings.translationMs).toBeUndefined();
     expect(result.timings.judgingMs).toBe(30);
     expect(result.timings.sourcesMs).toBe(result.timings.searchMs + 30);
-    expect(result.timings.searchMs).toBeGreaterThanOrEqual(result.timings.embeddingMs ?? 0);
     expect(result.usage).toEqual({ judging: NO_USAGE, generation: NO_USAGE });
   });
 
@@ -115,6 +114,27 @@ describe('the reference RAG through runQuery', () => {
   });
 });
 
+describe('createLexicalSearch', () => {
+  let database: ReturnType<typeof createEvalDatabase> | undefined;
+
+  afterEach(() => {
+    database?.remove();
+    database = undefined;
+  });
+
+  it('gives the chunks BM25 ranks best, a chunk with the instruction’s words first', async () => {
+    database = createEvalDatabase();
+
+    const { candidates } = await createLexicalSearch(database.db, 3)(
+      'sakligt grundad uppsägning',
+      [],
+    );
+
+    expect(candidates[0]).toEqual({ chunkId: 11, origin: 'lexical' });
+    expect(candidates.length).toBeLessThanOrEqual(3);
+  });
+});
+
 describe('createReferenceFlow', () => {
   let database: ReturnType<typeof createEvalDatabase> | undefined;
 
@@ -126,42 +146,41 @@ describe('createReferenceFlow', () => {
   const ENV = { LLM_PROVIDER: 'fake', MAX_CANDIDATES: '3', MIN_TAG_CANDIDATES: '1' };
   const INSTRUCTION = 'Uppsägning ska vara sakligt grundad';
 
-  async function embeddedDatabase() {
-    const { db } = (database = createEvalDatabase());
-    const { embedder } = createFakeEmbedder();
-    await indexEmbeddings(db, embedder, FAKE_IDENTITY);
-    return { db, embedder };
+  function openDatabase() {
+    return (database = createEvalDatabase()).db;
   }
 
-  it('judges the MAX_CANDIDATES nearest chunks with the LLM judge and keeps RERANK_TOP_K', async () => {
-    const { db, embedder } = await embeddedDatabase();
+  it('judges the MAX_CANDIDATES best BM25 chunks with the LLM judge and keeps RERANK_TOP_K', async () => {
+    const db = openDatabase();
 
+    // BM25 finds chunks 11 and 21 for these words; MAX_CANDIDATES 1 keeps the best.
     const flow = createReferenceFlow(
       db,
-      { ...ENV, RERANK_TOP_K: '1', JUDGE_THRESHOLD: '0.1' },
+      { ...ENV, MAX_CANDIDATES: '1', RERANK_TOP_K: '1', JUDGE_THRESHOLD: '0.1' },
       SILENT_LOGGER,
-      {},
-      embedder,
     );
-    const result = await runQuery({ instruction: INSTRUCTION, template: 'employment' }, flow);
+    const result = await runQuery(
+      { instruction: `${INSTRUCTION}, konkurrensklausulen oskälig`, template: 'employment' },
+      flow,
+    );
 
     expect(flow.reranker.name).toBe('llm');
-    expect(flow.configuration).toMatchObject({ reranker: expect.stringMatching(/^llm /), topK: 1 });
-    expect(result.candidates).toBe(3);
-    expect(result.judging?.judgeCalls).toBe(3);
+    expect(flow.configuration).toMatchObject({
+      retriever: REFERENCE_RETRIEVER,
+      reranker: expect.stringMatching(/^llm /),
+      topK: 1,
+    });
+    expect(result.candidates).toBe(1);
+    expect(result.judging?.judgeCalls).toBe(1);
     expect(result.approved).toHaveLength(1);
     expect(result.draft?.text).toContain('inte juridisk rådgivning');
   });
 
   it('writes no draft when no candidate reaches JUDGE_THRESHOLD', async () => {
-    const { db, embedder } = await embeddedDatabase();
-
     const flow = createReferenceFlow(
-      db,
+      openDatabase(),
       { ...ENV, JUDGE_THRESHOLD: '1' },
       SILENT_LOGGER,
-      {},
-      embedder,
     );
     // The fake judge scores the share of the instruction's words a chunk has; no chunk has "xylofon".
     const result = await runQuery({ instruction: 'xylofon', template: 'employment' }, flow);
@@ -171,42 +190,26 @@ describe('createReferenceFlow', () => {
   });
 
   it('judges with the LLM also when RERANKER is another reranker', async () => {
-    const { db, embedder } = await embeddedDatabase();
-
-    const flow = createReferenceFlow(
-      db,
-      { ...ENV, RERANKER: 'minilm' },
-      SILENT_LOGGER,
-      {},
-      embedder,
-    );
+    const flow = createReferenceFlow(openDatabase(), { ...ENV, RERANKER: 'subq' }, SILENT_LOGGER);
 
     expect(flow.reranker.name).toBe('llm');
   });
 
   it("shares the main flow's reranker when it is the LLM judge, and only then", async () => {
-    const { db, embedder } = await embeddedDatabase();
+    const db = openDatabase();
     const main = (name: string): Reranker => ({
       name,
       model: 'fake-model',
       rerank: async (_query, chunks) => fakeRerankResult(chunks, {}),
     });
     const llm = main('llm');
-    const bge = main('bge');
+    const subq = main('subq');
 
-    const shared = createReferenceFlow(db, ENV, SILENT_LOGGER, {}, embedder, llm);
-    const own = createReferenceFlow(db, ENV, SILENT_LOGGER, {}, embedder, bge);
+    const shared = createReferenceFlow(db, ENV, SILENT_LOGGER, {}, llm);
+    const own = createReferenceFlow(db, ENV, SILENT_LOGGER, {}, subq);
 
     expect(shared.reranker).toBe(llm);
-    expect(own.reranker).not.toBe(bge);
+    expect(own.reranker).not.toBe(subq);
     expect(own.reranker.name).toBe('llm');
-  });
-
-  it('fails, naming index:embed, before any chunk is embedded', () => {
-    const { db } = (database = createEvalDatabase());
-
-    expect(() =>
-      createReferenceFlow(db, ENV, SILENT_LOGGER, {}, createFakeEmbedder().embedder),
-    ).toThrow('run `npm run index:embed`');
   });
 });

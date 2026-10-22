@@ -5,18 +5,11 @@ import { createTestDatabase } from '../db/test-helpers.js';
 import { loadLlmConfig } from '../llm/config.js';
 import { createCapturingLogger, messageResponse } from '../llm/test-helpers.js';
 import type { Chunk } from '../llm/types.js';
-import {
-  createCrossEncoderReranker,
-  loadCrossEncoderRerankerConfig,
-  thresholdVariable,
-} from './cross-encoder-reranker.js';
-import { createReranker, localCrossEncoders } from './factory.js';
+import { createReranker } from './factory.js';
 import { fakeRerankResult } from './test-helpers.js';
 import type { Reranker, RerankerDependencies } from './types.js';
 
 const JEV_URL = 'https://api.typesafe.ai/v1/systemone';
-
-const CROSS_ENCODERS = localCrossEncoders();
 
 /** Each chunk's score, from JEV and from the LLM alike; `d` is below the 0.5 threshold. */
 const SCORES: Record<string, number> = { a: 0.6, b: 0.95, c: 0.8, d: 0.1, e: 0.7 };
@@ -60,13 +53,6 @@ function deps(): RerankerDependencies {
   };
 }
 
-/** A cross-encoder whose logit for a pair gives the passage's score in `SCORES`. */
-const fakeCrossEncoder = async () => async (pairs: readonly { passage: string }[]) =>
-  pairs.map(({ passage }) => {
-    const score = scoreIn(passage);
-    return { logit: Math.log(score / (1 - score)), truncated: false };
-  });
-
 /** A reranker outside the registry, scoring from `SCORES` without any call. */
 const fakeReranker: Reranker = {
   name: 'fake',
@@ -85,18 +71,6 @@ const RERANKERS: [string, () => Reranker, string][] = [
     () => createReranker({ RERANKER: 'llm', ...AT_HALF }, deps()).reranker,
     'claude-haiku-5-5',
   ],
-  // The model is faked: its logit for a chunk is the one whose sigmoid is the chunk's score.
-  ...CROSS_ENCODERS.map((spec): [string, () => Reranker, string] => [
-    spec.name,
-    () =>
-      createCrossEncoderReranker(
-        spec,
-        loadCrossEncoderRerankerConfig({ [thresholdVariable(spec.name)]: '0.5' }, spec.name),
-        createCapturingLogger(),
-        fakeCrossEncoder,
-      ),
-    spec.model.id,
-  ]),
   ['fake', () => fakeReranker, 'fake-model'],
 ];
 
@@ -116,13 +90,7 @@ describe.each(RERANKERS)('the %s reranker', (name, build, model) => {
     const result = await build().rerank('Anställningsavtal', CHUNKS, CHUNKS.length);
 
     expect(result.ranked.map(({ chunk }) => chunk.id)).toEqual(['b', 'c', 'e', 'a']);
-    const expected = [0.95, 0.8, 0.7, 0.6, 0.1];
-    // A cross-encoder's scores come back through a sigmoid of the fake logit, equal to rounding.
-    expect(result.scored.map(({ score }) => score)).toEqual(
-      CROSS_ENCODERS.some((spec) => spec.name === name)
-        ? expected.map((score) => expect.closeTo(score, 10))
-        : expected,
-    );
+    expect(result.scored.map(({ score }) => score)).toEqual([0.95, 0.8, 0.7, 0.6, 0.1]);
   });
 });
 

@@ -1,10 +1,10 @@
-import { registerQueryRoute, type QueryFlows } from './api/query-route.js';
+import { registerConfigRoute } from './api/config-route.js';
+import { registerQueryRoute } from './api/query-route.js';
 import { registerRunsRoute } from './api/runs-route.js';
 import { createQueryFlows, openQueryDatabase } from './api/setup.js';
 import { buildApp } from './app.js';
 import { resolveDatabasePath } from './db/config.js';
-import { elapsedMs } from './http.js';
-import { loadEmbedderConfig } from './embedding/factory.js';
+import { loadJudgingConfig } from './judge/config.js';
 import { describeError } from './errors.js';
 import { loadContextLimits } from './generation/config.js';
 import { createRunLog } from './generation/run-log.js';
@@ -13,6 +13,7 @@ import { loadLlmConfig } from './llm/config.js';
 import { resolvePort } from './port.js';
 import { loadQueryTranslatorConfig } from './query/config.js';
 import { loadReferenceConfig } from './reference/config.js';
+import { rejectRemovedSettings } from './removed-settings.js';
 import { loadRerankerConfig } from './rerank/factory.js';
 import { loadSearchConfig, tagIndexBuilder } from './search/config.js';
 import { loadTagIndex } from './search/load-index.js';
@@ -23,13 +24,10 @@ const app = buildApp();
 
 try {
   app.tagIndex = loadTagIndex(databasePath, buildTagIndex, app.log);
-  // Earlier runs are listed also without a database: the run log is a file of its own.
+  // Earlier runs and the configuration are served also without a database.
   registerRunsRoute(app);
-  const flows = registerQueryFlows(databasePath);
-  // Before listening, so the first query's timings do not include loading the local models.
-  const warmUpStarted = performance.now();
-  await flows?.warmUp?.();
-  app.log.info({ ms: elapsedMs(warmUpStarted) }, 'Local models warmed up');
+  registerConfigRoute(app);
+  registerQueryFlows(databasePath);
   await app.listen({ port });
 } catch (error) {
   app.log.error(describeError(error));
@@ -39,13 +37,13 @@ try {
 /**
  * Builds the query flows on the existing, migrated database, sharing the server's tag index, and
  * registers `POST /query`. Without one the server still starts, without the route, and warns. A
- * flow that cannot be built, e.g. `RETRIEVER=bge` before `npm run index:embed`, stops the server.
+ * flow that cannot be built stops the server.
  */
-function registerQueryFlows(databasePath: string): QueryFlows | undefined {
+function registerQueryFlows(databasePath: string): void {
   const opened = openQueryDatabase(databasePath);
   if ('unavailable' in opened) {
     app.log.warn({ databasePath }, `POST /query is not available: ${opened.unavailable}`);
-    return undefined;
+    return;
   }
   const { db } = opened;
   app.addHook('onClose', async () => db.close());
@@ -58,7 +56,6 @@ function registerQueryFlows(databasePath: string): QueryFlows | undefined {
     flows,
     createRunLog((message) => app.log.warn(message)),
   );
-  return flows;
 }
 
 /** Validates `.env` before listening; an invalid value prints its message and exits, no stack trace. */
@@ -69,12 +66,12 @@ function readStartupConfig(): {
 } {
   try {
     const port = resolvePort(process.env.PORT);
-    // Fail fast on every setting, also the reference RAG's (a failed build of it is only reported
-    // when a query asks for it), and also when there is no database and no flow is built.
+    // Fail fast on every setting, also when there is no database and no flow is built.
+    rejectRemovedSettings(process.env);
     loadLlmConfig(process.env);
     loadQueryTranslatorConfig(process.env);
     loadRerankerConfig(process.env);
-    loadEmbedderConfig(process.env);
+    loadJudgingConfig(process.env);
     loadReferenceConfig(process.env);
     loadContextLimits(process.env);
     return {

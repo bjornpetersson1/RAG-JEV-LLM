@@ -61,7 +61,7 @@ function fakeFlow(
         candidates: fake.ids.length,
         fallback: 0,
         approved: fake.ids.map(chunk),
-        sources: fake.ids.map((id) => ({ chunk: chunk(id), status: 'sent', origin: 'dense' })),
+        sources: fake.ids.map((id) => ({ chunk: chunk(id), status: 'sent', origin: 'lexical' })),
         ...(reranked && {
           judging: { relevant: 0, cacheHits: 0, judgeCalls: 0, unknown: fake.unknown ?? 0 },
         }),
@@ -89,7 +89,6 @@ function fakeFlow(
           : undefined,
         timings: {
           translationMs: reranked ? 10 : undefined,
-          embeddingMs: 5,
           searchMs: 20,
           judgingMs: reranked ? 30 : undefined,
           sourcesMs: reranked ? 50 : 20,
@@ -160,7 +159,6 @@ describe('benchCompare', () => {
         // search 20 + rerank 30, without the translation
         sources: { median: 50, p90: 50 },
         search: { median: 20, p90: 20 },
-        embedding: { median: 5, p90: 5 },
         rerank: { median: 30, p90: 30 },
         generation: { median: 100, p90: 100 },
         // 100 ms over 50 output tokens

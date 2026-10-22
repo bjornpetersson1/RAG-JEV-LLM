@@ -23,7 +23,7 @@ export interface QueryServices {
   candidateSearch: CandidateSearch;
   /** The chunks with these ids, in the given order; unknown ids are left out. */
   loadChunks(ids: readonly string[]): Chunk[];
-  /** E.g. `jev` or `claude-code claude-haiku-5-5`, for reports. */
+  /** E.g. `subq subq-snap-preview` or `claude-code claude-haiku-5-5`, for reports. */
   translatorLabel: string;
   /** The tag index in use, e.g. `roaring`, for reports. */
   tagIndexLabel: string;
@@ -53,7 +53,9 @@ export function createQueryServices(
     candidateSearch: createCandidateSearch({ db, tagIndex: index, config: searchConfig, logger }),
     loadChunks: createChunkLoader(db),
     translatorLabel:
-      translatorConfig.impl === 'jev' ? 'jev' : roleLabel(llmConfig, 'queryTranslator'),
+      translatorConfig.impl === 'llm'
+        ? roleLabel(llmConfig, 'queryTranslator')
+        : `${translatorConfig.impl} ${translatorConfig.systemOne.model}`,
     tagIndexLabel: index.description.implementation,
   };
 }
