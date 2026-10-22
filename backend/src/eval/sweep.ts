@@ -1,8 +1,8 @@
 // `eval:run -- --sweep` (E7-4): how many candidates to rerank and how many to keep. For each count
 // the retriever configured for it gives its own list. Every query's lists, over all counts and
 // retrievers, are reranked once together; the judge scores each chunk on its own, so each list then
-// keeps its chunks in that score order. Precision, recall and F1 of
-// the kept chunks are measured against the central chunks and against every graded chunk.
+// keeps its chunks in that score order. Precision, recall and F1 of the kept chunks are measured
+// against the central chunks and against every graded chunk.
 
 import { describeError } from '../errors.js';
 import type { Chunk } from '../llm/types.js';
