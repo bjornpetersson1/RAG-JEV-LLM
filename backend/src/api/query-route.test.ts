@@ -8,8 +8,6 @@ import { SILENT_LOGGER } from '../llm/client.js';
 import { createFakeGenerator } from '../llm/fakes.js';
 import type { Chunk } from '../llm/types.js';
 import { fakeRerankResult } from '../rerank/test-helpers.js';
-import { indexEmbeddings } from '../retrieval/index-embeddings.js';
-import { createFakeEmbedder, FAKE_IDENTITY } from '../retrieval/test-helpers.js';
 import type { RunLogEntry } from '../generation/run-log.js';
 import { registerQueryRoute, type QueryEvent, type QueryFlows } from './query-route.js';
 import { createQueryFlows } from './setup.js';
@@ -51,7 +49,7 @@ function flows(main: QueryFlowDependencies, reference?: () => QueryFlowDependenc
     reference:
       reference ??
       (() => {
-        throw new Error('The database has no chunk embeddings; run `npm run index:embed`');
+        throw new Error('The reference RAG cannot be built');
       }),
   };
 }
@@ -229,7 +227,7 @@ describe('POST /query', () => {
     expect(lines.at(-2)).toEqual({
       type: 'skipped',
       flow: 'reference',
-      reason: 'The database has no chunk embeddings; run `npm run index:embed`',
+      reason: 'The reference RAG cannot be built',
     });
   });
 
@@ -309,11 +307,7 @@ describe('createQueryFlows', () => {
     ],
   ])('runs both flows from %s through the route, with fake roles', async (_case, body, drafted) => {
     const { db, path } = (database = createEvalDatabase());
-    const { embedder } = createFakeEmbedder();
-    await indexEmbeddings(db, embedder, FAKE_IDENTITY);
-    app = appWith(
-      createQueryFlows(db, { ...ENV, DATABASE_PATH: path }, SILENT_LOGGER, { retrieval: embedder }),
-    );
+    app = appWith(createQueryFlows(db, { ...ENV, DATABASE_PATH: path }, SILENT_LOGGER));
 
     const lines = events((await post(app, { ...body, reference: true })).payload);
 
@@ -323,14 +317,10 @@ describe('createQueryFlows', () => {
     expect(lines.at(-1)).toEqual({ type: 'done' });
   });
 
-  it('gives both flows one LLM judge when RERANKER=llm', async () => {
+  it('gives both flows one LLM judge when RERANKER=llm', () => {
     const { db, path } = (database = createEvalDatabase());
-    const { embedder } = createFakeEmbedder();
-    await indexEmbeddings(db, embedder, FAKE_IDENTITY);
 
-    const flows = createQueryFlows(db, { ...ENV, DATABASE_PATH: path }, SILENT_LOGGER, {
-      retrieval: embedder,
-    });
+    const flows = createQueryFlows(db, { ...ENV, DATABASE_PATH: path }, SILENT_LOGGER);
 
     expect(flows.reference().reranker).toBe(flows.main().reranker);
   });
@@ -386,33 +376,6 @@ describe('createQueryFlows on the server', () => {
   afterEach(() => {
     database?.remove();
     database = undefined;
-  });
-
-  it('fails, naming index:embed, when RETRIEVER=bge has no embeddings', () => {
-    const { db, path } = (database = createEvalDatabase());
-
-    expect(() =>
-      createQueryFlows(
-        db,
-        { LLM_PROVIDER: 'fake', RETRIEVER: 'bge', DATABASE_PATH: path },
-        SILENT_LOGGER,
-        { retrieval: createFakeEmbedder().embedder },
-      ),
-    ).toThrow('run `npm run index:embed`');
-  });
-
-  it('warms up without the reference RAG’s embeddings, and with them', async () => {
-    const { db, path } = (database = createEvalDatabase());
-    const { embedder, embedded } = createFakeEmbedder();
-    const env = { LLM_PROVIDER: 'fake', RERANKER: 'llm', DATABASE_PATH: path };
-
-    await createQueryFlows(db, env, SILENT_LOGGER, { retrieval: embedder }).warmUp?.();
-    expect(embedded).toEqual([]);
-
-    await indexEmbeddings(db, embedder, FAKE_IDENTITY);
-    const indexed = embedded.length;
-    await createQueryFlows(db, env, SILENT_LOGGER, { retrieval: embedder }).warmUp?.();
-    expect(embedded.slice(indexed)).toEqual(['uppvärmning']);
   });
 
   it('searches with the tag index it is given', async () => {

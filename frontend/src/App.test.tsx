@@ -289,13 +289,17 @@ describe('the query form', () => {
     await act(async () => {
       stream.send({ type: 'start', flow: 'main', steps: MAIN_STEPS });
       stream.send({ type: 'result', flow: 'main', result: RESULT });
-      stream.send({ type: 'skipped', flow: 'reference', reason: 'run `npm run index:embed`' });
+      stream.send({
+        type: 'skipped',
+        flow: 'reference',
+        reason: 'the reference RAG cannot be built',
+      });
       stream.send({ type: 'done' });
       stream.end();
     });
 
     expect(
-      await screen.findByText('Referens-RAG:en kördes inte: run `npm run index:embed`'),
+      await screen.findByText('Referens-RAG:en kördes inte: the reference RAG cannot be built'),
     ).toBeDefined();
     expect(screen.queryByRole('alert')).toBeNull();
     expect(screen.queryByText('Förbereder referens-RAG…')).toBeNull();

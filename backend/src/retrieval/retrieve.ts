@@ -11,7 +11,7 @@ import type { Retriever } from './retriever.js';
 
 export interface RetrieveDependencies {
   retriever: Retriever;
-  /** The question's tags; called only when the retriever uses tags. */
+  /** The question's tags. */
   translate(question: string): Promise<string[]>;
   loadChunks(ids: readonly string[]): Chunk[];
   reranker: Reranker;
@@ -30,7 +30,6 @@ export interface RetrieveResult {
   chunks: RetrievedChunk[];
   timings: {
     translationMs: number;
-    embedMs: number;
     retrievalMs: number;
     rerankMs: number;
     totalMs: number;
@@ -46,14 +45,10 @@ export async function retrieve(
   const started = performance.now();
   const { retriever, reranker } = deps;
 
-  let tags: string[] = [];
-  let translationMs = 0;
-  if (retriever.usesTags) {
-    tags = await deps.translate(question);
-    translationMs = elapsedMs(started);
-  }
+  const tags = await deps.translate(question);
+  const translationMs = elapsedMs(started);
 
-  const { candidates, embedMs, searchMs } = await retriever.retrieve(question, tags);
+  const { candidates, searchMs } = await retriever.retrieve(question, tags);
   const ranks = new Map(
     candidates.map((candidate, i) => [String(candidate.chunkId), { rank: i + 1, candidate }]),
   );
@@ -70,7 +65,6 @@ export async function retrieve(
     }),
     timings: {
       translationMs,
-      embedMs: embedMs ?? 0,
       retrievalMs: searchMs,
       rerankMs: stats.elapsedMs,
       totalMs: elapsedMs(started),
@@ -90,7 +84,7 @@ export function formatRetrieveResult(result: RetrieveResult): string {
         ` · rerank ${chunk.score.toFixed(3)} · retrieval rank ${chunk.retrievalRank} (${chunk.origin})`,
     ),
     '',
-    `Time (ms): translation ${timings.translationMs} · embed query ${timings.embedMs} · ` +
+    `Time (ms): translation ${timings.translationMs} · ` +
       `retrieval ${timings.retrievalMs} · rerank ${timings.rerankMs} · total ${timings.totalMs}`,
   ].join('\n');
 }

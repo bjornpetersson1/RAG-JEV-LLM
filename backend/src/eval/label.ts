@@ -1,26 +1,25 @@
 // `eval:label`: the candidate chunks for one evaluation query, so a human can mark the relevant
-// ones quickly (E5-3). Since E7-10 it also lists the reference RAG's dense candidates, so chunks
-// only vector search finds get labelled too.
+// ones quickly (E5-3). Since E7-10 it also lists the reference RAG's candidates (BM25 since E10-1),
+// so chunks only the reference RAG finds get labelled too.
 
 import type { DatabaseSync } from 'node:sqlite';
 import type { Env } from '../env.js';
-import { createDenseSearch } from '../reference/dense-search.js';
-import { loadRetrievalResources, type RetrievalSource } from '../retrieval/setup.js';
-import { loadSearchConfig } from '../search/config.js';
+import { loadReferenceConfig } from '../reference/config.js';
+import { createLexicalSearch } from '../reference/lexical-search.js';
 import { collapseWhitespace } from '../text.js';
 import type { EvalQuery } from './queries.js';
 import type { SearchDependencies } from './run.js';
 
-/** A search that lists candidates: tag search, full-text search or the reference's vectors. */
-export type LabelSearch = 'tags' | 'fts' | 'dense';
+/** A search that lists candidates: tag search, full-text search or the reference RAG's BM25. */
+export type LabelSearch = 'tags' | 'fts' | 'reference';
 
-const SEARCHES: readonly LabelSearch[] = ['tags', 'fts', 'dense'];
+const SEARCHES: readonly LabelSearch[] = ['tags', 'fts', 'reference'];
 
 export interface LabelCandidate {
   chunkId: string;
   document: string;
   sourceRef: string;
-  /** Every search that found the chunk, in the order tags, fts, dense. */
+  /** Every search that found the chunk, in the order tags, fts, reference. */
   foundBy: LabelSearch[];
   tags: string[];
   text: string;
@@ -34,43 +33,37 @@ export interface LabelListing {
 }
 
 export interface LabelDependencies extends Pick<SearchDependencies, 'translate' | 'search'> {
-  /** The chunk ids the reference RAG's vector search finds for the instruction, nearest first. */
-  dense(instruction: string): Promise<string[]>;
+  /** The chunk ids the reference RAG's search finds for the instruction, best first. */
+  reference(instruction: string): Promise<string[]>;
 }
 
-/**
- * The `MAX_CANDIDATES` chunks nearest the instruction, as the reference RAG finds them. Fails,
- * naming `npm run index:embed`, when the chunks are not embedded with the embedder.
- */
-export function createLabelDenseSearch(
+/** The `MAX_CANDIDATES` chunks BM25 ranks best for the instruction, as the reference RAG finds them. */
+export function createLabelReferenceSearch(
   db: DatabaseSync,
   env: Env,
-  /** By default `EMBEDDER` and its stored vectors; a fake embedder in tests. */
-  source?: RetrievalSource,
-): LabelDependencies['dense'] {
-  const { embedder, vectorIndex } = loadRetrievalResources(db, env, source);
-  const search = createDenseSearch(embedder, vectorIndex, loadSearchConfig(env).maxCandidates);
+): LabelDependencies['reference'] {
+  const search = createLexicalSearch(db, loadReferenceConfig(env).candidates);
   return async (instruction) => {
     const { candidates } = await search(instruction, []);
     return candidates.map((candidate) => String(candidate.chunkId));
   };
 }
 
-/** The query's tag-search, full-text and dense candidates: tag hits first, then fts, then dense. */
+/** The query's tag-search, full-text and reference candidates, in that order. */
 export async function labelCandidates(
   query: EvalQuery,
   deps: LabelDependencies,
   db: DatabaseSync,
 ): Promise<LabelListing> {
-  // The dense search needs only the instruction, so it runs while the query is translated.
-  const [tags, denseIds] = await Promise.all([
+  // The reference search needs only the instruction, so it runs while the query is translated.
+  const [tags, referenceIds] = await Promise.all([
     deps.translate(query),
-    deps.dense(query.instruction),
+    deps.reference(query.instruction),
   ]);
   const found: Record<LabelSearch, Set<string>> = {
     tags: new Set(deps.search(query, tags, 'tags')),
     fts: new Set(deps.search(query, tags, 'fts')),
-    dense: new Set(denseIds),
+    reference: new Set(referenceIds),
   };
   const ids = [...new Set(SEARCHES.flatMap((search) => [...found[search]]))];
   const describe = db.prepare(
@@ -103,8 +96,8 @@ export function formatCandidates(
 ): string {
   const count = (search: LabelSearch) =>
     candidates.filter((candidate) => candidate.foundBy.includes(search)).length;
-  const onlyDense = candidates.filter(
-    (candidate) => candidate.foundBy.length === 1 && candidate.foundBy[0] === 'dense',
+  const onlyReference = candidates.filter(
+    (candidate) => candidate.foundBy.length === 1 && candidate.foundBy[0] === 'reference',
   ).length;
   const foundByWidth = Math.max(
     0,
@@ -113,8 +106,8 @@ export function formatCandidates(
   return [
     `${query.id} (${query.kind}${query.template ? `, template ${query.template}` : ''}): ${query.instruction}`,
     `Tags: ${tags.join(', ') || 'none'}`,
-    `${candidates.length} candidates (tags ${count('tags')}, fts ${count('fts')}, dense ${count('dense')}; ` +
-      `${onlyDense} only dense); [x] = already marked relevant`,
+    `${candidates.length} candidates (tags ${count('tags')}, fts ${count('fts')}, ` +
+      `reference ${count('reference')}; ${onlyReference} only reference); [x] = already marked relevant`,
     ...candidates.flatMap((candidate) => [
       '',
       `[${candidate.marked ? 'x' : ' '}] #${candidate.chunkId} ${foundByLabel(candidate).padEnd(foundByWidth)} document: ${candidate.document} | sourceRef: ${candidate.sourceRef}`,
@@ -124,7 +117,7 @@ export function formatCandidates(
   ].join('\n');
 }
 
-/** The searches that found a candidate, e.g. `tags+dense`. */
+/** The searches that found a candidate, e.g. `tags+reference`. */
 function foundByLabel(candidate: LabelCandidate): string {
   return candidate.foundBy.join('+');
 }

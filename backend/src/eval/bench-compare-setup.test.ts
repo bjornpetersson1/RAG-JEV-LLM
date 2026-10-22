@@ -2,12 +2,9 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { Embedder } from '../embedding/types.js';
 import { createRunLog, readRunLog, type RunLog, type RunLogEntry } from '../generation/run-log.js';
 import { SILENT_LOGGER } from '../llm/client.js';
 import { latencyOf } from '../stats.js';
-import { indexEmbeddings } from '../retrieval/index-embeddings.js';
-import { createFakeEmbedder, FAKE_IDENTITY } from '../retrieval/test-helpers.js';
 import { benchCompare } from './bench-compare.js';
 import { createBenchSetup } from './bench-compare-setup.js';
 import { resolveEvalQueries } from './queries.js';
@@ -30,20 +27,28 @@ describe('createBenchSetup', () => {
     return { entries, append: (entry) => entries.push(entry) };
   }
 
-  /** The bench setup over an indexed evaluation database, and its first `limit` queries. */
-  async function benchSetup(log: RunLog, limit: number, wrap = (embedder: Embedder) => embedder) {
+  /**
+   * The bench setup over the evaluation database, and its first `limit` queries, each asking for
+   * `instruction`: by default words BM25 finds in two chunks, and no vocabulary tag.
+   */
+  function benchSetup(
+    log: RunLog,
+    limit: number,
+    instruction = 'sakligt grundad oskälig',
+    prepare: (db: ReturnType<typeof createEvalDatabase>['db']) => void = () => {},
+  ) {
     database = createEvalDatabase();
-    const { embedder, embedded } = createFakeEmbedder();
-    await indexEmbeddings(database.db, embedder, FAKE_IDENTITY);
-    const queries = resolveEvalQueries(evalQueries(), database.db).slice(0, limit);
-    const setup = createBenchSetup(
+    prepare(database.db);
+    const queries = resolveEvalQueries(evalQueries(), database.db)
+      .slice(0, limit)
+      .map((query) => ({ ...query, instruction }));
+    const flows = createBenchSetup(
       database.db,
       { ...ENV, DATABASE_PATH: database.path },
       SILENT_LOGGER,
-      wrap(embedder),
       log,
     );
-    return { ...setup, queries, embedded };
+    return { flows, queries, db: database.db };
   }
 
   const ENV = {
@@ -57,35 +62,32 @@ describe('createBenchSetup', () => {
   };
 
   it('runs the main flow and the reference RAG from .env and measures both', async () => {
-    const { flows, warmUp, queries, embedded } = await benchSetup(memoryLog(), 2);
-    const indexed = embedded.length;
-    await warmUp();
+    const { flows, queries } = benchSetup(memoryLog(), 2);
     const [main, reference] = await benchCompare(queries, flows, { runs: 2, draft: true });
 
-    expect(embedded[indexed]).toBe('uppvärmning');
     expect(flows.map(({ configuration }) => configuration)).toEqual([
       'retriever tags · tag index roaring · translator fake fake · reranker llm fake · top 8 · ' +
         'generator fake fake',
-      'retriever dense (fake-embedder int8) · reranker llm fake · top 8 · generator fake fake',
+      'retriever bm25 · reranker llm fake · top 8 · generator fake fake',
     ]);
     expect(flows.map(({ remoteRerank }) => remoteRerank)).toEqual([true, true]);
     expect(main).toMatchObject({ flow: 'main', queries: 2, runs: 2, failures: 0 });
     expect(reference).toMatchObject({ flow: 'reference', queries: 2, drafts: 4, failures: 0 });
-    expect(reference.measured).toMatchObject({ judgedCandidates: 3, unknown: 0 });
+    expect(reference.measured).toMatchObject({ judgedCandidates: 2, unknown: 0 });
     expect(reference.measured?.rerank).toBeDefined();
     expect(reference.measured?.relevance.precision).toBeGreaterThanOrEqual(0);
-    // The fake translator's tags find nothing here, so the main flow writes no draft, and the
-    // reference's drafts have no shared pair to be compared on.
-    expect(main).toMatchObject({ drafts: 0, withoutDraft: 4 });
+    // The fake translator finds no tag, so the main flow's full-text fallback finds what BM25
+    // finds: both flows draft every time, and the drafts are compared on every pair.
+    expect(main).toMatchObject({ drafts: 4, withoutDraft: 0 });
     expect(reference).toMatchObject({ withoutDraft: 0 });
-    expect(reference.measured?.sourceAccuracy).toBeNull();
+    expect(reference.measured?.sourceAccuracy).toBe(1);
   });
 
   it('writes every flow run to the run log as a bench run, the flows of a run sharing a runId', async () => {
     dir = mkdtempSync(join(tmpdir(), 'bench-log-'));
     const path = join(dir, 'logs', 'runs.jsonl');
     // `bench:compare -- --runs 2 --limit 1`.
-    const { flows, queries } = await benchSetup(
+    const { flows, queries } = benchSetup(
       createRunLog(() => {}, path),
       1,
     );
@@ -117,13 +119,17 @@ describe('createBenchSetup', () => {
 
   it('logs a failed bench run with its error, and counts it as a failure', async () => {
     const log = memoryLog();
-    // The reference RAG embeds the instruction; the main flow searches by tags and does not.
-    const { flows, queries } = await benchSetup(log, 1, (embedder) => ({
-      ...embedder,
-      embed: async () => {
-        throw new Error('embedder down');
-      },
-    }));
+    // The main flow finds a chunk by its tag (the fake translator picks the tag the instruction
+    // names), so only the reference RAG needs the full-text index, which is gone.
+    const { flows, queries, db } = benchSetup(log, 1, 'Uppsägningstid', (tagged) =>
+      tagged.exec(`
+        INSERT INTO tags (id, slug, label, description, area) VALUES
+          (2, 'uppsagningstid', 'Uppsägningstid', 'uppsägningstid', 'anstallning');
+        INSERT INTO chunk_tags (chunk_id, tag_id, model, vocabulary_version, created_at) VALUES
+          (12, 2, 'fake', 'v1', '2026-10-11');
+      `),
+    );
+    db.exec('DROP TABLE chunks_fts');
 
     const [main, reference] = await benchCompare(queries, flows, { runs: 1, draft: true });
 
@@ -132,7 +138,7 @@ describe('createBenchSetup', () => {
     const failed = log.entries.find(({ flow }) => flow === 'reference');
     expect(failed).toMatchObject({
       source: 'bench',
-      error: expect.stringContaining('embedder down'),
+      error: expect.stringContaining('chunks_fts'),
     });
     expect(failed?.timings.totalMs).toBeUndefined();
   });
@@ -143,7 +149,7 @@ describe('createBenchSetup', () => {
     writeFileSync(blocked, '');
     const warnings: string[] = [];
     const log = createRunLog((message) => warnings.push(message), join(blocked, 'runs.jsonl'));
-    const { flows, queries } = await benchSetup(log, 1);
+    const { flows, queries } = benchSetup(log, 1);
 
     const [main, reference] = await benchCompare(queries, flows, { runs: 2, draft: true });
 

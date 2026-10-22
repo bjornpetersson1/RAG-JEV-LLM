@@ -62,10 +62,10 @@ describe('streamQuery', () => {
     stubFetch(() => Promise.resolve(stream.response));
 
     const done = streamQuery(REQUEST, () => {});
-    stream.send({ type: 'error', flow: 'reference', message: 'run `npm run index:embed`' });
+    stream.send({ type: 'error', flow: 'reference', message: 'the judge failed' });
     stream.end();
 
-    await expect(done).rejects.toThrow('Fel i referens-RAG:en: run `npm run index:embed`');
+    await expect(done).rejects.toThrow('Fel i referens-RAG:en: the judge failed');
   });
 
   it.each([

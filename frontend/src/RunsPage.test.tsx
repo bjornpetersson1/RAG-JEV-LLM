@@ -36,7 +36,6 @@ const PAIR: LoggedRequest = {
       flow: 'reference',
       timings: {
         searchMs: 220,
-        embeddingMs: 210,
         judgingMs: 27_000,
         sourcesMs: 27_220,
         totalMs: 64_000,

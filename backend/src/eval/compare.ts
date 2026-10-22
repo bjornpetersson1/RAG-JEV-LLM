@@ -45,8 +45,6 @@ export interface CompareDependencies {
   loadChunks(ids: readonly string[]): Chunk[];
   /** Queries a latency is taken over when the cache answered (5). */
   latencyQueries: number;
-  /** Loads the local models before anything is timed, so no row's latency includes a load. */
-  warmUp?(): Promise<void>;
   onQuery?(query: ResolvedQuery, index: number, total: number): void;
   /** A step that failed for one query, e.g. a translation; the run goes on without it. */
   onFailure?(step: string, query: ResolvedQuery, error: string): void;
@@ -66,7 +64,6 @@ export interface ComparisonRow {
   /** `none` for the retriever's own order. */
   reranker: string;
   model: string;
-  dtype: string;
   /** Mean candidates per query. */
   candidates: number;
   /** The retriever's own order. */
@@ -118,7 +115,6 @@ export async function compareRerankers(
   queries: readonly ResolvedQuery[],
   deps: CompareDependencies,
 ): Promise<ComparisonRow[]> {
-  await deps.warmUp?.();
   const usesTags = deps.retrievers.some((retriever) => retriever.usesTags);
   const retrieved = new Map<string, QueryList[]>();
   const reranked = new Map<string, RerankedList[]>();
@@ -286,7 +282,6 @@ function beforeRow(
     retriever,
     reranker: 'none',
     model: '–',
-    dtype: '–',
     candidates: mean(lists.map(({ ids }) => ids.length)),
     before: gradedMeasures(lists),
     retrievalMs: latencyOf(lists.map(({ elapsedMs }) => elapsedMs)),
@@ -315,7 +310,6 @@ function afterRow(
     }),
     reranker: reranker.name,
     model: reranker.model,
-    dtype: reranker.dtype ?? '–',
     after: gradedMeasures(results),
     rerankMs: latency,
     notes: [

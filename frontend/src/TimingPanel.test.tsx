@@ -10,7 +10,7 @@ const CONFIGURATION = {
   retriever: 'tags',
   tagIndex: 'roaring',
   translator: 'claude-code claude-haiku-5-5',
-  reranker: 'minilm cross-encoder/mmarco-mMiniLMv2-L12-H384-v1 int8',
+  reranker: 'subq subq-snap-preview',
   generator: 'claude-code claude-sonnet-5-5',
   topK: 8,
 };
@@ -35,14 +35,13 @@ describe('TimingPanel', () => {
           step: 'search',
           candidates: 40,
           fallback: 0,
-          timings: { searchMs: 420, embeddingMs: 400 },
+          timings: { searchMs: 420 },
         },
       },
       result: queryResult({
         candidates: 40,
         judging: { cacheHits: 0, judgeCalls: 40, relevant: 8, unknown: 0 },
         timings: {
-          embeddingMs: 400,
           searchMs: 420,
           judgingMs: 4000,
           sourcesMs: 4420,
@@ -54,7 +53,6 @@ describe('TimingPanel', () => {
 
     expect(row('Översättning')).toEqual(['–']);
     expect(row('Sökning')).toEqual(['420 ms']);
-    expect(row('varav inbäddning')).toEqual(['400 ms']);
     expect(row('Rerank')).toEqual(['4,0 s (100 ms per bedömd kandidat)']);
     expect(row('Generering')).toEqual(['–']);
     expect(row('Totalt')).toEqual(['4,5 s']);
@@ -62,7 +60,7 @@ describe('TimingPanel', () => {
     expect(
       screen.getByText(
         'Huvudflödet: hämtning tags · taggindex roaring · översättare claude-code claude-haiku-5-5 · ' +
-          'reranker minilm cross-encoder/mmarco-mMiniLMv2-L12-H384-v1 int8 · högst 8 källor · ' +
+          'reranker subq subq-snap-preview · högst 8 källor · ' +
           'generator claude-code claude-sonnet-5-5',
       ),
     ).toBeDefined();
@@ -85,13 +83,13 @@ describe('TimingPanel', () => {
       <TimingPanel
         flows={{ main }}
         reference
-        skipped="run `npm run index:embed`"
+        skipped="the reference RAG cannot be built"
         running={false}
       />,
     );
 
     expect(
-      screen.getByText('Referens-RAG:en kördes inte: run `npm run index:embed`'),
+      screen.getByText('Referens-RAG:en kördes inte: the reference RAG cannot be built'),
     ).toBeDefined();
   });
 
@@ -118,7 +116,6 @@ describe('TimingPanel', () => {
       result: queryResult({
         flow: 'reference',
         timings: {
-          embeddingMs: 300,
           searchMs: 320,
           judgingMs: 2500,
           sourcesMs: 2820,

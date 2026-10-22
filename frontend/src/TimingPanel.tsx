@@ -26,7 +26,6 @@ interface Row {
 const ROWS: Row[] = [
   { label: 'Översättning', step: 'translation', timing: 'translationMs', measure: 'translation' },
   { label: 'Sökning', step: 'search', timing: 'searchMs', measure: 'search' },
-  { label: 'varav inbäddning', step: 'search', timing: 'embeddingMs', measure: 'embedding' },
   {
     label: 'Rerank',
     step: 'rerank',

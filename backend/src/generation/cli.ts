@@ -5,6 +5,7 @@
 import { randomUUID } from 'node:crypto';
 import { withDatabase } from '../db/with-database.js';
 import { describeError } from '../errors.js';
+import { rejectRemovedSettings } from '../removed-settings.js';
 import { createConsoleLogger } from '../llm/console-logger.js';
 import { formatQueryResult } from './format.js';
 import { parseQueryArgs, QUERY_USAGE } from './query-args.js';
@@ -16,6 +17,7 @@ import { createReferenceFlow } from '../reference/setup.js';
 const problemLogger = createConsoleLogger({ quiet: true });
 
 try {
+  rejectRemovedSettings(process.env);
   process.exitCode = await run(process.argv.slice(2));
 } catch (error) {
   console.error(describeError(error));

@@ -71,7 +71,7 @@ export function queryResult(overrides: Partial<QueryResult> = {}): QueryResult {
     candidates: 30,
     fallback: 6,
     approved: [cited],
-    sources: [{ chunk: cited, status: 'cited', origin: 'tag', score: 0.9, reranker: 'bge' }],
+    sources: [{ chunk: cited, status: 'cited', origin: 'tag', score: 0.9, reranker: 'llm' }],
     draft: { text: '# Anställningsavtal\n\nText [K:11].', used: [cited], unused: [], leftOut: [] },
     timings: {
       translationMs: 800,

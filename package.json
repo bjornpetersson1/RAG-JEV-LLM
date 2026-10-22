@@ -9,9 +9,6 @@
   "engines": {
     "node": ">=24"
   },
-  "overrides": {
-    "sharp": "0.35.5"
-  },
   "scripts": {
     "dev": "concurrently --kill-others-on-fail --names backend,frontend --prefix-colors blue,green \"npm run dev -w backend\" \"npm run dev -w frontend\"",
     "lint": "eslint .",
@@ -29,14 +26,10 @@
     "index:vocabulary": "npm run index:vocabulary -w backend",
     "index:tag": "npm run index:tag -w backend --",
     "index:report": "npm run index:report -w backend",
-    "index:embed": "npm run index:embed -w backend",
     "retrieve": "npm run retrieve -w backend --",
     "bench:index": "npm run bench:index -w backend",
     "jev:probe": "npm run jev:probe -w backend",
     "subq:probe": "npm run subq:probe -w backend --",
-    "models:bench": "npm run models:bench -w backend --",
-    "bench:rerank": "npm run bench:rerank -w backend --",
-    "embed:smoke": "npm run embed:smoke -w backend",
     "eval:label": "npm run eval:label -w backend --",
     "eval:run": "npm run eval:run -w backend --",
     "bench:compare": "npm run bench:compare -w backend --",

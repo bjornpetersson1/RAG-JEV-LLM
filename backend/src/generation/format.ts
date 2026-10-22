@@ -24,7 +24,7 @@ export function formatQueryResult(request: QueryRequest, result: QueryResult): s
 function formatHeader({ flow, tags, candidates, approved, judging }: QueryResult): string[] {
   const found =
     flow === 'reference'
-      ? `Reference RAG: the ${candidates} chunks most similar to the instruction (no tags)`
+      ? `Reference RAG: the ${candidates} chunks BM25 ranks best for the instruction (no tags)`
       : `Tags: ${tags.join(', ') || '–'}`;
   if (!judging) return [found];
   return [
@@ -123,13 +123,9 @@ function rerunCommand(
 function formatTimings({ timings, usage }: QueryResult): string[] {
   const step = (name: string, ms: number | undefined) =>
     ms === undefined ? [] : [`${name} ${ms}`];
-  const search =
-    timings.embeddingMs === undefined
-      ? `search ${timings.searchMs}`
-      : `search ${timings.searchMs} (embedding ${timings.embeddingMs})`;
   const steps = [
     ...step('translation', timings.translationMs),
-    search,
+    `search ${timings.searchMs}`,
     ...step('judging', timings.judgingMs),
     `sources ${timings.sourcesMs}`,
     ...step('generation', timings.generationMs),

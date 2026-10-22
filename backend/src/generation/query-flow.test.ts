@@ -4,8 +4,6 @@ import { NO_USAGE, SILENT_LOGGER } from '../llm/client.js';
 import { loadLlmConfig } from '../llm/config.js';
 import { createFakeGenerator } from '../llm/fakes.js';
 import { createReranker } from '../rerank/factory.js';
-import { indexEmbeddings } from '../retrieval/index-embeddings.js';
-import { createFakeEmbedder } from '../retrieval/test-helpers.js';
 import type { Chunk } from '../llm/types.js';
 import { fakeRerankResult } from '../rerank/test-helpers.js';
 import { runQuery, type QueryFlowDependencies, type QueryStep } from './query-flow.js';
@@ -74,18 +72,13 @@ describe('runQuery', () => {
     expect(result.usage).toEqual({ translation: USAGE, judging: USAGE, generation: NO_USAGE });
   });
 
-  it('reports the approved chunks and the time the search spent embedding', async () => {
+  it('reports the approved chunks', async () => {
     const { deps } = fakeFlow({ '1': 0.6, '2': 0.9, '3': 0.2 });
-    const search = deps.search;
 
-    const result = await runQuery(
-      { instruction: 'Säljare', template: 'employment' },
-      { ...deps, search: async (...args) => ({ ...(await search(...args)), embedMs: 25 }) },
-    );
+    const result = await runQuery({ instruction: 'Säljare', template: 'employment' }, deps);
 
     expect(result.flow).toBe('main');
     expect(result.approved.map((c) => c.id)).toEqual(['2', '1']);
-    expect(result.timings.embeddingMs).toBe(25);
   });
 
   it('lists every candidate as a source, with its origin and the reranker’s score', async () => {
@@ -410,46 +403,24 @@ describe('createQueryFlow', () => {
     expect(result.draft?.check).toMatchObject({ flags: [], sourceAccuracy: 1 });
   });
 
-  it.each([
-    ['tags', true],
-    ['bge', false],
-    ['both', true],
-  ])('works with RETRIEVER=%s (query translated: %s)', async (retriever, translated) => {
+  it('translates the query and searches by tags with RETRIEVER=tags', async () => {
     database = createEvalDatabase();
-    const { embedder } = createFakeEmbedder();
-    await indexEmbeddings(database.db, embedder, { model: embedder.model, dtype: 'int8' });
 
     const flow = createQueryFlow(
       database.db,
-      { ...ENV, DATABASE_PATH: database.path, RETRIEVER: retriever },
+      { ...ENV, DATABASE_PATH: database.path, RETRIEVER: 'tags' },
       logger,
       { maxChunks: 1 },
-      embedder,
     );
     const result = await runQuery(
       { instruction: 'Uppsägning ska vara sakligt grundad', template: 'employment' },
       flow,
     );
 
-    expect(flow.translate !== undefined).toBe(translated);
-    expect(result.tags.length > 0).toBe(translated);
-    expect(result.timings.translationMs !== undefined).toBe(translated);
-    expect(result.timings.embeddingMs !== undefined).toBe(retriever !== 'tags');
+    expect(flow.translate).toBeDefined();
+    expect(result.tags.length).toBeGreaterThan(0);
+    expect(result.timings.translationMs).toBeDefined();
     expect(result.candidates).toBeGreaterThan(0);
     expect(result.draft?.text).toContain('inte juridisk rådgivning');
-  });
-
-  it('fails for bge, naming index:embed, before any chunk is embedded', () => {
-    database = createEvalDatabase();
-
-    expect(() =>
-      createQueryFlow(
-        database!.db,
-        { ...ENV, DATABASE_PATH: database!.path, RETRIEVER: 'bge' },
-        logger,
-        {},
-        createFakeEmbedder().embedder,
-      ),
-    ).toThrow('run `npm run index:embed`');
   });
 });

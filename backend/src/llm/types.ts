@@ -40,7 +40,7 @@ export interface Chunk {
   text: string;
   /** Where the text comes from, e.g. "SFS 1982:80 7 §" or a case reference. */
   source?: string;
-  /** The heading path, e.g. "Lag (1982:80) om anställningsskydd › … › 7 §", for the local models. */
+  /** The heading path, e.g. "Lag (1982:80) om anställningsskydd › … › 7 §". */
   context?: string;
   /** The document the chunk is from, for the UI (E7-2): its title and original source. */
   document?: { title: string; url?: string };

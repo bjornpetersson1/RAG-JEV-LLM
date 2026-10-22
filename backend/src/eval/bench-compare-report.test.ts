@@ -8,7 +8,7 @@ import { COMPARISON_HEADING } from './compare-report.js';
 
 const MAIN: FlowSummary = {
   flow: 'main',
-  configuration: 'retriever tags · reranker bge',
+  configuration: 'retriever tags · reranker llm claude-haiku-5-5',
   measured: {
     total: { median: 41_234.4, p90: 52_000 },
     translation: { median: 800, p90: 900 },
@@ -35,12 +35,11 @@ const MAIN: FlowSummary = {
 const REFERENCE: FlowSummary = {
   ...MAIN,
   flow: 'reference',
-  configuration: 'dense Xenova/bge-m3 int8',
+  configuration: 'retriever bm25 · reranker llm claude-haiku-5-5 · top 8',
   measured: {
     total: { median: 35_000, p90: 40_000 },
     sources: { median: 410, p90: 500 },
     search: { median: 410, p90: 500 },
-    embedding: { median: 400, p90: 480 },
     llm: { median: 12_000, p90: 16_000 },
     relevance: { precision: 0.3, recall: 0.2 },
     sourceAccuracy: null,
@@ -52,9 +51,9 @@ const REFERENCE: FlowSummary = {
 describe('benchRows', () => {
   it('gives one row per flow, with – for steps that did not run', () => {
     expect(benchRows([MAIN, REFERENCE], '2026-10-12')).toEqual([
-      '| 2026-10-12 | main | retriever tags · reranker bge | 41234 / 52000 | 800 / 900 | 30002 / 36005 | 2 / 5 | – | ' +
+      '| 2026-10-12 | main | retriever tags · reranker llm claude-haiku-5-5 | 41234 / 52000 | 800 / 900 | 30002 / 36005 | 2 / 5 | ' +
         '30000 / 36000 | 14 | 2 | 11000 / 15000 | 9.2 / 11.0 | 1200 / 1400 | 12000 / 16000 | 0.400 | 0.250 | 0.950 | 100 | 20 | 96 | 4 | 5 | 0 |',
-      '| 2026-10-12 | reference | dense Xenova/bge-m3 int8 | 35000 / 40000 | – | 410 / 500 | 410 / 500 | 400 / 480 | ' +
+      '| 2026-10-12 | reference | retriever bm25 · reranker llm claude-haiku-5-5 · top 8 | 35000 / 40000 | – | 410 / 500 | 410 / 500 | ' +
         '– | – | – | – | – | – | 12000 / 16000 | 0.300 | 0.200 | – | 100 | 20 | 0 | – | 5 | 0 |',
     ]);
   });
@@ -63,7 +62,7 @@ describe('benchRows', () => {
     const [row] = benchRows([{ ...MAIN, measured: undefined, samples: 0, failures: 20 }], 'd');
 
     expect(row).toBe(
-      '| d | main | retriever tags · reranker bge | – | – | – | – | – | – | – | – | – | – | – | – | – | – | – | 0 | 20 | 96 | 4 | 5 | 20 |',
+      '| d | main | retriever tags · reranker llm claude-haiku-5-5 | – | – | – | – | – | – | – | – | – | – | – | – | – | – | 0 | 20 | 96 | 4 | 5 | 20 |',
     );
   });
 });
@@ -89,7 +88,7 @@ describe('appendBenchToReport', () => {
 
     const report = readFileSync(path, 'utf8');
     expect(report).toContain(
-      `${COMPARISON_HEADING}\n\n| a |\n| --- |\n| 1 |\n\n## Main flow vs reference RAG: the same judge`,
+      `${COMPARISON_HEADING}\n\n| a |\n| --- |\n| 1 |\n\n## Main flow vs BM25 reference RAG: the same judge`,
     );
     const rows = report.split('\n').filter((line) => /^\| 2026-10-1[23] \|/.test(line));
     expect(rows).toEqual([
