@@ -1,6 +1,6 @@
 # RAG-JEV-LLM
 
-Legal RAG proof of concept: tag search, followed by a judge (an LLM judge by default; SubQ optional; JEV paused), find relevant Swedish laws and rulings, and an LLM drafts employment agreements and NDAs from them. An initial idea to make generating rag-enginges faster but a vector-database is probably the right way to go. But the problem i'm trying to solve is not the gathering of correct context it is: what if the vector gives you to much context? -> Slim down the context for a faster output.
+Legal RAG proof of concept: tag search, followed by a judge (an LLM judge by default; SubQ optional; JEV paused), find relevant Swedish laws and rulings, and an LLM drafts employment agreements and NDAs from them. An initial idea to make generating rag-enginges faster but a vector-database is probably the right way to go. But the problem i'm trying to solve is not the gathering of correct context, it is: what if the vector gives you to much context? -> Slim down the context for a faster output.
 
 ## Prerequisites
 
